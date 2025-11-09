@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit } from './types'; 
+import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit } from '../types'; 
 import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT } from '../constants';
 
 // ★★★ Propsの定義を変更 ★★★

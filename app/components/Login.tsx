@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Profile } from '../types';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase';
+import { auth, googleProvider } from '../../lib/firebase';
 // ...existing code...
 
 interface LoginProps {
