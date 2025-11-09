@@ -1,13 +1,19 @@
+"use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit } from '../types';
+// types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
+import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit } from './types'; 
 import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT } from '../constants';
 
+// ★★★ Propsの定義を変更 ★★★
 interface EnergyDiagnosisProps {
   history: EnergyRecord[];
   onComplete: (scores: EnergyScores) => void;
   setIsHelpOpen: (isOpen: boolean) => void;
   diagnosisFrequency: DiagnosisFrequency;
-  setDiagnosisFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>;
+  // React.Dispatch<React.SetStateAction<DiagnosisFrequency>> だったものを、
+  // MainApp.tsx が渡す関数の型 (Firestore保存関数) に合わせる
+  setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
   habits: Habit[];
 }
 
@@ -15,6 +21,7 @@ type QuizStep = EnergyCategory | 'start' | 'results';
 
 const categoryOrder: EnergyCategory[] = ['physical', 'mental', 'emotional', 'intellectual'];
 
+// (↓ isHabitScheduledForDate は変更なし)
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     const habitStartDate = new Date(habit.startDate);
     habitStartDate.setHours(0,0,0,0);
@@ -35,6 +42,7 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     }
 };
 
+// (↓ calculateCompletionStatus は変更なし)
 const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'partial' | 'full' => {
     const dateStr = date.toLocaleDateString('sv-SE');
     const scheduledHabits = habits.filter(h => isHabitScheduledForDate(h, date));
@@ -55,6 +63,7 @@ const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'parti
 };
 
 
+// --- Icon Components Start (変更なし) ---
 const IconBody: React.FC<{className?: string}> = ({className}) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -75,24 +84,23 @@ const IconIntellectual: React.FC<{className?: string}> = ({className}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
     </svg>
 );
-
 const ChevronDownIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
     </svg>
 );
-
 const HelpIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
     </svg>
 );
-
 const CalendarIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
 );
+// --- Icon Components End ---
+
 
 const categoryIcons: {[key in EnergyCategory]: React.FC<{className?: string}>} = {
     physical: IconBody,
@@ -101,6 +109,7 @@ const categoryIcons: {[key in EnergyCategory]: React.FC<{className?: string}>} =
     intellectual: IconIntellectual,
 }
 
+// (↓ DatePickerModal は変更なし)
 const DatePickerModal: React.FC<{
     isOpen: boolean, 
     onClose: () => void, 
@@ -186,9 +195,10 @@ const DatePickerModal: React.FC<{
 
 const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
+// (↓ FrequencyEditor は変更なし)
 const FrequencyEditor: React.FC<{
     frequency: DiagnosisFrequency;
-    setFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>;
+    setFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>; // ここはローカルのuseStateを使うので変更なし
 }> = ({ frequency, setFrequency }) => {
     return (
         <div className="space-y-4">
@@ -247,15 +257,25 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
   
+  // ★ localFrequency は、親 (MainApp) から渡される diagnosisFrequency を初期値とする
   const [localFrequency, setLocalFrequency] = useState(diagnosisFrequency);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  
+  // ★ 親から渡される diagnosisFrequency が変わったら、localFrequency も更新する
+  useEffect(() => {
+    setLocalFrequency(diagnosisFrequency);
+  }, [diagnosisFrequency]);
 
+
+  // ★ handleSaveFrequency を修正
   const handleSaveFrequency = () => {
+    // 親 (MainApp) から渡された setDiagnosisFrequency (Firestore保存関数) を呼び出す
     setDiagnosisFrequency(localFrequency);
     setShowSaveSuccess(true);
     setTimeout(() => setShowSaveSuccess(false), 2000);
   };
   
+  // (↓ useEffect[history] は変更なし)
   useEffect(() => {
     if (history.length > 0) {
       const latestRecordDate = new Date(history[history.length - 1].date + 'T00:00:00');
@@ -266,12 +286,14 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     }
   }, [history]);
   
+  // (↓ useEffect[step] は変更なし)
   useEffect(() => {
     if (step !== 'start' && step !== 'results') {
       quizContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [step]);
 
+  // (↓ handleAnswer, handleNext, startQuiz は変更なし)
   const handleAnswer = (questionId: string, value: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
@@ -301,6 +323,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     setStep(categoryOrder[0]);
   }
 
+  // (↓ recordDates, displayedRecord, lowestEnergy, currentQuestions, isCurrentStepAnswered は変更なし)
   const recordDates = useMemo(() => new Set(history.map(r => r.date)), [history]);
   
   const displayedRecord = useMemo(() => {
@@ -322,6 +345,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   const isCurrentStepAnswered = currentQuestions.every(q => answers[q.id] !== undefined);
 
 
+  // --- JSX (変更なし) ---
   if (step === 'start' || step === 'results') {
     return (
         <div className="space-y-6">
@@ -421,10 +445,13 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
             <div className="bg-white p-6 rounded-xl shadow-md">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">診断の頻度設定</h3>
                 <p className="text-gray-600 mb-4 text-sm">ここで設定した頻度に合わせて、「習慣トラッカー」に診断タスクが表示されます。</p>
+                {/* FrequencyEditor は localFrequency (ローカルのuseState) を操作する
+                  これは変更ありません
+                */}
                 <FrequencyEditor frequency={localFrequency} setFrequency={setLocalFrequency} />
                 <div className="mt-4 text-right">
                     <button
-                        onClick={handleSaveFrequency}
+                        onClick={handleSaveFrequency} // ★ 保存ボタンが押された時に Firestore保存関数を呼ぶ
                         className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-md disabled:bg-gray-400"
                         disabled={JSON.stringify(localFrequency) === JSON.stringify(diagnosisFrequency)}
                     >
@@ -436,6 +463,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     );
   }
 
+  // --- クイズ中のJSX (変更なし) ---
   return (
     <div ref={quizContainerRef} className="bg-white p-6 md:p-8 rounded-xl shadow-lg animate-fade-in">
         <div className="mb-6">

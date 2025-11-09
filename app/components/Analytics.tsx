@@ -1,3 +1,5 @@
+"use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
+
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { EnergyRecord, Habit, EnergyCategory } from '../types';
 import { ENERGY_CATEGORIES } from '../constants';
