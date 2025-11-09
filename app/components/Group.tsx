@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 // ★ ユーザーの指示通り ../types に修正
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 
-// ★★★ Propsの定義を修正 ★★★
+// ★★★ Propsの定義を
 interface GroupProps {
     profile: Profile;
     following: Friend[]; // ★ friends -> following
@@ -16,11 +16,12 @@ interface GroupProps {
     onInviteToGroup: (group: GroupType, memberIdsToInvite: string[]) => void; // ★ onUpdateGroup -> onInviteToGroup
     onAcceptGroupInvite: (invite: GroupType) => void; // ★ 追加
     onDeclineGroupInvite: (inviteId: string) => void; // ★ 追加
+    onRemoveMember: (groupId: string, memberIdToRemove: string) => void; // ★ 新機能
     comments: Comment[];
     onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     setIsHelpOpen: (isOpen: boolean) => void;
-    allUserProfiles: Map<string, Profile | Friend>;
+    allUserProfiles: Map<string, Profile | Friend>; // ★ 追加
 }
 
 // (↓ isHabitScheduledForDate は変更なし)
@@ -70,10 +71,10 @@ const UserPlusIcon: React.FC<{className?: string}> = ({className}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
     </svg>
 );
-// ★ 友達候補追加用のアイコン
-const UserAddIcon: React.FC<{className?: string}> = ({className}) => (
+// ★ メンバー退会用のアイコン
+const UserMinusIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-9 9m4.5-1.206a8.959 8.959 0 0 1-4.5 1.207" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
 );
 
@@ -137,7 +138,7 @@ const CreateGroupModal: React.FC<{
     following: Friend[]; // ★ friends -> following
     onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     onClose: () => void;
-    onCreate: (name: string, members: string[]) => void; // MainApp の onAddGroup
+    onCreate: (name: string, members: string[], ownerId: string) => void; // ★ ownerId を追加
 }> = ({ profile, following, onFollowUser, onClose, onCreate }) => {
     const [groupName, setGroupName] = useState('');
     const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
@@ -160,8 +161,8 @@ const CreateGroupModal: React.FC<{
             setError('グループ名を入力してください。');
             return;
         }
-        // ★ 自分自身と、選択した友達をメンバーとして渡す
-        onCreate(groupName, [profile.id, ...Array.from(selectedFriends)]);
+        // ★ 自分自身と、選択した友達をメンバーとして、自分がオーナーとして渡す
+        onCreate(groupName, [profile.id, ...Array.from(selectedFriends)], profile.id);
         onClose();
     };
 
@@ -259,6 +260,34 @@ const InviteMemberModal: React.FC<{
     );
 };
 
+// ★★★ 新機能: メンバー退会確認モーダル ★★★
+const ConfirmRemoveModal: React.FC<{
+    member: Profile | Friend;
+    groupName: string;
+    onClose: () => void;
+    onConfirm: () => void;
+}> = ({ member, groupName, onClose, onConfirm }) => {
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[70]" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center animate-fade-in" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-gray-800">メンバーを退会させますか？</h3>
+                <p className="text-gray-600 my-2 text-sm">
+                    本当に <span className="font-bold">{member.displayName}</span> さんを
+                    グループ「{groupName}」から退会させますか？
+                </p>
+                <div className="flex justify-center gap-4 mt-6">
+                    <button onClick={onClose} className="px-6 py-2 rounded-lg text-gray-700 bg-gray-200 hover:bg-gray-300 font-semibold">
+                        キャンセル
+                    </button>
+                    <button onClick={onConfirm} className="px-6 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 font-semibold">
+                        退会させる
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // ★ GroupDetail の Props を修正
 const GroupDetail: React.FC<{
@@ -271,16 +300,23 @@ const GroupDetail: React.FC<{
     habits: Habit[];
     onBack: () => void;
     onInviteMembers: (group: GroupType, memberIds: string[]) => void; // ★ 修正
+    onRemoveMember: (groupId: string, memberIdToRemove: string) => void; // ★ 新機能
     allUserProfiles: Map<string, Profile | Friend>;
-}> = ({ group, profile, following, onFollowUser, comments, onAddComment, habits, onBack, onInviteMembers, allUserProfiles }) => {
+}> = ({ 
+    group, profile, following, onFollowUser, 
+    comments, onAddComment, habits, 
+    onBack, onInviteMembers, onRemoveMember, 
+    allUserProfiles 
+}) => {
     const [newComment, setNewComment] = useState('');
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    
+    // ★★★ 新機能: 退会確認モーダルのための state
+    const [memberToRemov, setMemberToRemove] = useState<(Profile | Friend) | null>(null);
 
     const groupComments = useMemo(() => comments.filter(c => c.groupId === group.id).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()), [comments, group.id]);
 
-    // ★★★ getMemberProfile を修正 ★★★
     const getMemberProfile = (memberId: string) => {
-        // MainApp から渡された allUserProfiles マップから探す
         return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
     };
 
@@ -294,7 +330,6 @@ const GroupDetail: React.FC<{
             const completed = scheduled.filter(h => h.completedDates.includes(todayStr)).length;
             return Math.round((completed / scheduled.length) * 100);
         }
-        // 他のメンバーの進捗は、当面はダミーデータ（ハッシュ）で表示
         let hash = 0;
         for (let i = 0; i < memberId.length; i++) {
             hash = memberId.charCodeAt(i) + ((hash << 5) - hash);
@@ -319,6 +354,17 @@ const GroupDetail: React.FC<{
     
     // ★ 自分がフォローしている人のIDセット (機能C用)
     const followingIds = useMemo(() => new Set(following.map(f => f.id)), [following]);
+    
+    // ★ 自分がグループオーナーかどうかの判定
+    const isOwner = profile.id === group.ownerId;
+
+    // ★★★ 新機能: 退会処理の実行
+    const confirmRemoveMember = () => {
+        if (memberToRemov) {
+            onRemoveMember(group.id, memberToRemov.id);
+            setMemberToRemove(null); // モーダルを閉じる
+        }
+    };
 
     return (
         <div className="animate-fade-in space-y-6">
@@ -332,10 +378,13 @@ const GroupDetail: React.FC<{
             <div className="bg-white p-6 rounded-xl shadow-md">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-bold text-gray-800">今日の進捗</h3>
-                    <button onClick={() => setIsInviteModalOpen(true)} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold p-2 rounded-md hover:bg-indigo-50">
-                        <UserPlusIcon className="w-5 h-5" />
-                        招待する
-                    </button>
+                    {/* ★ オーナーのみ招待ボタンを表示 */}
+                    {isOwner && (
+                        <button onClick={() => setIsInviteModalOpen(true)} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold p-2 rounded-md hover:bg-indigo-50">
+                            <UserPlusIcon className="w-5 h-5" />
+                            招待する
+                        </button>
+                    )}
                 </div>
                 {/* ★ メンバー進捗表示 (getMemberProfile が修正されたので、自動的に正しい名前が表示される) */}
                 <div className="space-y-4">
@@ -357,6 +406,7 @@ const GroupDetail: React.FC<{
                                         <div className="bg-indigo-500 h-2.5 rounded-full" style={{width: `${progress}%`}}></div>
                                     </div>
                                 </div>
+                                
                                 {/* ★ 機能C: グループ内からフォローするボタン */}
                                 {!isSelf && !isFollowing && (
                                     <button 
@@ -365,6 +415,16 @@ const GroupDetail: React.FC<{
                                         title={`${member.displayName} をフォローする`}
                                     >
                                         <UserPlusIcon className="w-5 h-5" />
+                                    </button>
+                                )}
+                                {/* ★★★ 新機能: メンバー退会ボタン ★★★ */}
+                                {isOwner && !isSelf && (
+                                    <button 
+                                        onClick={() => setMemberToRemove(member)}
+                                        className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                                        title={`${member.displayName} を退会させる`}
+                                    >
+                                        <UserMinusIcon className="w-5 h-5" />
                                     </button>
                                 )}
                             </div>
@@ -409,6 +469,15 @@ const GroupDetail: React.FC<{
                     onInvite={(memberIds) => onInviteMembers(group, memberIds)} // ★ 修正
                 />
             )}
+            {/* ★★★ 新機能: 退会確認モーダル ★★★ */}
+            {memberToRemov && (
+                <ConfirmRemoveModal 
+                    member={memberToRemov}
+                    groupName={group.name}
+                    onClose={() => setMemberToRemove(null)}
+                    onConfirm={confirmRemoveMember}
+                />
+            )}
         </div>
     );
 };
@@ -426,6 +495,7 @@ const Group: React.FC<GroupProps> = ({
     onInviteToGroup, // ★ 修正
     onAcceptGroupInvite, // ★ 追加
     onDeclineGroupInvite, // ★ 追加
+    onRemoveMember, // ★ 新機能
     comments, 
     onAddComment,
     habits, 
@@ -435,11 +505,12 @@ const Group: React.FC<GroupProps> = ({
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null);
 
-    // (↓ handleCreateGroup は変更なし)
+    // ★ handleCreateGroup を修正 (ownerId を渡す)
     const handleCreateGroup = (name: string, members: string[]) => {
-        const newGroupData: Omit<GroupType, 'id'> = {
+        const newGroupData: Omit<GroupType, 'id' | 'ownerId'> & { ownerId: string } = {
             name,
-            members
+            members,
+            ownerId: profile.id // ★ 自分がオーナー
         };
         onAddGroup(newGroupData);
     };
@@ -460,6 +531,7 @@ const Group: React.FC<GroupProps> = ({
                     habits={habits} 
                     onBack={() => setSelectedGroup(null)} 
                     onInviteMembers={handleInviteMembers}
+                    onRemoveMember={onRemoveMember} // ★ 新機能
                     allUserProfiles={allUserProfiles}
                 />;
     }

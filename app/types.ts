@@ -1,3 +1,5 @@
+// types.ts
+
 // FIX: Defined all necessary types and interfaces for the application.
 // This file should only contain type definitions.
 
@@ -56,11 +58,14 @@ export interface Friend {
   imageUrl: string | null;
 }
 
+// ★★★ ここが修正点 ★★★
 export interface Group {
   id: string;
+  ownerId: string; // ★ この行を追加しました (オーナーのID)
   name: string;
   members: string[]; // array of profile IDs
 }
+// ★★★ 修正点ここまで ★★★
 
 export interface Comment {
     id: string;
