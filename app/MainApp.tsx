@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+// ★ React.Dispatch と useCallback をインポート
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 
 // ★ Firestore関連のモジュールをインポート
 import {
@@ -102,43 +103,44 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // ★★★ データの「読み込み」処理 (Firestore) (★修正あり★) ★★★
+  // ★★★ ユーザーのプロフィール情報を取得するヘルパー関数 ★★★
+  // (useEffect の外に移動し、useCallback で囲みました)
+  const fetchUserProfiles = useCallback(async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
+      const userMap = new Map<string, Profile | Friend>();
+      // 自分のプロフィールをまず追加 (最新の 'profile' state を使う)
+      userMap.set(profile.id, profile);
+
+      // 重複しないIDのリストを作成
+      const uniqueIdsToFetch = new Set(userIds.filter(id => id !== profile.id));
+
+      for (const id of uniqueIdsToFetch) {
+          try {
+              const settingsRef = doc(db, 'users', id, 'settings', 'main');
+              const docSnap = await getDoc(settingsRef);
+              if (docSnap.exists() && docSnap.data().profile) {
+                  const userProfile = docSnap.data().profile;
+                  userMap.set(id, {
+                      id: id,
+                      displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`,
+                      imageUrl: userProfile.imageUrl || null
+                  });
+              } else {
+                  userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+              }
+          } catch (error) {
+              console.error(`ユーザー(id: ${id}) のプロフィール取得に失敗:`, error);
+              userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+          }
+      }
+      return userMap;
+  }, [profile]); // ★ profile が更新されたら、この関数も更新される
+
+  // ★★★ データの「読み込み」処理 (Firestore) ★★★
   useEffect(() => {
     if (!profile.id) {
       setIsLoading(false);
       return;
     }
-
-    // ★ ユーザーのプロフィール情報を取得するヘルパー関数
-    const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
-        const userMap = new Map<string, Profile | Friend>();
-        // 自分のプロフィールをまず追加 (最新の 'profile' state を使う)
-        userMap.set(profile.id, profile);
-
-        // 重複しないIDのリストを作成
-        const uniqueIdsToFetch = new Set(userIds.filter(id => id !== profile.id));
-
-        for (const id of uniqueIdsToFetch) {
-            try {
-                const settingsRef = doc(db, 'users', id, 'settings', 'main');
-                const docSnap = await getDoc(settingsRef);
-                if (docSnap.exists() && docSnap.data().profile) {
-                    const userProfile = docSnap.data().profile;
-                    userMap.set(id, {
-                        id: id,
-                        displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`,
-                        imageUrl: userProfile.imageUrl || null
-                    });
-                } else {
-                    userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-                }
-            } catch (error) {
-                console.error(`ユーザー(id: ${id}) のプロフィール取得に失敗:`, error);
-                userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-            }
-        }
-        return userMap;
-    };
     
     const loadData = async () => {
       try {
@@ -179,13 +181,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const loadedComments = commentsSnap.docs.map(d => ({ ...d.data() as Omit<Comment, 'id'>, id: d.id }));
         setComments(loadedComments);
         
-        // ★ following と followers にデータをセット
         const loadedFollowing = followingSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         const loadedFollowers = followersSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         
         const loadedGroups = groupsSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
         const loadedGroupInvites = groupInvitesSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
-        setGroupInvites(loadedGroupInvites); // ★ 招待をセット
+        setGroupInvites(loadedGroupInvites);
 
         // 設定 (診断頻度 + プロフィール)
         if (settingsSnap.exists()) {
@@ -213,6 +214,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         
         const allUserIds = Array.from(new Set([...followingIds, ...followersIds, ...memberIds, ...inviteMemberIds]));
         
+        // ★ 外に出した fetchUserProfiles を呼び出す
         const userProfilesMap = await fetchUserProfiles(allUserIds);
         setAllUserProfiles(userProfilesMap);
 
@@ -237,7 +239,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
     loadData();
     
-  }, [profile.id, setProfile, profile]); // ★ profile 自体も依存配列に追加
+  }, [profile.id, setProfile, profile, fetchUserProfiles]); // ★ fetchUserProfiles を依存配列に追加
 
 
   // ★★★ データの「書き込み」処理 (Firestore) ★★★
@@ -296,7 +298,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
   
-  // ★ (3) グループ・友達関連の書き込みハンドラ (★全面的に修正★) ★
+  // (3) グループ・友達関連 (★全面的に修正★)
   
   // ★ 友達を「フォロー」するハンドラ (Profile.tsx / Group.tsx に渡す)
   const handleFollowUser = async (friendId: string) => {
@@ -307,23 +309,31 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     
     try {
       // 1. 相手のプロフィール情報を Firestore から「読み込む」
-      const friendSettingsRef = doc(db, 'users', friendId, 'settings', 'main');
-      const friendSnap = await getDoc(friendSettingsRef);
-
+      // (fetchUserProfiles は Map を返すので、単一ユーザー取得用のロジックをここで使う)
       let friendData: Omit<Friend, 'id'>;
-
-      if (friendSnap.exists() && friendSnap.data().profile) {
-        const friendProfile = friendSnap.data().profile;
-        friendData = {
-          displayName: friendProfile.displayName ?? `ユーザー ${friendId.substring(0, 4)}`,
-          imageUrl: friendProfile.imageUrl || null
-        };
-      } else {
-        friendData = {
-          displayName: `ユーザー ${friendId.substring(0, 4)}`,
-          imageUrl: null
-        };
+      try {
+        const friendSettingsRef = doc(db, 'users', friendId, 'settings', 'main');
+        const friendSnap = await getDoc(friendSettingsRef);
+        if (friendSnap.exists() && friendSnap.data().profile) {
+          const friendProfile = friendSnap.data().profile;
+          friendData = {
+            displayName: friendProfile.displayName ?? `ユーザー ${friendId.substring(0, 4)}`,
+            imageUrl: friendProfile.imageUrl || null
+          };
+        } else {
+          friendData = {
+            displayName: `ユーザー ${friendId.substring(0, 4)}`,
+            imageUrl: null
+          };
+        }
+      } catch (e) {
+         friendData = {
+            displayName: `ユーザー ${friendId.substring(0, 4)}`,
+            imageUrl: null
+         };
+         console.error("相手のプロフ取得失敗:", e);
       }
+
 
       // 2. 自分の `following` リストに「書き込む」
       const followingRef = doc(db, 'users', profile.id, 'following', friendId);
@@ -380,6 +390,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // 4. 新規メンバーのプロフィールも取得してキャッシュに追加
       const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
       if (newMemberIds.length > 0) {
+          // ★★★ エラー修正: await fetchUserProfiles を呼び出す ★★★
           const newProfilesMap = await fetchUserProfiles(newMemberIds);
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
       }
@@ -418,6 +429,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // 5. 新規メンバーのプロフィールも取得してキャッシュに追加
       const newMemberIdsToFetch = memberIdsToInvite.filter(id => !allUserProfiles.has(id));
       if (newMemberIdsToFetch.length > 0) {
+          // ★★★ エラー修正: await fetchUserProfiles を呼び出す ★★★
           const newProfilesMap = await fetchUserProfiles(newMemberIdsToFetch);
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
       }
