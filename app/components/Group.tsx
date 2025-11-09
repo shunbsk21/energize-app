@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react'; // ★ useEffect をインポート
+// ★ Firestoreのリアルタイム機能を追加
+import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase'; // ★ db をインポート
+
 // ★ ユーザーの指示通り ../types に修正
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 
@@ -17,7 +21,7 @@ interface GroupProps {
     onAcceptGroupInvite: (invite: GroupType) => void; // ★ 追加
     onDeclineGroupInvite: (inviteId: string) => void; // ★ 追加
     onRemoveMember: (groupId: string, memberIdToRemove: string) => void; // ★ 新機能
-    comments: Comment[];
+    // comments: Comment[]; // ★ 削除 (GroupDetailが直接読み込むため)
     onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     setIsHelpOpen: (isOpen: boolean) => void;
@@ -295,7 +299,7 @@ const GroupDetail: React.FC<{
     profile: Profile;
     following: Friend[]; // ★ friends -> following
     onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
-    comments: Comment[];
+    // comments: Comment[]; // ★ 削除
     onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     onBack: () => void;
@@ -304,7 +308,7 @@ const GroupDetail: React.FC<{
     allUserProfiles: Map<string, Profile | Friend>;
 }> = ({ 
     group, profile, following, onFollowUser, 
-    comments, onAddComment, habits, 
+    /* comments, */ onAddComment, habits, 
     onBack, onInviteMembers, onRemoveMember, 
     allUserProfiles 
 }) => {
@@ -312,9 +316,43 @@ const GroupDetail: React.FC<{
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     
     // ★★★ 新機能: 退会確認モーダルのための state
-    const [memberToRemov, setMemberToRemove] = useState<(Profile | Friend) | null>(null);
+    const [memberToRemove, setMemberToRemove] = useState<(Profile | Friend) | null>(null);
+    
+    // ★★★ 新機能: リアルタイムチャットの state
+    const [messages, setMessages] = useState<Comment[]>([]);
 
-    const groupComments = useMemo(() => comments.filter(c => c.groupId === group.id).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()), [comments, group.id]);
+    // ★★★ 新機能: チャットのリアルタイム読み込み
+    useEffect(() => {
+        // group_chats/{groupId}/messages をタイムスタンプ順で監視
+        const q = query(
+            collection(db, 'group_chats', group.id, 'messages'),
+            orderBy('timestamp', 'asc')
+        );
+        
+        // onSnapshot でリアルタイムの変更を購読
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const loadedMessages: Comment[] = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                // FirestoreのドキュメントをComment型に変換
+                loadedMessages.push({
+                    id: doc.id,
+                    groupId: data.groupId,
+                    authorId: data.authorId,
+                    authorName: data.authorName,
+                    text: data.text,
+                    timestamp: data.timestamp,
+                    authorImageUrl: data.authorImageUrl || null // ★ 画像URLも取得
+                } as Comment); // (types.ts に authorImageUrl がないためキャスト)
+            });
+            setMessages(loadedMessages);
+        }, (error) => {
+            console.error("チャットの読み込みに失敗しました:", error);
+        });
+
+        // このコンポーネントが不要になったら監視を停止
+        return () => unsubscribe();
+    }, [group.id]); // グループIDが変わったら監視し直す
 
     const getMemberProfile = (memberId: string) => {
         return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
@@ -347,6 +385,7 @@ const GroupDetail: React.FC<{
             authorName: profile.displayName,
             text: newComment.trim(),
             timestamp: new Date().toISOString()
+            // authorImageUrl は MainApp.tsx の handleAddComment が付与する
         };
         onAddComment(commentData);
         setNewComment('');
@@ -360,8 +399,8 @@ const GroupDetail: React.FC<{
 
     // ★★★ 新機能: 退会処理の実行
     const confirmRemoveMember = () => {
-        if (memberToRemov) {
-            onRemoveMember(group.id, memberToRemov.id);
+        if (memberToRemove) {
+            onRemoveMember(group.id, memberToRemove.id);
             setMemberToRemove(null); // モーダルを閉じる
         }
     };
@@ -435,17 +474,28 @@ const GroupDetail: React.FC<{
 
              <div className="bg-white p-6 rounded-xl shadow-md">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">コメント</h3>
-                {/* (↓ コメント表示 ... 変更なし) */}
+                {/* ★★★ チャット表示 (messages state を使用) ★★★ */}
                 <div className="space-y-4 max-h-96 overflow-y-auto pr-2 mb-4">
-                    {groupComments.map(comment => {
-                        const isAuthor = comment.authorId === profile.id;
+                    {messages.map(message => {
+                        const isAuthor = message.authorId === profile.id;
+                        // ★ authorImageUrl を正しく型推論させるためのトリック
+                        const authorImageUrl = (message as any).authorImageUrl || null;
+                        
                         return (
-                             <div key={comment.id} className={`flex ${isAuthor ? 'justify-end' : 'justify-start'}`}>
+                             <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
+                                {/* プロフィール画像を表示 */}
+                                {!isAuthor && (
+                                    <img 
+                                        src={authorImageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} 
+                                        alt={message.authorName} 
+                                        className="w-8 h-8 rounded-full object-cover bg-gray-200"
+                                    />
+                                )}
                                 <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-800'}`}>
                                     {/* ★ コメント投稿者の名前も allUserProfiles から引く */}
-                                    {!isAuthor && <p className="text-xs font-bold text-indigo-600">{allUserProfiles.get(comment.authorId)?.displayName || '名無しのさん'}</p>}
-                                    <p className="text-sm">{comment.text}</p>
-                                    <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>{new Date(comment.timestamp).toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})}</p>
+                                    {!isAuthor && <p className="text-xs font-bold text-indigo-600">{allUserProfiles.get(message.authorId)?.displayName || '名無しのさん'}</p>}
+                                    <p className="text-sm">{message.text}</p>
+                                    <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>{new Date(message.timestamp).toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})}</p>
                                 </div>
                             </div>
                         )
@@ -470,9 +520,9 @@ const GroupDetail: React.FC<{
                 />
             )}
             {/* ★★★ 新機能: 退会確認モーダル ★★★ */}
-            {memberToRemov && (
+            {memberToRemove && (
                 <ConfirmRemoveModal 
-                    member={memberToRemov}
+                    member={memberToRemove}
                     groupName={group.name}
                     onClose={() => setMemberToRemove(null)}
                     onConfirm={confirmRemoveMember}
@@ -496,7 +546,7 @@ const Group: React.FC<GroupProps> = ({
     onAcceptGroupInvite, // ★ 追加
     onDeclineGroupInvite, // ★ 追加
     onRemoveMember, // ★ 新機能
-    comments, 
+    // comments, // ★ 削除
     onAddComment,
     habits, 
     setIsHelpOpen,
@@ -507,7 +557,7 @@ const Group: React.FC<GroupProps> = ({
 
     // ★ handleCreateGroup を修正 (ownerId を渡す)
     const handleCreateGroup = (name: string, members: string[]) => {
-        const newGroupData: Omit<GroupType, 'id' | 'ownerId'> & { ownerId: string } = {
+        const newGroupData: Omit<GroupType, 'id'> = {
             name,
             members,
             ownerId: profile.id // ★ 自分がオーナー
@@ -526,7 +576,7 @@ const Group: React.FC<GroupProps> = ({
                     profile={profile} 
                     following={following} // ★ 修正
                     onFollowUser={onFollowUser} // ★ 修正
-                    comments={comments} 
+                    // comments={comments} // ★ 削除
                     onAddComment={onAddComment}
                     habits={habits} 
                     onBack={() => setSelectedGroup(null)} 
