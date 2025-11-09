@@ -26,8 +26,7 @@ import HabitTracker from './components/HabitTracker';
 import Analytics from './components/Analytics';
 import Group from './components/Group';
 import ProfileModal from './components/Profile';
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from '@/types';
-
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types';
 // --- Icon Components Start (コード変更なし) ---
 
 const DiagnosisIcon: React.FC<{className?: string}> = ({className}) => (

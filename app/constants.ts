@@ -1,6 +1,6 @@
 // FIX: Removed circular dependency by importing types from the corrected `types.ts` file.
 // This file now correctly separates constants from type definitions.
-import type { EnergyCategory, EnergyQuestionnaire, Advice } from './types';
+import type { EnergyCategory, EnergyQuestionnaire, Advice } from '../app/types';
 
 export const ENERGY_CATEGORIES: { [key in EnergyCategory]: { name: string; description: string; color: string; } } = {
   physical: { name: '身体的エネルギー', description: 'フィジカル', color: '#34D399' },
