@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-// ★ EnergyRecord をインポート
-import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
+// ★ EnergyRecord をインポートし、パスを修正
+import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from './types'; 
 import HabitDetail from './HabitDetail';
 
 // --- Propsの定義を変更 ---
@@ -418,9 +418,10 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     return isDiagnosisScheduledForDate(diagnosisFrequency, selectedDate);
   }, [diagnosisFrequency, selectedDate]);
   
-  // ★ 診断が完了しているかチェックするロジック
+  // ★ 診断が完了しているかチェックするロジック (★エラー修正★)
   const isDiagnosisCompleted = useMemo(() => {
-      // ★ energyHistory が undefined でないかチェック
+      // MainAppから渡される energyHistory が undefined の可能性があるため、
+      // 安全チェックを追加します (これがエラーの原因です)
       if (!energyHistory) return false; 
       return energyHistory.some(record => record.date === selectedDateString);
   }, [energyHistory, selectedDateString]);

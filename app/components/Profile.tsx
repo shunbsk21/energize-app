@@ -1,18 +1,16 @@
-"use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
+"use client"; 
 
 import React, { useState, useRef } from 'react';
-// types.ts が MainApp.tsx と同じ階層にある想定 (`./types`)
-import { Profile, Friend } from './types';
+import { Profile, Friend } from './types'; // ★ types.ts のパスを修正
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {
   profile: Profile;
-  // setProfile: React.Dispatch<React.SetStateAction<Profile | null>>; // 削除
   friends: Friend[];
-  onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void;
+  onAddFriend: (friendId: string) => void; // ★ 修正
   onClose: () => void;
   onLogout: () => void;
-  onSave: (newDisplayName: string, newImageUrl: string | null) => void; // ★ 追加
+  onSave: (newDisplayName: string, newImageUrl: string | null) => void;
 }
 
 // --- Icon Components Start (変更なし) ---
@@ -43,36 +41,36 @@ const LogoutIcon: React.FC<{className?: string}> = ({className}) => (
 // --- Icon Components End ---
 
 
-// ★ AddFriendModal (変更なし)
+// ★★★ AddFriendModal の Props を修正 ★★★
 const AddFriendModal: React.FC<{
     profile: Profile;
     friends: Friend[];
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void;
+    onAddFriend: (friendId: string) => void; // ★ 修正
     onClose: () => void;
 }> = ({ profile, friends, onAddFriend, onClose }) => {
     const [friendId, setFriendId] = useState('');
     const [error, setError] = useState('');
     
     const handleAddFriend = () => {
+        // (↓ エラーチェックは変更なし)
         if (!friendId.trim()) {
             setError('ユーザーIDを入力してください。');
             return;
         }
-        if (friendId === profile.id) {
+        if (friendId.trim() === profile.id) {
             setError('自分自身を友達として追加することはできません。');
             return;
         }
-        if (friends.some(f => f.id === friendId)) {
+        if (friends.some(f => f.id === friendId.trim())) {
             setError('このユーザーは既に友達です。');
             return;
         }
-        const newFriendData: Omit<Friend, 'id'> = {
-            displayName: `ユーザー ${friendId.substring(0, 4)}`,
-            imageUrl: null
-        };
-        onAddFriend(friendId, newFriendData);
+
+        // ★ MainApp の onAddFriend に「IDだけ」を渡す
+        onAddFriend(friendId.trim());
+        
         setError('');
-        onClose();
+        onClose(); // 成功したらモーダルを閉じる
     };
 
     return (
@@ -108,12 +106,11 @@ const AddFriendModal: React.FC<{
 // ★★★ ProfileModal の Props を修正 ★★★
 const ProfileModal: React.FC<ProfileModalProps> = ({ 
     profile, 
-    // setProfile, // 削除
     friends, 
     onAddFriend,
     onClose, 
     onLogout,
-    onSave       // ★ 追加
+    onSave
 }) => {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [imagePreview, setImagePreview] = useState<string | null>(profile.imageUrl);
@@ -136,9 +133,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   };
   
-  // ★★★ handleSave を修正 ★★★
+  // (↓ handleSave は変更なし)
   const handleSave = () => {
-    // MainApp に、新しい表示名と画像データを渡して保存を依頼する
     onSave(displayName, imageData);
     onClose();
   }
@@ -220,6 +216,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                      追加
                  </button>
              </div>
+             {/* ★★★ 友達リストの表示 (変更なし) ★★★ */}
              <div className="space-y-2 max-h-32 overflow-y-auto">
                  {friends.length > 0 ? friends.map(friend => (
                      <div key={friend.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
@@ -247,12 +244,11 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       </div>
     </div>
     
-    {/* ★★★ AddFriendModal に onAddFriend を渡す ★★★ */}
+    {/* ★★★ AddFriendModal に onAddFriend を渡す (変更なし) ★★★ */}
     {isAddFriendOpen && <AddFriendModal 
                             profile={profile} 
                             friends={friends} 
-                            // setFriends={setFriends} // 削除
-                            onAddFriend={onAddFriend} // ★ 追加
+                            onAddFriend={onAddFriend}
                             onClose={() => setIsAddFriendOpen(false)} 
                         />}
     </>

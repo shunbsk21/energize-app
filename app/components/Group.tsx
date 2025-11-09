@@ -1,23 +1,21 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
+import { Profile, Friend, Group as GroupType, Comment, Habit } from './types';
 
 // ★★★ Propsの定義を
 interface GroupProps {
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string) => void; // ★ 修正
     groups: GroupType[];
-    // setGroups: React.Dispatch<React.SetStateAction<GroupType[]>>; // 削除
-    onAddGroup: (newGroupData: Omit<GroupType, 'id'>) => void; // ★ 追加
-    onUpdateGroup: (updatedGroup: GroupType) => void; // ★ 追加
+    onAddGroup: (newGroupData: Omit<GroupType, 'id'>) => void;
+    onUpdateGroup: (updatedGroup: GroupType) => void;
     comments: Comment[];
-    // setComments: React.Dispatch<React.SetStateAction<Comment[]>>; // 削除
-    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void; // ★ 追加
+    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     setIsHelpOpen: (isOpen: boolean) => void;
+    allUserProfiles: Map<string, Profile | Friend>; // ★ 追加
 }
 
 // (↓ isHabitScheduledForDate は変更なし)
@@ -72,42 +70,32 @@ const UserPlusIcon: React.FC<{className?: string}> = ({className}) => (
 const AddFriendInline: React.FC<{
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string) => void; // ★ 修正
 }> = ({ profile, friends, onAddFriend }) => {
     const [friendId, setFriendId] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
     const handleAddFriend = () => {
-        // (↓ エラーチェックは変更なし)
         if (!friendId.trim()) {
             setError('ユーザーIDを入力してください。');
             return;
         }
-        if (friendId === profile.id) {
+        if (friendId.trim() === profile.id) {
             setError('自分自身を友達として追加することはできません。');
             return;
         }
-        if (friends.some(f => f.id === friendId)) {
+        if (friends.some(f => f.id === friendId.trim())) {
             setError('このユーザーは既に友達です。');
             return;
         }
 
-        // ★ MainApp に渡すデータ (IDは除く)
-        const newFriendData: Omit<Friend, 'id'> = {
-            displayName: `ユーザー ${friendId.substring(0, 4)}`, // 仮の名前
-            imageUrl: null
-        };
-        
-        // ★ MainApp の onAddFriend を呼び出す (ID と データを渡す)
-        onAddFriend(friendId, newFriendData);
-        
-        // setFriends(prev => [...prev, newFriend]); // 削除 (MainApp が state を更新)
+        // ★ MainApp の onAddFriend に「IDだけ」を渡す
+        onAddFriend(friendId.trim());
 
         setError('');
         setFriendId('');
-        setSuccess(`「${newFriendData.displayName}」さんを追加しました！`);
+        setSuccess(`友達追加リクエストを送信しました！`);
         setTimeout(() => setSuccess(''), 3000);
     };
 
@@ -135,8 +123,7 @@ const AddFriendInline: React.FC<{
 const CreateGroupModal: React.FC<{
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string) => void; // ★ 修正
     onClose: () => void;
     onCreate: (name: string, members: string[]) => void;
 }> = ({ profile, friends, onAddFriend, onClose, onCreate }) => {
@@ -181,12 +168,13 @@ const CreateGroupModal: React.FC<{
                             {friends.length > 0 ? friends.map(friend => (
                                 <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                     <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                    <span className="ml-3 text-gray-800">{friend.displayName}</span>
+                                    {/* ★ 友達の本当の表示名を使う */}
+                                    <img src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
+                                    <span className="ml-2 text-gray-800">{friend.displayName}</span>
                                 </div>
                             )) : <p className="text-center text-sm text-gray-500 py-4">まず友達を追加しましょう</p>}
                         </div>
                     </div>
-                    {/* ★ onAddFriend を渡す */}
                     <AddFriendInline profile={profile} friends={friends} onAddFriend={onAddFriend} />
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
@@ -203,8 +191,7 @@ const InviteMemberModal: React.FC<{
     group: GroupType;
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string) => void; // ★ 修正
     onClose: () => void;
     onInvite: (memberIds: string[]) => void;
 }> = ({ group, profile, friends, onAddFriend, onClose, onInvite }) => {
@@ -241,13 +228,14 @@ const InviteMemberModal: React.FC<{
                         {availableFriends.length > 0 ? availableFriends.map(friend => (
                             <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                 <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                <span className="ml-3 text-gray-800">{friend.displayName}</span>
+                                {/* ★ 友達の本当の表示名を使う */}
+                                <img src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
+                                <span className="ml-2 text-gray-800">{friend.displayName}</span>
                             </div>
                         )) : (
                             <p className="text-gray-500 text-center py-4">招待できる友達がいません。</p>
                         )}
                     </div>
-                    {/* ★ onAddFriend を渡す */}
                     <AddFriendInline profile={profile} friends={friends} onAddFriend={onAddFriend} />
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
@@ -265,23 +253,26 @@ const GroupDetail: React.FC<{
     group: GroupType;
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string) => void; // ★ 修正
     comments: Comment[];
-    // setComments: React.Dispatch<React.SetStateAction<Comment[]>>; // 削除
-    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void; // ★ 追加
+    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     onBack: () => void;
     onInviteMembers: (groupId: string, memberIds: string[]) => void;
-}> = ({ group, profile, friends, onAddFriend, comments, onAddComment, habits, onBack, onInviteMembers }) => {
+    allUserProfiles: Map<string, Profile | Friend>; // ★ 追加
+}> = ({ group, profile, friends, onAddFriend, comments, onAddComment, habits, onBack, onInviteMembers, allUserProfiles }) => {
     const [newComment, setNewComment] = useState('');
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-    const allUsers = useMemo(() => [profile, ...friends], [profile, friends]);
+
+    // ★ allUserProfiles は props から受け取るので useMemo を削除
+    // const allUsers = useMemo(() => [profile, ...friends], [profile, friends]);
 
     const groupComments = useMemo(() => comments.filter(c => c.groupId === group.id).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()), [comments, group.id]);
 
+    // ★★★ getMemberProfile を修正 ★★★
     const getMemberProfile = (memberId: string) => {
-        return allUsers.find(u => u.id === memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
+        // MainApp から渡された allUserProfiles マップから探す
+        return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
     };
 
     // (↓ getMemberProgress は変更なし)
@@ -294,6 +285,7 @@ const GroupDetail: React.FC<{
             const completed = scheduled.filter(h => h.completedDates.includes(todayStr)).length;
             return Math.round((completed / scheduled.length) * 100);
         }
+        // 他のメンバーの進捗は、当面はダミーデータ（ハッシュ）で表示
         let hash = 0;
         for (let i = 0; i < memberId.length; i++) {
             hash = memberId.charCodeAt(i) + ((hash << 5) - hash);
@@ -302,24 +294,17 @@ const GroupDetail: React.FC<{
         return Math.abs(progress);
     };
 
-    // ★ handlePostComment を修正
+    // (↓ handlePostComment は変更なし)
     const handlePostComment = () => {
         if(!newComment.trim()) return;
-        
-        // ★ IDなしのデータを作成 (FirestoreがIDを生成)
         const commentData: Omit<Comment, 'id'> = {
-            // id: Date.now().toString(), // 削除
             groupId: group.id,
             authorId: profile.id,
             authorName: profile.displayName,
             text: newComment.trim(),
             timestamp: new Date().toISOString()
         };
-        
-        // ★ MainApp の onAddComment を呼び出す
         onAddComment(commentData);
-        // setComments(prev => [...prev, comment]); // 削除 (MainApp が state を更新)
-        
         setNewComment('');
     };
 
@@ -340,14 +325,14 @@ const GroupDetail: React.FC<{
                         招待する
                     </button>
                 </div>
-                {/* (↓ メンバー進捗表示 ... 変更なし) */}
+                {/* ★ メンバー進捗表示 (getMemberProfile が修正されたので、自動的に正しい名前が表示される) */}
                 <div className="space-y-4">
                     {group.members.map(memberId => {
                         const member = getMemberProfile(memberId);
                         const progress = getMemberProgress(memberId);
                         return (
                             <div key={memberId} className="flex items-center gap-4">
-                                <img src={member.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={member.displayName} className="w-10 h-10 rounded-full bg-gray-200" />
+                                <img src={member.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
                                 <div className="flex-grow">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="font-semibold text-gray-700">{member.displayName}</span>
@@ -372,7 +357,8 @@ const GroupDetail: React.FC<{
                         return (
                              <div key={comment.id} className={`flex ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                                    {!isAuthor && <p className="text-xs font-bold text-indigo-600">{comment.authorName}</p>}
+                                    {/* ★ コメント投稿者の名前も allUserProfiles から引く */}
+                                    {!isAuthor && <p className="text-xs font-bold text-indigo-600">{allUserProfiles.get(comment.authorId)?.displayName || '名無しのさん'}</p>}
                                     <p className="text-sm">{comment.text}</p>
                                     <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>{new Date(comment.timestamp).toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})}</p>
                                 </div>
@@ -393,8 +379,7 @@ const GroupDetail: React.FC<{
                     group={group}
                     profile={profile}
                     friends={friends}
-                    // setFriends={setFriends} // 削除
-                    onAddFriend={onAddFriend} // ★ onAddFriend を渡す
+                    onAddFriend={onAddFriend} // ★ 修正
                     onClose={() => setIsInviteModalOpen(false)}
                     onInvite={(memberIds) => onInviteMembers(group.id, memberIds)}
                 />
@@ -408,50 +393,36 @@ const GroupDetail: React.FC<{
 const Group: React.FC<GroupProps> = ({ 
     profile, 
     friends, 
-    // setFriends, // 削除
-    onAddFriend, // ★ 追加
+    onAddFriend, // ★ 修正
     groups, 
-    // setGroups, // 削除
-    onAddGroup, // ★ 追加
-    onUpdateGroup, // ★ 追加
+    onAddGroup,
+    onUpdateGroup,
     comments, 
-    // setComments, // 削除
-    onAddComment, // ★ 追加
+    onAddComment,
     habits, 
-    setIsHelpOpen 
+    setIsHelpOpen,
+    allUserProfiles // ★ 追加
 }) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null);
 
-    // ★ handleCreateGroup を修正
+    // (↓ handleCreateGroup, handleInviteMembers は変更なし)
     const handleCreateGroup = (name: string, members: string[]) => {
-        // ★ IDなしのデータを作成
         const newGroupData: Omit<GroupType, 'id'> = {
-            // id: Date.now().toString(), // 削除
             name,
             members
         };
-        // ★ MainApp の onAddGroup を呼び出す
         onAddGroup(newGroupData);
-        // setGroups(prev => [...prev, newGroup]); // 削除 (MainApp が state を更新)
     };
     
-    // ★ handleInviteMembers を修正
     const handleInviteMembers = (groupId: string, memberIds: string[]) => {
         const groupToUpdate = groups.find(g => g.id === groupId);
-        if (!groupToUpdate) return; // グループが見つからない場合は何もしない
-
-        // 更新後のグループオブジェクトを作成
+        if (!groupToUpdate) return;
         const updatedGroup: GroupType = { 
             ...groupToUpdate, 
             members: [...new Set([...groupToUpdate.members, ...memberIds])] 
         };
-        
-        // ★ MainApp の onUpdateGroup を呼び出す
         onUpdateGroup(updatedGroup);
-        // setGroups(prevGroups => ...); // 削除 (MainApp が state を更新)
-        
-        // selectedGroup も更新 (UI即時反映)
         setSelectedGroup(prev => prev ? updatedGroup : null)
     };
 
@@ -460,14 +431,13 @@ const Group: React.FC<GroupProps> = ({
                     group={selectedGroup} 
                     profile={profile} 
                     friends={friends} 
-                    // setFriends={setFriends} // 削除
-                    onAddFriend={onAddFriend} // ★ 追加
+                    onAddFriend={onAddFriend} // ★ 修正
                     comments={comments} 
-                    // setComments={setComments} // 削除
-                    onAddComment={onAddComment} // ★ 追加
+                    onAddComment={onAddComment}
                     habits={habits} 
                     onBack={() => setSelectedGroup(null)} 
-                    onInviteMembers={handleInviteMembers} 
+                    onInviteMembers={handleInviteMembers}
+                    allUserProfiles={allUserProfiles} // ★ 追加
                 />;
     }
 
@@ -488,7 +458,7 @@ const Group: React.FC<GroupProps> = ({
                     <span>作成</span>
                 </button>
             </div>
-            {/* (↓ グループ一覧表示 ... 変更なし) */}
+            {/* ★ グループ一覧表示 (allUserProfiles を使うように修正) */}
             <div className="space-y-4">
                 {groups.map(group => (
                     <div key={group.id} onClick={() => setSelectedGroup(group)} className="bg-white p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow">
@@ -496,9 +466,13 @@ const Group: React.FC<GroupProps> = ({
                         <div className="flex items-center mt-2">
                             <div className="flex -space-x-2">
                                 {group.members.slice(0,5).map(memberId => {
-                                    const member = friends.find(f => f.id === memberId) || (memberId === profile.id ? profile : null);
+                                    // ★ allUserProfiles マップからメンバー情報を取得
+                                    const member = allUserProfiles.get(memberId);
                                     return (
-                                        <img key={memberId} src={member?.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt="member" className="w-8 h-8 rounded-full ring-2 ring-white bg-gray-200" />
+                                        <img key={memberId} 
+                                             src={member?.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} 
+                                             alt={member?.displayName || 'member'} 
+                                             className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
                                     );
                                 })}
                             </div>
@@ -518,8 +492,7 @@ const Group: React.FC<GroupProps> = ({
             {isCreateOpen && <CreateGroupModal 
                                 profile={profile} 
                                 friends={friends} 
-                                // setFriends={setFriends} // 削除
-                                onAddFriend={onAddFriend} // ★ 追加
+                                onAddFriend={onAddFriend} // ★ 修正
                                 onClose={() => setIsCreateOpen(false)} 
                                 onCreate={handleCreateGroup} 
                             />}

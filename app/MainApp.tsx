@@ -17,9 +17,6 @@ import {
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 
-// ★ useLocalStorage は ProfileModal のためだけに残す
-import useLocalStorage from './hooks/useLocalStorage';
-
 // (↓ 既存のコンポーネントインポート)
 import EnergyDiagnosis from './components/EnergyDiagnosis';
 import HabitTracker from './components/HabitTracker';
@@ -66,26 +63,23 @@ const UserIcon: React.FC<{className?: string}> = ({className}) => (
 // Propsの定義 (変更なし)
 interface MainAppProps {
     profile: Profile;
-    setProfile: (profile: Profile | null) => void;
+    setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
 }
 
 const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [view, setView] = useState<View>('habits');
   
-  // ★★★ useLocalStorage を useState に置き換え ★★★
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
   const [friends, setFriends] = useState<Friend[]>([]);
   const [groups, setGroups] = useState<GroupType[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  
+  // ★ すべてのユーザー（自分、友達、グループメンバー）のプロフィール情報を保持するMap
+  const [allUserProfiles, setAllUserProfiles] = useState<Map<string, Profile | Friend>>(new Map());
 
-  // ★ データをクラウドから読み込み中かを示す状態
   const [isLoading, setIsLoading] = useState(true);
-
-  // ★ ProfileModalで使うローカルストレージを削除
-  // const [userProfile, setUserProfile] = useLocalStorage<Profile | null>('userProfile', profile);
-
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -100,78 +94,132 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // ★★★ データの「読み込み」処理 (Firestore) (変更なし) ★★★
+  // ★★★ データの「読み込み」処理 (Firestore) (★修正あり★) ★★★
   useEffect(() => {
-    // profile.id (ユーザーID) がなければ、読み込めないので処理を中断
     if (!profile.id) {
       setIsLoading(false);
       return;
     }
 
-    // 読み込むコレクション（フォルダ）の場所を定義
-    const baseRef = doc(db, 'users', profile.id);
-    const habitsRef = collection(baseRef, 'habits');
-    const historyRef = collection(baseRef, 'energyHistory');
-    const friendsRef = collection(baseRef, 'friends');
-    const groupsRef = collection(baseRef, 'groups');
-    const commentsRef = collection(baseRef, 'comments');
-    const settingsRef = doc(baseRef, 'settings', 'main'); // 診断頻度は単一のドキュメント
+    // ★ ユーザーのプロフィール情報を取得するヘルパー関数
+    const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
+        const userMap = new Map<string, Profile | Friend>();
+        // 自分のプロフィールをまず追加
+        userMap.set(profile.id, profile);
+
+        // 重複しないIDのリストを作成
+        const uniqueIdsToFetch = new Set(userIds.filter(id => id !== profile.id));
+
+        for (const id of uniqueIdsToFetch) {
+            try {
+                const settingsRef = doc(db, 'users', id, 'settings', 'main');
+                const docSnap = await getDoc(settingsRef);
+                if (docSnap.exists() && docSnap.data().profile) {
+                    const userProfile = docSnap.data().profile;
+                    userMap.set(id, {
+                        id: id,
+                        displayName: userProfile.displayName || `ユーザー ${id.substring(0, 4)}`,
+                        imageUrl: userProfile.imageUrl || null
+                    });
+                } else {
+                    // プロフィールがない/見つからないユーザー
+                    userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+                }
+            } catch (error) {
+                console.error(`ユーザー(id: ${id}) のプロフィール取得に失敗:`, error);
+                userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+            }
+        }
+        return userMap;
+    };
     
     const loadData = async () => {
       try {
-        // 1. 習慣(habits)を読み込む
-        const habitsSnap = await getDocs(habitsRef);
-        const loadedHabits = habitsSnap.docs.map(d => ({
-          ...d.data() as Omit<Habit, 'id'>,
-          id: d.id, // FirestoreのドキュメントIDを `id` プロパティとして追加
-        }));
+        const baseRef = doc(db, 'users', profile.id);
+        const habitsRef = collection(baseRef, 'habits');
+        const historyRef = collection(baseRef, 'energyHistory');
+        const friendsRef = collection(baseRef, 'friends');
+        const groupsRef = collection(baseRef, 'groups');
+        const commentsRef = collection(baseRef, 'comments');
+        const settingsRef = doc(baseRef, 'settings', 'main');
+
+        // 1. 自分の基本設定を読み込む (並行して実行)
+        const settingsSnapPromise = getDoc(settingsRef);
+
+        // 2. 自分の習慣、履歴、コメントを読み込む (並行して実行)
+        const habitsSnapPromise = getDocs(habitsRef);
+        const historySnapPromise = getDocs(historyRef);
+        const commentsSnapPromise = getDocs(commentsRef);
+        
+        // 3. 友達リストとグループリストを読み込む (並行して実行)
+        const friendsSnapPromise = getDocs(friendsRef);
+        const groupsSnapPromise = getDocs(groupsRef);
+
+        // --- すべての読み込みが完了するのを待つ ---
+        const [
+            settingsSnap, habitsSnap, historySnap, commentsSnap, 
+            friendsSnap, groupsSnap
+        ] = await Promise.all([
+            settingsSnapPromise, habitsSnapPromise, historySnapPromise, commentsSnapPromise,
+            friendsSnapPromise, groupsSnapPromise
+        ]);
+
+        // --- 読み込んだデータを state にセット (プロフィール以外) ---
+        
+        const loadedHabits = habitsSnap.docs.map(d => ({ ...d.data() as Omit<Habit, 'id'>, id: d.id }));
         setHabits(loadedHabits);
 
-        // 2. 診断履歴(energyHistory)を読み込む
-        const historySnap = await getDocs(historyRef);
         const loadedHistory = historySnap.docs.map(d => d.data() as EnergyRecord);
         setEnergyHistory(loadedHistory);
 
-        // 3. 友達(friends)を読み込む
-        const friendsSnap = await getDocs(friendsRef);
-        const loadedFriends = friendsSnap.docs.map(d => ({
-          ...d.data() as Omit<Friend, 'id'>,
-          id: d.id,
-        }));
-        setFriends(loadedFriends);
-
-        // 4. グループ(groups)を読み込む
-        const groupsSnap = await getDocs(groupsRef);
-        const loadedGroups = groupsSnap.docs.map(d => ({
-          ...d.data() as Omit<GroupType, 'id'>,
-          id: d.id,
-        }));
-        setGroups(loadedGroups);
-
-        // 5. コメント(comments)を読み込む
-        const commentsSnap = await getDocs(commentsRef);
-        const loadedComments = commentsSnap.docs.map(d => ({
-          ...d.data() as Omit<Comment, 'id'>,
-          id: d.id,
-        }));
+        const loadedComments = commentsSnap.docs.map(d => ({ ...d.data() as Omit<Comment, 'id'>, id: d.id }));
         setComments(loadedComments);
         
-        // 6. 設定(diagnosisFrequency)を読み込む
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists() && settingsSnap.data().diagnosisFrequency) {
-          setDiagnosisFrequency(settingsSnap.data().diagnosisFrequency);
-        }
-        
-        // 7. ★ 保存されているプロフィール情報も読み込む
-        // (page.tsxの初期値より新しい情報があれば上書きする)
-        if (settingsSnap.exists() && settingsSnap.data().profile) {
-            const savedProfile = settingsSnap.data().profile;
-            setProfile(prevProfile => ({
+        // ★ 読み込んだ時点での古い友達・グループデータ
+        const loadedFriends = friendsSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        const loadedGroups = groupsSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
+
+        // 設定 (診断頻度 + プロフィール)
+        if (settingsSnap.exists()) {
+          const settingsData = settingsSnap.data();
+          if (settingsData.diagnosisFrequency) {
+            setDiagnosisFrequency(settingsData.diagnosisFrequency);
+          }
+          if (settingsData.profile) {
+            const savedProfile = settingsData.profile;
+            setProfile((prevProfile: Profile | null) => ({
                 ...prevProfile!,
                 displayName: savedProfile.displayName || prevProfile!.displayName,
-                imageUrl: savedProfile.imageUrl || prevProfile!.imageUrl,
+                imageUrl: savedProfile.imageUrl,
             }));
+          }
         }
+
+        // --- 4. 友達とグループメンバー全員のプロフィール情報を取得 ---
+        const friendIds = loadedFriends.map(f => f.id);
+        const memberIds = loadedGroups.flatMap(g => g.members); // 全グループの全メンバーID
+        const allUserIds = Array.from(new Set([...friendIds, ...memberIds]));
+        
+        const userProfilesMap = await fetchUserProfiles(allUserIds);
+        setAllUserProfiles(userProfilesMap); // Group.tsx が使うMapをセット
+
+        // ★★★ ここからが修正点 (問題1の解決) ★★★
+        // 5. 読み込んだ古い友達リスト(loadedFriends)を、最新のプロフィール(userProfilesMap)で更新する
+        const updatedFriends = loadedFriends.map(oldFriend => {
+            const latestProfile = userProfilesMap.get(oldFriend.id);
+            if (latestProfile) {
+                return { // Return the fresh profile
+                    id: latestProfile.id,
+                    displayName: latestProfile.displayName,
+                    imageUrl: latestProfile.imageUrl
+                };
+            }
+            return oldFriend; // もしMapになければ古い情報のまま
+        });
+        
+        // ★ 更新済みの友達リストを state にセットする
+        setFriends(updatedFriends);
+        setGroups(loadedGroups); // グループはここでセット
 
       } catch (error) {
         console.error("データの読み込みに失敗しました:", error);
@@ -182,7 +230,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
     loadData();
     
-  }, [profile.id, setProfile]); // ★ setProfile を依存配列に追加
+  }, [profile.id, setProfile]);
 
 
   // ★★★ データの「書き込み」処理 (Firestore) ★★★
@@ -241,18 +289,59 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
   
-  // (3) グループ関連 (変更なし)
-  const handleAddFriend = async (friendId: string, friendData: Omit<Friend, 'id'>) => {
-    if (!profile.id) return;
+  // ★ (3) グループ関連の書き込みハンドラ (★ onAddFriend を修正 ★)
+  
+  // ★ 友達の「追加」ハンドラ (Group.tsx / Profile.tsx に渡す)
+  const handleAddFriend = async (friendId: string) => {
+    if (!profile.id || friendId === profile.id || friends.some(f => f.id === friendId)) {
+        console.warn("追加できない友達IDです:", friendId);
+        return;
+    }
+    
     try {
+      // 1. 相手のプロフィール情報を Firestore から「読み込む」
+      const friendSettingsRef = doc(db, 'users', friendId, 'settings', 'main');
+      const friendSnap = await getDoc(friendSettingsRef);
+
+      let friendData: Omit<Friend, 'id'>;
+
+      if (friendSnap.exists() && friendSnap.data().profile) {
+        const friendProfile = friendSnap.data().profile;
+        friendData = {
+          displayName: friendProfile.displayName || `ユーザー ${friendId.substring(0, 4)}`,
+          imageUrl: friendProfile.imageUrl || null
+        };
+      } else {
+        friendData = {
+          displayName: `ユーザー ${friendId.substring(0, 4)}`,
+          imageUrl: null
+        };
+      }
+
+      // 2. 自分の友達リストに「書き込む」
       const friendRef = doc(db, 'users', profile.id, 'friends', friendId);
       await setDoc(friendRef, friendData);
+      
+      // 3. ローカルの React 状態 (state) にも追加
       const newFriend: Friend = { ...friendData, id: friendId };
       setFriends(prevFriends => [...prevFriends, newFriend]);
+      
+      // 4. ★ allUserProfiles マップにも追加
+      setAllUserProfiles(prevMap => new Map(prevMap).set(newFriend.id, newFriend));
+
+      // 5. ★ 相手の友達リストにも「自分」を追加する (相互フォロー - 問題②の解決)
+      const myProfileDataForFriend: Omit<Friend, 'id'> = {
+          displayName: profile.displayName,
+          imageUrl: profile.imageUrl
+      };
+      const myRefOnFriendList = doc(db, 'users', friendId, 'friends', profile.id);
+      await setDoc(myRefOnFriendList, myProfileDataForFriend);
+      
     } catch (error) {
       console.error("友達の追加に失敗しました:", error);
     }
   };
+
   const handleAddGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
     if (!profile.id) return;
     try {
@@ -260,6 +349,26 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       const docRef = await addDoc(groupsRef, newGroupData);
       const createdGroup: GroupType = { ...newGroupData, id: docRef.id };
       setGroups(prevGroups => [...prevGroups, createdGroup]);
+      
+      const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
+      if (newMemberIds.length > 0) {
+          const newProfilesMap = await (async () => {
+              const map = new Map<string, Profile | Friend>();
+              for (const id of newMemberIds) {
+                  const settingsRef = doc(db, 'users', id, 'settings', 'main');
+                  const docSnap = await getDoc(settingsRef);
+                  if (docSnap.exists() && docSnap.data().profile) {
+                      const userProfile = docSnap.data().profile;
+                      map.set(id, { id: id, displayName: userProfile.displayName, imageUrl: userProfile.imageUrl });
+                  } else {
+                      map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+                  }
+              }
+              return map;
+          })();
+          setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+      }
+
     } catch (error) {
       console.error("グループの追加に失敗しました:", error);
     }
@@ -273,6 +382,25 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       setGroups(prevGroups => 
         prevGroups.map(g => g.id === updatedGroup.id ? updatedGroup : g)
       );
+      
+      const newMemberIds = updatedGroup.members.filter(id => !allUserProfiles.has(id));
+      if (newMemberIds.length > 0) {
+          const newProfilesMap = await (async () => {
+              const map = new Map<string, Profile | Friend>();
+              for (const id of newMemberIds) {
+                  const settingsRef = doc(db, 'users', id, 'settings', 'main');
+                  const docSnap = await getDoc(settingsRef);
+                  if (docSnap.exists() && docSnap.data().profile) {
+                      const userProfile = docSnap.data().profile;
+                      map.set(id, { id: id, displayName: userProfile.displayName, imageUrl: userProfile.imageUrl });
+                  } else {
+                      map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+                  }
+              }
+              return map;
+          })();
+          setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+      }
     } catch (error)
     {
       console.error("グループの更新に失敗しました:", error);
@@ -302,28 +430,23 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // ★ (5) プロフィール保存ハンドラ (★ここが修正点です★) ★
+  // ★ (5) プロフィール保存ハンドラ (変更なし)
   const handleProfileSave = async (newDisplayName: string, newImageUrl: string | null) => {
     if (!profile) return;
-
-    // 1. UIを即時反映させるため、page.tsx の state を更新
     const updatedProfile: Profile = {
       ...profile,
       displayName: newDisplayName,
       imageUrl: newImageUrl,
     };
     setProfile(updatedProfile); // page.tsx の state を更新
-
-    // 2. Firestoreに保存
     try {
-      // 診断頻度と同じ 'settings/main' ドキュメントにマージ(統合)して保存
       const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
       await setDoc(settingsRef, { 
         profile: {
           displayName: newDisplayName,
           imageUrl: newImageUrl
         }
-      }, { merge: true }); // merge: true で既存の diagnosisFrequency を消さずに追記
+      }, { merge: true });
     } catch (error) {
       console.error("プロフィール情報の保存に失敗しました:", error);
     }
@@ -347,7 +470,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     return '';
   }, [view]);
 
-  // ★★★ ビューのレンダリング (★ここが修正点です★) ★★★
+  // ★★★ ビューのレンダリング (★修正あり★) ★★★
   const renderView = () => {
     // ★ 読み込み中は、ローディング画面を表示
     if (isLoading) {
@@ -365,10 +488,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   habits={habits} 
                 />;
       case 'habits':
-        // ★★★ HabitTrackerに energyHistory を渡す ★★★
+        // ★★★ HabitTrackerに energyHistory を渡す (問題③の解決) ★★★
         return <HabitTracker 
                   habits={habits} 
-                  energyHistory={energyHistory} // ★ この行を追加しました
+                  energyHistory={energyHistory} // ★ この行が問題③を解決します
                   onAddHabit={handleAddHabit}
                   onUpdateHabit={handleUpdateHabit}
                   onDeleteHabit={handleDeleteHabit}
@@ -393,7 +516,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   comments={comments} 
                   onAddComment={handleAddComment}
                   habits={habits} 
-                  setIsHelpOpen={setIsHelpOpen} 
+                  setIsHelpOpen={setIsHelpOpen}
+                  allUserProfiles={allUserProfiles} // ★ プロフィールMAPを渡す (問題1の解決)
                 />;
       default:
         return null;
@@ -453,7 +577,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       </header>
       
-      {/* (↓ ヘルプモーダル ... 変更なし) */}
       {isHelpOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsHelpOpen(false)}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -466,11 +589,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       )}
 
-      {/* ★★★ プロフィールモーダルの修正 ★★★ */}
+      {/* ★★★ プロフィールモーダルの修正 (問題②の解決) ★★★ */}
       {isProfileOpen && (
           <ProfileModal 
             profile={profile}
-            // setProfile={setUserProfile} // 削除
             onSave={handleProfileSave} // ★ この行が `onSave is not a function` エラーを解決します
             friends={friends}
             onAddFriend={handleAddFriend}
@@ -479,7 +601,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           />
       )}
 
-      {/* (↓ main, footer ... 変更なし) */}
       <main className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
         {renderView()}
       </main>
