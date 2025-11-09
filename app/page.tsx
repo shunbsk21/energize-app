@@ -5,13 +5,11 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from 'firebase/auth';
 import Login from './components/Login';
 import MainApp from './MainApp';
-// types.ts が MainApp.tsx と同じ階層にあるなら、page.tsx から見ると ./types です
+// types.ts が page.tsx と同じ app/ フォルダにあるため、パスを ./types にします
 import { Profile } from './types'; 
 
 const App: React.FC = () => {
-  // ★ useLocalStorage を useState に変更
-  // ブラウザを閉じたら状態は消えますが、再訪問時に onAuthStateChanged が
-  // Firebaseから最新のログイン状態を取得して復元してくれます。
+  // useLocalStorage を useState に変更
   const [profile, setProfile] = useState<Profile | null>(null);
   
   // 認証チェック中のローディング状態
@@ -22,38 +20,41 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
       if (user) {
         // --- ログインしている場合 ---
-        // MainApp.tsxが期待する「型」に合わせてProfileオブジェクトを作成
+        
+        // ★ エラーを修正:
+        // types.tsx の Profile の定義に合わせ、id, displayName, imageUrl のみ設定します。
         const userProfile: Profile = {
           id: user.uid,
-          uid: user.uid,
-          email: user.email || '',
           displayName: user.displayName || 'EnerGize User',
-          imageUrl: user.photoURL || '',
+          imageUrl: user.photoURL || null, // types.tsx に合わせ、空文字ではなく null を設定
         };
+        
         setProfile(userProfile);
+
       } else {
         // --- ログインしていない場合 ---
         setProfile(null);
       }
-      // 認証チェック完了
+      
+      // これで認証チェック（ログイン/ログアウトの判定）が完了
       setAuthLoading(false);
     });
 
-    // クリーンアップ関数
+    // コンポーネントが不要になったら監視を停止（メモリリーク防止）
     return () => unsubscribe();
-  }, []); // 依存配列は空でOK（setProfileは安定しているため）
 
+  }, []); // 依存配列は空でOK
+
+  
   // --- 表示のロジック ---
 
-  // 認証チェック中はローディング表示
+  // 認証チェック中（authLoading=true）は、ちらつき防止のためローディング表示
   if (authLoading) {
-    // ここをリッチなローディング画面にしても良いですね
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
 
-  // 認証チェック後、profile がなければログイン画面
+  // 認証チェック後、profile がなければ（nullなら）ログイン画面
   if (!profile) {
-    // Loginコンポーネントに渡す setProfile も useState のセッターになります
     return <Login onLoginSuccess={setProfile} />;
   }
 
