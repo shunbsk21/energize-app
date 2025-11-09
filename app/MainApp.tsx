@@ -23,6 +23,7 @@ import HabitTracker from './components/HabitTracker';
 import Analytics from './components/Analytics';
 import Group from './components/Group';
 import ProfileModal from './components/Profile';
+// ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
 
 // --- Icon Components Start (コード変更なし) ---
@@ -72,10 +73,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
-  const [friends, setFriends] = useState<Friend[]>([]);
+  
+  // ★ `friends` を `following` と `followers` に分離
+  const [following, setFollowing] = useState<Friend[]>([]); // 自分がフォローした人
+  const [followers, setFollowers] = useState<Friend[]>([]); // 自分をフォローした人
+  
   const [groups, setGroups] = useState<GroupType[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   
+  // ★ 新しい state: グループ招待
+  const [groupInvites, setGroupInvites] = useState<GroupType[]>([]);
+
   // ★ すべてのユーザー（自分、友達、グループメンバー）のプロフィール情報を保持するMap
   const [allUserProfiles, setAllUserProfiles] = useState<Map<string, Profile | Friend>>(new Map());
 
@@ -101,7 +109,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       return;
     }
 
-    // ★ ユーザーのプロフィール情報を取得するヘルパー関数 (★修正あり★)
+    // ★ ユーザーのプロフィール情報を取得するヘルパー関数
     const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
         const userMap = new Map<string, Profile | Friend>();
         // 自分のプロフィールをまず追加 (最新の 'profile' state を使う)
@@ -137,41 +145,30 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const baseRef = doc(db, 'users', profile.id);
         const habitsRef = collection(baseRef, 'habits');
         const historyRef = collection(baseRef, 'energyHistory');
-        const friendsRef = collection(baseRef, 'friends');
-        const groupsRef = collection(baseRef, 'groups');
         const commentsRef = collection(baseRef, 'comments');
         const settingsRef = doc(baseRef, 'settings', 'main');
+        
+        // ★ 読み込むコレクションを変更
+        const followingRef = collection(baseRef, 'following'); // 旧 friends
+        const followersRef = collection(baseRef, 'followers'); // 新規
+        const groupsRef = collection(baseRef, 'groups');
+        const groupInvitesRef = collection(baseRef, 'group_invites'); // 新規
 
-        // 1. 自分の基本設定を読み込む
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
-          const settingsData = settingsSnap.data();
-          if (settingsData.diagnosisFrequency) {
-            setDiagnosisFrequency(settingsData.diagnosisFrequency);
-          }
-          if (settingsData.profile) {
-            const savedProfile = settingsData.profile;
-            // ★ setProfile は profile が変更された時のみ呼び出す
-            if (savedProfile.displayName !== profile.displayName || savedProfile.imageUrl !== profile.imageUrl) {
-              setProfile((prevProfile: Profile | null) => ({
-                  ...prevProfile!,
-                  displayName: savedProfile.displayName || prevProfile!.displayName,
-                  imageUrl: savedProfile.imageUrl,
-              }));
-            }
-          }
-        }
-
-        // 2. 他のデータを並行して読み込む
-        const [habitsSnap, historySnap, commentsSnap, friendsSnap, groupsSnap] = await Promise.all([
+        const [
+            settingsSnap, habitsSnap, historySnap, commentsSnap, 
+            followingSnap, followersSnap, groupsSnap, groupInvitesSnap
+        ] = await Promise.all([
+            getDoc(settingsRef),
             getDocs(habitsRef),
             getDocs(historyRef),
             getDocs(commentsRef),
-            getDocs(friendsRef),
-            getDocs(groupsRef)
+            getDocs(followingRef),
+            getDocs(followersRef),
+            getDocs(groupsRef),
+            getDocs(groupInvitesRef)
         ]);
 
-        // --- 読み込んだデータを state にセット (プロフィール以外) ---
+        // --- 読み込んだデータを state にセット ---
         
         const loadedHabits = habitsSnap.docs.map(d => ({ ...d.data() as Omit<Habit, 'id'>, id: d.id }));
         setHabits(loadedHabits);
@@ -182,31 +179,53 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const loadedComments = commentsSnap.docs.map(d => ({ ...d.data() as Omit<Comment, 'id'>, id: d.id }));
         setComments(loadedComments);
         
-        const loadedFriends = friendsSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        // ★ following と followers にデータをセット
+        const loadedFollowing = followingSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        const loadedFollowers = followersSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        
         const loadedGroups = groupsSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
+        const loadedGroupInvites = groupInvitesSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
+        setGroupInvites(loadedGroupInvites); // ★ 招待をセット
 
-        // --- 4. 友達とグループメンバー全員のプロフィール情報を取得 ---
-        const friendIds = loadedFriends.map(f => f.id);
+        // 設定 (診断頻度 + プロフィール)
+        if (settingsSnap.exists()) {
+          const settingsData = settingsSnap.data();
+          if (settingsData.diagnosisFrequency) {
+            setDiagnosisFrequency(settingsData.diagnosisFrequency);
+          }
+          if (settingsData.profile) {
+            const savedProfile = settingsData.profile;
+            if (savedProfile.displayName !== profile.displayName || savedProfile.imageUrl !== profile.imageUrl) {
+              setProfile((prevProfile: Profile | null) => ({
+                  ...prevProfile!,
+                  displayName: savedProfile.displayName || prevProfile!.displayName,
+                  imageUrl: savedProfile.imageUrl,
+              }));
+            }
+          }
+        }
+
+        // --- 4. 全員のプロフィール情報を取得 ---
+        const followingIds = loadedFollowing.map(f => f.id);
+        const followersIds = loadedFollowers.map(f => f.id);
         const memberIds = loadedGroups.flatMap(g => g.members);
-        const allUserIds = Array.from(new Set([...friendIds, ...memberIds]));
+        const inviteMemberIds = loadedGroupInvites.flatMap(g => g.members);
+        
+        const allUserIds = Array.from(new Set([...followingIds, ...followersIds, ...memberIds, ...inviteMemberIds]));
         
         const userProfilesMap = await fetchUserProfiles(allUserIds);
-        setAllUserProfiles(userProfilesMap); // Group.tsx が使うMapをセット
+        setAllUserProfiles(userProfilesMap);
 
-        // 5. 読み込んだ友達リスト(loadedFriends)を、最新のプロフィール(userProfilesMap)で更新する
-        const updatedFriends = loadedFriends.map(oldFriend => {
-            const latestProfile = userProfilesMap.get(oldFriend.id);
-            if (latestProfile) {
-                return {
-                    id: latestProfile.id,
-                    displayName: latestProfile.displayName,
-                    imageUrl: latestProfile.imageUrl
-                };
-            }
-            return oldFriend;
+        // 5. 読み込んだ following / followers リストを、最新のプロフィールで更新する
+        const updatedFollowing = loadedFollowing.map(oldFriend => {
+            return userProfilesMap.get(oldFriend.id) || oldFriend;
+        });
+        const updatedFollowers = loadedFollowers.map(oldFollower => {
+            return userProfilesMap.get(oldFollower.id) || oldFollower;
         });
         
-        setFriends(updatedFriends);
+        setFollowing(updatedFollowing);
+        setFollowers(updatedFollowers);
         setGroups(loadedGroups);
 
       } catch (error) {
@@ -277,12 +296,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
   
-  // (3) グループ関連 (★ onAddFriend, onAddGroup, onUpdateGroup を修正 ★)
+  // ★ (3) グループ・友達関連の書き込みハンドラ (★全面的に修正★) ★
   
-  // ★ 友達の「追加」ハンドラ (相互フォロー対応)
-  const handleAddFriend = async (friendId: string) => {
-    if (!profile.id || friendId === profile.id || friends.some(f => f.id === friendId)) {
-        console.warn("追加できない友達IDです:", friendId);
+  // ★ 友達を「フォロー」するハンドラ (Profile.tsx / Group.tsx に渡す)
+  const handleFollowUser = async (friendId: string) => {
+    if (!profile.id || friendId === profile.id || following.some(f => f.id === friendId)) {
+        console.warn("すでにフォロー済みか、自分自身です:", friendId);
         return;
     }
     
@@ -306,134 +325,143 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         };
       }
 
-      // 2. 自分の友達リストに「書き込む」
-      const friendRef = doc(db, 'users', profile.id, 'friends', friendId);
-      await setDoc(friendRef, friendData);
+      // 2. 自分の `following` リストに「書き込む」
+      const followingRef = doc(db, 'users', profile.id, 'following', friendId);
+      await setDoc(followingRef, friendData);
       
       // 3. ローカルの React 状態 (state) にも追加
       const newFriend: Friend = { ...friendData, id: friendId };
-      setFriends(prevFriends => [...prevFriends, newFriend]);
-      
-      // 4. allUserProfiles マップにも追加
+      setFollowing(prevFollowing => [...prevFollowing, newFriend]);
       setAllUserProfiles(prevMap => new Map(prevMap).set(newFriend.id, newFriend));
 
-      // 5. ★ 相手の友達リストにも「自分」を追加する (相互フォロー)
-      const myProfileDataForFriend: Omit<Friend, 'id'> = {
+      // 4. ★ 相手の `followers` リストにも「自分」を追加する (相互フォロー申請)
+      const myProfileDataForFollower: Omit<Friend, 'id'> = {
           displayName: profile.displayName,
           imageUrl: profile.imageUrl
       };
-      const myRefOnFriendList = doc(db, 'users', friendId, 'friends', profile.id);
-      await setDoc(myRefOnFriendList, myProfileDataForFriend);
+      const myRefOnFollowerList = doc(db, 'users', friendId, 'followers', profile.id);
+      await setDoc(myRefOnFollowerList, myProfileDataForFollower);
       
     } catch (error) {
-      console.error("友達の追加に失敗しました:", error);
+      console.error("フォローに失敗しました:", error);
     }
   };
 
-  // ★ グループの「追加」ハンドラ (メンバー全員に書き込む)
-  const handleAddGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
+  // ★ グループの「作成」ハンドラ (メンバー全員に招待を送る)
+  const handleCreateGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
     if (!profile.id) return;
     try {
       // 1. 新しいグループIDを先に生成
       const newGroupRef = doc(collection(db, 'users', profile.id, 'groups'));
       const newGroupId = newGroupRef.id;
-      const groupDocWithId: GroupType = { ...newGroupData, id: newGroupId };
+      // ★ IDを含めた完全なグループデータを作成
+      const groupDocWithId: GroupType = { 
+          id: newGroupId,
+          name: newGroupData.name,
+          members: newGroupData.members 
+      };
 
-      // 2. メンバー全員にこのグループを書き込む
+      // 2. メンバー全員に処理
       for (const memberId of newGroupData.members) {
-          const groupRefForMember = doc(db, 'users', memberId, 'groups', newGroupId);
-          // (自分の書き込みは `profile.id == userId` ルールで、
-          //  他人への書き込みは `request.auth.uid in request.resource.data.members` ルールで許可される)
-          await setDoc(groupRefForMember, newGroupData); 
+        if (memberId === profile.id) {
+          // 自分は `groups` (参加済み) に追加
+          const groupRefForMe = doc(db, 'users', profile.id, 'groups', newGroupId);
+          await setDoc(groupRefForMe, newGroupData); // (idなしの元データでOK)
+        } else {
+          // 他のメンバーは `group_invites` (招待) に追加
+          const inviteRef = doc(db, 'users', memberId, 'group_invites', newGroupId);
+          await setDoc(inviteRef, newGroupData); // (idなしの元データでOK)
+        }
       }
       
-      // 3. ローカルの state を更新
+      // 3. ローカルの state を更新 (自分のグループに)
       setGroups(prevGroups => [...prevGroups, groupDocWithId]);
       
       // 4. 新規メンバーのプロフィールも取得してキャッシュに追加
       const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
       if (newMemberIds.length > 0) {
-          // ★★★ ここからがエラー修正箇所 ★★★
-          const newProfilesMap = await (async () => {
-              const map = new Map<string, Profile | Friend>();
-              for (const id of newMemberIds) {
-                  const settingsRef = doc(db, 'users', id, 'settings', 'main');
-                  const docSnap = await getDoc(settingsRef);
-                  if (docSnap.exists() && docSnap.data().profile) {
-                      const userProfile = docSnap.data().profile;
-                      map.set(id, { id: id, displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`, imageUrl: userProfile.imageUrl });
-                  } else {
-                      map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-                  }
-              }
-              return map; // ★ 関数がMapを返すようにする
-          })();
+          const newProfilesMap = await fetchUserProfiles(newMemberIds);
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
-          // ★★★ エラー修正ここまで ★★★
       }
 
     } catch (error) {
-      console.error("グループの追加に失敗しました:", error);
+      console.error("グループの作成/招待に失敗しました:", error);
     }
   };
-
-  // ★ グループの「更新」ハンドラ (メンバー全員に書き込む)
-  const handleUpdateGroup = async (updatedGroup: GroupType) => {
-    if (!profile.id || !updatedGroup.id) return;
+  
+  // ★ グループに「メンバーを招待」するハンドラ (既存グループへの追加)
+  const handleInviteToGroup = async (group: GroupType, memberIdsToInvite: string[]) => {
+    if (!profile.id || !group.id || memberIdsToInvite.length === 0) return;
+    
+    // 1. 更新後のメンバーリスト (招待する人も含める)
+    const updatedMembers = [...new Set([...group.members, ...memberIdsToInvite])];
+    const updatedGroupData: GroupType = { ...group, members: updatedMembers };
+    const { id, ...dataToSave } = updatedGroupData; // IDを除いた保存用データ
+    
     try {
-      const { id, ...dataToSave } = updatedGroup;
-      
-      const oldGroup = groups.find(g => g.id === updatedGroup.id);
-      const oldMembers = oldGroup ? oldGroup.members : [];
-      const newMembers = updatedGroup.members.filter(id => !oldMembers.includes(id));
-
-      // 1. 新しく招待されたメンバーにだけ、グループを作成
-      for (const newMemberId of newMembers) {
-          const groupRefForNewMember = doc(db, 'users', newMemberId, 'groups', updatedGroup.id);
-          await setDoc(groupRefForNewMember, dataToSave);
+      // 2. 新しく招待されたメンバーの `group_invites` に書き込む
+      for (const newMemberId of memberIdsToInvite) {
+        if (newMemberId === profile.id || group.members.includes(newMemberId)) continue; // 自分や既存メンバーは除く
+        const inviteRef = doc(db, 'users', newMemberId, 'group_invites', group.id);
+        await setDoc(inviteRef, dataToSave);
       }
       
-      // 2. 既存のメンバー（自分を含む）のグループ情報を更新
-      // (注意: メンバーが脱退するロジックはここには含まれていない)
-      for (const memberId of oldMembers) {
-          const groupRefForMember = doc(db, 'users', memberId, 'groups', updatedGroup.id);
-          // (注: 他人の `write` は失敗する。自分のだけ更新する)
-          if (memberId === profile.id) {
-              await setDoc(groupRefForMember, dataToSave);
-          }
+      // 3. 既にメンバーである全員の `groups` 情報を更新する
+      for (const existingMemberId of group.members) {
+        const groupRef = doc(db, 'users', existingMemberId, 'groups', group.id);
+        await setDoc(groupRef, dataToSave); // メンバーリストを最新に
       }
 
-      // 3. ローカルの state を更新
-      setGroups(prevGroups => 
-        prevGroups.map(g => g.id === updatedGroup.id ? updatedGroup : g)
-      );
-      
-      // 4. 新規メンバーのプロフィールも取得してキャッシュに追加
-      const newMemberIdsToFetch = newMembers.filter(id => !allUserProfiles.has(id));
+      // 4. ローカルの state を更新
+      setGroups(prevGroups => prevGroups.map(g => g.id === group.id ? updatedGroupData : g));
+
+      // 5. 新規メンバーのプロフィールも取得してキャッシュに追加
+      const newMemberIdsToFetch = memberIdsToInvite.filter(id => !allUserProfiles.has(id));
       if (newMemberIdsToFetch.length > 0) {
-          // ★★★ ここからがエラー箇所です ★★★
-          const newProfilesMap = await (async () => {
-              const map = new Map<string, Profile | Friend>();
-              for (const id of newMemberIdsToFetch) { // ★ newMemberIds -> newMemberIdsToFetch
-                  const settingsRef = doc(db, 'users', id, 'settings', 'main');
-                  const docSnap = await getDoc(settingsRef);
-                  if (docSnap.exists() && docSnap.data().profile) {
-                      const userProfile = docSnap.data().profile;
-                      map.set(id, { id: id, displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`, imageUrl: userProfile.imageUrl });
-                  } else {
-                      map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-                  }
-              }
-              return map; // ★ 関数がMapを返すようにする
-          })();
+          const newProfilesMap = await fetchUserProfiles(newMemberIdsToFetch);
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
-          // ★★★ エラー修正ここまで ★★★
       }
-    } catch (error)
-    {
-      console.error("グループの更新に失敗しました:", error);
+
+    } catch (error) {
+      console.error("グループへの招待に失敗しました:", error);
     }
   };
+  
+  // ★ グループ招待を「承認」するハンドラ
+  const handleAcceptGroupInvite = async (invite: GroupType) => {
+    if (!profile.id || !invite.id) return;
+    try {
+      // 1. `groups` (参加済み) に追加
+      const groupRef = doc(db, 'users', profile.id, 'groups', invite.id);
+      const { id, ...dataToSave } = invite; // IDは除外
+      await setDoc(groupRef, dataToSave);
+
+      // 2. `group_invites` (招待) から削除
+      const inviteRef = doc(db, 'users', profile.id, 'group_invites', invite.id);
+      await deleteDoc(inviteRef);
+
+      // 3. ローカル state を更新
+      setGroups(prev => [...prev, invite]);
+      setGroupInvites(prev => prev.filter(g => g.id !== invite.id));
+    } catch (error) {
+      console.error("グループ招待の承認に失敗しました:", error);
+    }
+  };
+  
+  // ★ グループ招待を「拒否」するハンドラ
+  const handleDeclineGroupInvite = async (inviteId: string) => {
+    if (!profile.id) return;
+    try {
+      // 1. `group_invites` から削除
+      const inviteRef = doc(db, 'users', profile.id, 'group_invites', inviteId);
+      await deleteDoc(inviteRef);
+      // 2. ローカル state を更新
+      setGroupInvites(prev => prev.filter(g => g.id !== inviteId));
+    } catch (error) {
+      console.error("グループ招待の拒否に失敗しました:", error);
+    }
+  };
+
   const handleAddComment = async (newCommentData: Omit<Comment, 'id'>) => {
     if (!profile.id) return;
     try {
@@ -467,6 +495,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       imageUrl: newImageUrl,
     };
     setProfile(updatedProfile); // page.tsx の state を更新
+    setAllUserProfiles(prevMap => new Map(prevMap).set(profile.id, updatedProfile)); // ★ 自分の情報もMAPで更新
     try {
       const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
       await setDoc(settingsRef, { 
@@ -500,7 +529,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // ★★★ ビューのレンダリング (★修正あり★) ★★★
   const renderView = () => {
-    // ★ 読み込み中は、ローディング画面を表示
     if (isLoading) {
       return <div className="text-center p-10">データを読み込んでいます...</div>;
     }
@@ -535,11 +563,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       case 'group':
         return <Group 
                   profile={profile} 
-                  friends={friends} 
-                  onAddFriend={handleAddFriend}
+                  following={following} // ★ 修正
+                  followers={followers} // ★ 追加
+                  onFollowUser={handleFollowUser} // ★ 修正
                   groups={groups} 
-                  onAddGroup={handleAddGroup}
-                  onUpdateGroup={handleUpdateGroup}
+                  groupInvites={groupInvites} // ★ 追加
+                  onAddGroup={handleCreateGroup} // ★ 修正
+                  onInviteToGroup={handleInviteToGroup} // ★ 修正
+                  onAcceptGroupInvite={handleAcceptGroupInvite} // ★ 追加
+                  onDeclineGroupInvite={handleDeclineGroupInvite} // ★ 追加
                   comments={comments} 
                   onAddComment={handleAddComment}
                   habits={habits} 
@@ -615,12 +647,14 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       )}
 
+      {/* ★★★ プロフィールモーダルの修正 ★★★ */}
       {isProfileOpen && (
           <ProfileModal 
             profile={profile}
             onSave={handleProfileSave}
-            friends={friends}
-            onAddFriend={handleAddFriend}
+            following={following} // ★ 修正
+            followers={followers} // ★ 追加
+            onFollowUser={handleFollowUser} // ★ 修正
             onClose={() => setIsProfileOpen(false)}
             onLogout={handleLogout}
           />

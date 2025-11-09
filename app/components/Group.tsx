@@ -1,21 +1,26 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types'; // ★ ユーザーの指示通り ../types に修正
+// ★ ユーザーの指示通り ../types に修正
+import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 
-// ★★★ Propsの定義を
+// ★★★ Propsの定義を修正 ★★★
 interface GroupProps {
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
+    following: Friend[]; // ★ friends -> following
+    followers: Friend[]; // ★ 追加
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     groups: GroupType[];
+    groupInvites: GroupType[]; // ★ 追加
     onAddGroup: (newGroupData: Omit<GroupType, 'id'>) => void;
-    onUpdateGroup: (updatedGroup: GroupType) => void;
+    onInviteToGroup: (group: GroupType, memberIdsToInvite: string[]) => void; // ★ onUpdateGroup -> onInviteToGroup
+    onAcceptGroupInvite: (invite: GroupType) => void; // ★ 追加
+    onDeclineGroupInvite: (inviteId: string) => void; // ★ 追加
     comments: Comment[];
     onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     setIsHelpOpen: (isOpen: boolean) => void;
-    allUserProfiles: Map<string, Profile | Friend>; // ★ 追加
+    allUserProfiles: Map<string, Profile | Friend>;
 }
 
 // (↓ isHabitScheduledForDate は変更なし)
@@ -65,43 +70,50 @@ const UserPlusIcon: React.FC<{className?: string}> = ({className}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
     </svg>
 );
+// ★ 友達候補追加用のアイコン
+const UserAddIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-9 9m4.5-1.206a8.959 8.959 0 0 1-4.5 1.207" />
+    </svg>
+);
 
 // ★ AddFriendInline の Props を修正
 const AddFriendInline: React.FC<{
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
-}> = ({ profile, friends, onAddFriend }) => {
+    following: Friend[]; // ★ friends -> following
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
+}> = ({ profile, following, onFollowUser }) => {
     const [friendId, setFriendId] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
     const handleAddFriend = () => {
-        if (!friendId.trim()) {
+        const trimmedId = friendId.trim();
+        if (!trimmedId) {
             setError('ユーザーIDを入力してください。');
             return;
         }
-        if (friendId.trim() === profile.id) {
+        if (trimmedId === profile.id) {
             setError('自分自身を友達として追加することはできません。');
             return;
         }
-        if (friends.some(f => f.id === friendId.trim())) {
-            setError('このユーザーは既に友達です。');
+        if (following.some(f => f.id === trimmedId)) {
+            setError('このユーザーは既にフォロー中です。');
             return;
         }
 
-        // ★ MainApp の onAddFriend に「IDだけ」を渡す
-        onAddFriend(friendId.trim());
+        // ★ MainApp の onFollowUser に「IDだけ」を渡す
+        onFollowUser(trimmedId);
 
         setError('');
         setFriendId('');
-        setSuccess(`友達追加リクエストを送信しました！`);
+        setSuccess(`フォローリクエストを送信しました！`);
         setTimeout(() => setSuccess(''), 3000);
     };
 
     return (
         <div className="p-3 bg-gray-100 rounded-lg">
-            <label className="block text-sm font-medium text-gray-700 mb-1">友達をIDで追加</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">友達をIDでフォロー</label>
             <div className="flex gap-2">
                 <input
                     type="text"
@@ -122,11 +134,11 @@ const AddFriendInline: React.FC<{
 // ★ CreateGroupModal の Props を修正
 const CreateGroupModal: React.FC<{
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
+    following: Friend[]; // ★ friends -> following
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     onClose: () => void;
-    onCreate: (name: string, members: string[]) => void;
-}> = ({ profile, friends, onAddFriend, onClose, onCreate }) => {
+    onCreate: (name: string, members: string[]) => void; // MainApp の onAddGroup
+}> = ({ profile, following, onFollowUser, onClose, onCreate }) => {
     const [groupName, setGroupName] = useState('');
     const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
     const [error, setError] = useState('');
@@ -148,6 +160,7 @@ const CreateGroupModal: React.FC<{
             setError('グループ名を入力してください。');
             return;
         }
+        // ★ 自分自身と、選択した友達をメンバーとして渡す
         onCreate(groupName, [profile.id, ...Array.from(selectedFriends)]);
         onClose();
     };
@@ -163,19 +176,18 @@ const CreateGroupModal: React.FC<{
                         {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                     </div>
                     <div>
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">メンバーを招待</h3>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">メンバーを招待 (フォロー中の友達)</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto p-1">
-                            {friends.length > 0 ? friends.map(friend => (
+                            {following.length > 0 ? following.map(friend => (
                                 <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                     <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                    {/* ★ 友達の本当の表示名を使う */}
                                     <img src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
                                     <span className="ml-2 text-gray-800">{friend.displayName}</span>
                                 </div>
-                            )) : <p className="text-center text-sm text-gray-500 py-4">まず友達を追加しましょう</p>}
+                            )) : <p className="text-center text-sm text-gray-500 py-4">まず友達をフォローしましょう</p>}
                         </div>
                     </div>
-                    <AddFriendInline profile={profile} friends={friends} onAddFriend={onAddFriend} />
+                    <AddFriendInline profile={profile} following={following} onFollowUser={onFollowUser} />
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
                     <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">キャンセル</button>
@@ -190,17 +202,18 @@ const CreateGroupModal: React.FC<{
 const InviteMemberModal: React.FC<{
     group: GroupType;
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
+    following: Friend[]; // ★ friends -> following
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     onClose: () => void;
-    onInvite: (memberIds: string[]) => void;
-}> = ({ group, profile, friends, onAddFriend, onClose, onInvite }) => {
+    onInvite: (memberIds: string[]) => void; // MainApp の onInviteToGroup
+}> = ({ group, profile, following, onFollowUser, onClose, onInvite }) => {
     const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
 
+    // ★ 招待可能な友達 = フォロー中の人のうち、まだグループメンバーでない人
     const availableFriends = useMemo(() => {
         const memberIds = new Set(group.members);
-        return friends.filter(f => !memberIds.has(f.id));
-    }, [friends, group.members]);
+        return following.filter(f => !memberIds.has(f.id));
+    }, [following, group.members]);
 
     const toggleFriend = (friendId: string) => {
         setSelectedFriends(prev => {
@@ -228,15 +241,14 @@ const InviteMemberModal: React.FC<{
                         {availableFriends.length > 0 ? availableFriends.map(friend => (
                             <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                 <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                {/* ★ 友達の本当の表示名を使う */}
                                 <img src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
                                 <span className="ml-2 text-gray-800">{friend.displayName}</span>
                             </div>
                         )) : (
-                            <p className="text-gray-500 text-center py-4">招待できる友達がいません。</p>
+                            <p className="text-gray-500 text-center py-4">招待できるフォロー中の友達がいません。</p>
                         )}
                     </div>
-                    <AddFriendInline profile={profile} friends={friends} onAddFriend={onAddFriend} />
+                    <AddFriendInline profile={profile} following={following} onFollowUser={onFollowUser} />
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
                     <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">キャンセル</button>
@@ -252,20 +264,17 @@ const InviteMemberModal: React.FC<{
 const GroupDetail: React.FC<{
     group: GroupType;
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
+    following: Friend[]; // ★ friends -> following
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     comments: Comment[];
     onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
     habits: Habit[];
     onBack: () => void;
-    onInviteMembers: (groupId: string, memberIds: string[]) => void;
-    allUserProfiles: Map<string, Profile | Friend>; // ★ 追加
-}> = ({ group, profile, friends, onAddFriend, comments, onAddComment, habits, onBack, onInviteMembers, allUserProfiles }) => {
+    onInviteMembers: (group: GroupType, memberIds: string[]) => void; // ★ 修正
+    allUserProfiles: Map<string, Profile | Friend>;
+}> = ({ group, profile, following, onFollowUser, comments, onAddComment, habits, onBack, onInviteMembers, allUserProfiles }) => {
     const [newComment, setNewComment] = useState('');
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-
-    // ★ allUserProfiles は props から受け取るので useMemo を削除
-    // const allUsers = useMemo(() => [profile, ...friends], [profile, friends]);
 
     const groupComments = useMemo(() => comments.filter(c => c.groupId === group.id).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()), [comments, group.id]);
 
@@ -307,6 +316,9 @@ const GroupDetail: React.FC<{
         onAddComment(commentData);
         setNewComment('');
     };
+    
+    // ★ 自分がフォローしている人のIDセット (機能C用)
+    const followingIds = useMemo(() => new Set(following.map(f => f.id)), [following]);
 
     return (
         <div className="animate-fade-in space-y-6">
@@ -330,6 +342,9 @@ const GroupDetail: React.FC<{
                     {group.members.map(memberId => {
                         const member = getMemberProfile(memberId);
                         const progress = getMemberProgress(memberId);
+                        const isSelf = memberId === profile.id;
+                        const isFollowing = followingIds.has(memberId);
+                        
                         return (
                             <div key={memberId} className="flex items-center gap-4">
                                 <img src={member.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
@@ -342,6 +357,16 @@ const GroupDetail: React.FC<{
                                         <div className="bg-indigo-500 h-2.5 rounded-full" style={{width: `${progress}%`}}></div>
                                     </div>
                                 </div>
+                                {/* ★ 機能C: グループ内からフォローするボタン */}
+                                {!isSelf && !isFollowing && (
+                                    <button 
+                                        onClick={() => onFollowUser(memberId)}
+                                        className="p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                                        title={`${member.displayName} をフォローする`}
+                                    >
+                                        <UserPlusIcon className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
                         )
                     })}
@@ -378,10 +403,10 @@ const GroupDetail: React.FC<{
                 <InviteMemberModal
                     group={group}
                     profile={profile}
-                    friends={friends}
-                    onAddFriend={onAddFriend} // ★ 修正
+                    following={following} // ★ 修正
+                    onFollowUser={onFollowUser} // ★ 修正
                     onClose={() => setIsInviteModalOpen(false)}
-                    onInvite={(memberIds) => onInviteMembers(group.id, memberIds)}
+                    onInvite={(memberIds) => onInviteMembers(group, memberIds)} // ★ 修正
                 />
             )}
         </div>
@@ -392,21 +417,25 @@ const GroupDetail: React.FC<{
 // ★ Group (本体) の Props を修正
 const Group: React.FC<GroupProps> = ({ 
     profile, 
-    friends, 
-    onAddFriend, // ★ 修正
+    following, // ★ 修正
+    followers, // ★ 追加
+    onFollowUser, // ★ 修正
     groups, 
+    groupInvites, // ★ 追加
     onAddGroup,
-    onUpdateGroup,
+    onInviteToGroup, // ★ 修正
+    onAcceptGroupInvite, // ★ 追加
+    onDeclineGroupInvite, // ★ 追加
     comments, 
     onAddComment,
     habits, 
     setIsHelpOpen,
-    allUserProfiles // ★ 追加
+    allUserProfiles
 }) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null);
 
-    // (↓ handleCreateGroup, handleInviteMembers は変更なし)
+    // (↓ handleCreateGroup は変更なし)
     const handleCreateGroup = (name: string, members: string[]) => {
         const newGroupData: Omit<GroupType, 'id'> = {
             name,
@@ -415,29 +444,23 @@ const Group: React.FC<GroupProps> = ({
         onAddGroup(newGroupData);
     };
     
-    const handleInviteMembers = (groupId: string, memberIds: string[]) => {
-        const groupToUpdate = groups.find(g => g.id === groupId);
-        if (!groupToUpdate) return;
-        const updatedGroup: GroupType = { 
-            ...groupToUpdate, 
-            members: [...new Set([...groupToUpdate.members, ...memberIds])] 
-        };
-        onUpdateGroup(updatedGroup);
-        setSelectedGroup(prev => prev ? updatedGroup : null)
+    // ★ handleInviteMembers (onInvite) を修正
+    const handleInviteMembers = (group: GroupType, memberIds: string[]) => {
+        onInviteToGroup(group, memberIds);
     };
 
     if (selectedGroup) {
         return <GroupDetail 
                     group={selectedGroup} 
                     profile={profile} 
-                    friends={friends} 
-                    onAddFriend={onAddFriend} // ★ 修正
+                    following={following} // ★ 修正
+                    onFollowUser={onFollowUser} // ★ 修正
                     comments={comments} 
                     onAddComment={onAddComment}
                     habits={habits} 
                     onBack={() => setSelectedGroup(null)} 
                     onInviteMembers={handleInviteMembers}
-                    allUserProfiles={allUserProfiles} // ★ 追加
+                    allUserProfiles={allUserProfiles}
                 />;
     }
 
@@ -458,41 +481,76 @@ const Group: React.FC<GroupProps> = ({
                     <span>作成</span>
                 </button>
             </div>
-            {/* ★ グループ一覧表示 (allUserProfiles を使うように修正) */}
-            <div className="space-y-4">
-                {groups.map(group => (
-                    <div key={group.id} onClick={() => setSelectedGroup(group)} className="bg-white p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow">
-                        <h3 className="text-lg font-bold text-gray-800">{group.name}</h3>
-                        <div className="flex items-center mt-2">
-                            <div className="flex -space-x-2">
-                                {group.members.slice(0,5).map(memberId => {
-                                    // ★ allUserProfiles マップからメンバー情報を取得
-                                    const member = allUserProfiles.get(memberId);
-                                    return (
-                                        <img key={memberId} 
-                                             src={member?.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} 
-                                             alt={member?.displayName || 'member'} 
-                                             className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
-                                    );
-                                })}
-                            </div>
-                            <span className="ml-3 text-sm text-gray-500">{group.members.length}人のメンバー</span>
-                        </div>
-                    </div>
-                ))}
-            </div>
 
-            {groups.length === 0 && (
-                <div className="text-center text-gray-500 py-10">
-                    <p>まだグループに参加していません。</p>
-                    <p>新しいグループを作成して友達と進捗を共有しましょう！</p>
+            {/* ★★★ グループ招待リスト (問題②の解決) ★★★ */}
+            {groupInvites.length > 0 && (
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">招待されているグループ</h3>
+                    <div className="space-y-3">
+                        {groupInvites.map(invite => (
+                            <div key={invite.id} className="flex items-center justify-between p-3 bg-indigo-50 rounded-lg">
+                                <div>
+                                    <span className="font-semibold text-indigo-800">{invite.name}</span>
+                                    <span className="text-sm text-gray-500 ml-2">({invite.members.length}人)</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => onDeclineGroupInvite(invite.id)}
+                                        className="px-3 py-1 bg-gray-200 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-300"
+                                    >
+                                      拒否
+                                    </button>
+                                    <button
+                                        onClick={() => onAcceptGroupInvite(invite)}
+                                        className="px-3 py-1 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700"
+                                    >
+                                      参加
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
+            
+            {/* ★ グループ一覧表示 (allUserProfiles を使うように修正) */}
+            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">参加中のグループ</h3>
+                <div className="space-y-4">
+                    {groups.map(group => (
+                        <div key={group.id} onClick={() => setSelectedGroup(group)} className="p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-indigo-400 transition-colors">
+                            <h3 className="text-lg font-bold text-gray-800">{group.name}</h3>
+                            <div className="flex items-center mt-2">
+                                <div className="flex -space-x-2">
+                                    {group.members.slice(0,5).map(memberId => {
+                                        // ★ allUserProfiles マップからメンバー情報を取得
+                                        const member = allUserProfiles.get(memberId);
+                                        return (
+                                            <img key={memberId} 
+                                                 src={member?.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} 
+                                                 alt={member?.displayName || 'member'} 
+                                                 className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
+                                        );
+                                    })}
+                                </div>
+                                <span className="ml-3 text-sm text-gray-500">{group.members.length}人のメンバー</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {groups.length === 0 && (
+                    <div className="text-center text-gray-500 py-10">
+                        <p>まだグループに参加していません。</p>
+                        <p>新しいグループを作成するか、招待を待ちましょう！</p>
+                    </div>
+                )}
+            </div>
 
             {isCreateOpen && <CreateGroupModal 
                                 profile={profile} 
-                                friends={friends} 
-                                onAddFriend={onAddFriend} // ★ 修正
+                                following={following} // ★ 修正
+                                onFollowUser={onFollowUser} // ★ 修正
                                 onClose={() => setIsCreateOpen(false)} 
                                 onCreate={handleCreateGroup} 
                             />}

@@ -1,13 +1,15 @@
-"use client"; 
+"use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
 
-import React, { useState, useRef } from 'react';
-import { Profile, Friend } from '../types'; // ★ ユーザーの指示通り ../types に修正
+import React, { useState, useRef, useMemo } from 'react';
+// ★ ユーザーの指示通り ../types に修正
+import { Profile, Friend } from '../types';
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {
   profile: Profile;
-  friends: Friend[];
-  onAddFriend: (friendId: string) => void; // ★ 修正
+  following: Friend[]; // ★ friends -> following
+  followers: Friend[]; // ★ 追加
+  onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
   onClose: () => void;
   onLogout: () => void;
   onSave: (newDisplayName: string, newImageUrl: string | null) => void;
@@ -44,30 +46,30 @@ const LogoutIcon: React.FC<{className?: string}> = ({className}) => (
 // ★★★ AddFriendModal の Props を修正 ★★★
 const AddFriendModal: React.FC<{
     profile: Profile;
-    friends: Friend[];
-    onAddFriend: (friendId: string) => void; // ★ 修正
+    following: Friend[]; // ★ friends -> following
+    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
     onClose: () => void;
-}> = ({ profile, friends, onAddFriend, onClose }) => {
+}> = ({ profile, following, onFollowUser, onClose }) => {
     const [friendId, setFriendId] = useState('');
     const [error, setError] = useState('');
     
     const handleAddFriend = () => {
-        // (↓ エラーチェックは変更なし)
-        if (!friendId.trim()) {
+        const trimmedId = friendId.trim();
+        if (!trimmedId) {
             setError('ユーザーIDを入力してください。');
             return;
         }
-        if (friendId.trim() === profile.id) {
+        if (trimmedId === profile.id) {
             setError('自分自身を友達として追加することはできません。');
             return;
         }
-        if (friends.some(f => f.id === friendId.trim())) {
-            setError('このユーザーは既に友達です。');
+        if (following.some(f => f.id === trimmedId)) {
+            setError('このユーザーは既にフォロー中です。');
             return;
         }
 
-        // ★ MainApp の onAddFriend に「IDだけ」を渡す
-        onAddFriend(friendId.trim());
+        // ★ MainApp の onFollowUser に「IDだけ」を渡す
+        onFollowUser(trimmedId);
         
         setError('');
         onClose(); // 成功したらモーダルを閉じる
@@ -76,7 +78,7 @@ const AddFriendModal: React.FC<{
     return (
          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-                 <h3 className="text-lg font-bold text-gray-800">友達を追加</h3>
+                 <h3 className="text-lg font-bold text-gray-800">友達をフォロー</h3>
                  <p className="text-gray-600 my-2 text-sm">追加したい友達のユーザーIDを入力してください。</p>
                  <input
                      type="text"
@@ -94,7 +96,7 @@ const AddFriendModal: React.FC<{
                          キャンセル
                      </button>
                      <button onClick={handleAddFriend} className="px-4 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 font-semibold">
-                         追加
+                         フォロー
                      </button>
                  </div>
              </div>
@@ -106,8 +108,9 @@ const AddFriendModal: React.FC<{
 // ★★★ ProfileModal の Props を修正 ★★★
 const ProfileModal: React.FC<ProfileModalProps> = ({ 
     profile, 
-    friends, 
-    onAddFriend,
+    following, // ★ 修正
+    followers, // ★ 追加
+    onFollowUser, // ★ 修正
     onClose, 
     onLogout,
     onSave
@@ -154,6 +157,12 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         setTimeout(() => setCopySuccess(''), 2000);
     });
   };
+
+  // ★ 友達候補（フォロワーのうち、まだフォローしていない人）を計算
+  const friendCandidates = useMemo(() => {
+    const followingIds = new Set(following.map(f => f.id));
+    return followers.filter(follower => !followingIds.has(follower.id));
+  }, [followers, following]);
 
   return (
     <>
@@ -208,17 +217,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
          </div>
         
+         {/* ★★★「友達リスト」を「フォロー中」に変更 ★★★ */}
          <div className="mt-6 pt-4 border-t w-full">
              <div className="flex justify-between items-center mb-2">
-                 <h3 className="text-md font-bold text-gray-700">友達リスト</h3>
+                 <h3 className="text-md font-bold text-gray-700">フォロー中</h3>
                  <button onClick={() => setIsAddFriendOpen(true)} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold p-2 rounded-md hover:bg-indigo-50">
                      <UserPlusIcon className="w-4 h-4" />
                      追加
                  </button>
              </div>
-             {/* ★★★ 友達リストの表示 (変更なし) ★★★ */}
-             <div className="space-y-2 max-h-32 overflow-y-auto">
-                 {friends.length > 0 ? friends.map(friend => (
+             <div className="space-y-2 max-h-24 overflow-y-auto">
+                 {following.length > 0 ? following.map(friend => (
                      <div key={friend.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
                           <img
                              src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='}
@@ -227,7 +236,34 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                          />
                          <span className="text-gray-800">{friend.displayName}</span>
                      </div>
-                 )) : <p className="text-gray-500 text-sm text-center py-2">まだ友達がいません。</p>}
+                 )) : <p className="text-gray-500 text-sm text-center py-2">まだ誰もフォローしていません。</p>}
+             </div>
+         </div>
+        
+         {/* ★★★ フォロワー（友達候補）リストを追加 ★★★ */}
+         <div className="mt-4 pt-4 border-t w-full">
+             <div className="flex justify-between items-center mb-2">
+                 <h3 className="text-md font-bold text-gray-700">フォロワー（友達候補）</h3>
+             </div>
+             <div className="space-y-2 max-h-24 overflow-y-auto">
+                 {friendCandidates.length > 0 ? friendCandidates.map(follower => (
+                     <div key={follower.id} className="flex items-center justify-between gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <img
+                             src={follower.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='}
+                             alt={follower.displayName}
+                             className="w-8 h-8 rounded-full object-cover bg-gray-200"
+                         />
+                         <span className="text-gray-800">{follower.displayName}</span>
+                        </div>
+                        <button 
+                            onClick={() => onFollowUser(follower.id)}
+                            className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-md hover:bg-indigo-200"
+                        >
+                          追加
+                        </button>
+                     </div>
+                 )) : <p className="text-gray-500 text-sm text-center py-2">友達候補はまだいません。</p>}
              </div>
          </div>
         
@@ -244,11 +280,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       </div>
     </div>
     
-    {/* ★★★ AddFriendModal に onAddFriend を渡す (変更なし) ★★★ */}
     {isAddFriendOpen && <AddFriendModal 
                             profile={profile} 
-                            friends={friends} 
-                            onAddFriend={onAddFriend}
+                            following={following} // ★ friends -> following
+                            onFollowUser={onFollowUser} // ★ onAddFriend -> onFollowUser
                             onClose={() => setIsAddFriendOpen(false)} 
                         />}
     </>
