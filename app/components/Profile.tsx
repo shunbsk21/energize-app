@@ -1,7 +1,7 @@
 "use client"; 
 
 import React, { useState, useRef } from 'react';
-import { Profile, Friend } from './types'; // ★ types.ts のパスを修正
+import { Profile, Friend } from '../types'; // ★ types.ts のパスを修正
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {

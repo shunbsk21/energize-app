@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Profile, Friend, Group as GroupType, Comment, Habit } from './types';
+import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 
 // ★★★ Propsの定義を
 interface GroupProps {

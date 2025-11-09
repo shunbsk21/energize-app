@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 // ★ EnergyRecord をインポートし、パスを修正
-import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from './types'; 
+import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
 import HabitDetail from './HabitDetail';
 
 // --- Propsの定義を変更 ---
