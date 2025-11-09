@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { Profile, Friend } from './types';
+import { Profile, Friend } from '../types';
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {
