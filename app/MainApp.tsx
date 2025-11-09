@@ -101,7 +101,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       return;
     }
 
-    // ★ ユーザーのプロフィール情報を取得するヘルパー関数
+    // ★ ユーザーのプロフィール情報を取得するヘルパー関数 (★修正あり★)
     const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
         const userMap = new Map<string, Profile | Friend>();
         // 自分のプロフィールをまず追加 (最新の 'profile' state を使う)
@@ -313,18 +313,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // 3. ローカルの React 状態 (state) にも追加
       const newFriend: Friend = { ...friendData, id: friendId };
       setFriends(prevFriends => [...prevFriends, newFriend]);
+      
+      // 4. allUserProfiles マップにも追加
       setAllUserProfiles(prevMap => new Map(prevMap).set(newFriend.id, newFriend));
 
-      // 4. ★ 相手の友達リストにも「自分」を追加する (相互フォロー)
+      // 5. ★ 相手の友達リストにも「自分」を追加する (相互フォロー)
       const myProfileDataForFriend: Omit<Friend, 'id'> = {
           displayName: profile.displayName,
           imageUrl: profile.imageUrl
       };
       const myRefOnFriendList = doc(db, 'users', friendId, 'friends', profile.id);
-      // ★ セキュリティルール `allow create: if request.auth.uid == friendId` が
-      // ★ `profile.id` と `friendId` が一致しないため、これは機能しない。
-      // ★ 代わりに、相手の `friend_invites` に書き込むべきだが、
-      // ★ まずは簡単な「相互書き込み」を試すため、ルールを修正した前提で進める
       await setDoc(myRefOnFriendList, myProfileDataForFriend);
       
     } catch (error) {
@@ -344,8 +342,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // 2. メンバー全員にこのグループを書き込む
       for (const memberId of newGroupData.members) {
           const groupRefForMember = doc(db, 'users', memberId, 'groups', newGroupId);
-          // ★ セキュリティルール `allow create: if request.auth.uid in request.resource.data.members;` 
-          // ★ がこれを許可するはず (自分がメンバーに含まれているため)
+          // (自分の書き込みは `profile.id == userId` ルールで、
+          //  他人への書き込みは `request.auth.uid in request.resource.data.members` ルールで許可される)
           await setDoc(groupRefForMember, newGroupData); 
       }
       
@@ -355,6 +353,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // 4. 新規メンバーのプロフィールも取得してキャッシュに追加
       const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
       if (newMemberIds.length > 0) {
+          // ★★★ ここからがエラー修正箇所 ★★★
           const newProfilesMap = await (async () => {
               const map = new Map<string, Profile | Friend>();
               for (const id of newMemberIds) {
@@ -367,9 +366,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                       map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
                   }
               }
-              return map;
+              return map; // ★ 関数がMapを返すようにする
           })();
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+          // ★★★ エラー修正ここまで ★★★
       }
 
     } catch (error) {
@@ -382,41 +382,52 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !updatedGroup.id) return;
     try {
       const { id, ...dataToSave } = updatedGroup;
-
-      // 1. メンバー全員のグループ情報を更新
-      for (const memberId of updatedGroup.members) {
-          const groupRefForMember = doc(db, 'users', memberId, 'groups', updatedGroup.id);
-          // ★ `allow write` は自分にしかないので、これは失敗する。
-          // ★ 正しくは `update` ではなく、新しいメンバーに `create` するだけ。
-          // ★ ここでは簡略化のため、自分だけ更新するロジックに戻す（招待は片道）
-          // ★ 招待された側は、次回ロード時に `groups` クエリで取得する（TODO: MainAppのuseEffectのクエリ修正が必要）
-          
-          // 現状のロジック: 自分のグループだけ更新
-          if (memberId === profile.id) {
-              await setDoc(groupRefForMember, dataToSave);
-          }
-      }
       
-      // ★ 招待された新しいメンバーにだけ、グループを作成
       const oldGroup = groups.find(g => g.id === updatedGroup.id);
       const oldMembers = oldGroup ? oldGroup.members : [];
       const newMembers = updatedGroup.members.filter(id => !oldMembers.includes(id));
-      
+
+      // 1. 新しく招待されたメンバーにだけ、グループを作成
       for (const newMemberId of newMembers) {
           const groupRefForNewMember = doc(db, 'users', newMemberId, 'groups', updatedGroup.id);
           await setDoc(groupRefForNewMember, dataToSave);
       }
+      
+      // 2. 既存のメンバー（自分を含む）のグループ情報を更新
+      // (注意: メンバーが脱退するロジックはここには含まれていない)
+      for (const memberId of oldMembers) {
+          const groupRefForMember = doc(db, 'users', memberId, 'groups', updatedGroup.id);
+          // (注: 他人の `write` は失敗する。自分のだけ更新する)
+          if (memberId === profile.id) {
+              await setDoc(groupRefForMember, dataToSave);
+          }
+      }
 
-      // 2. ローカルの state を更新
+      // 3. ローカルの state を更新
       setGroups(prevGroups => 
         prevGroups.map(g => g.id === updatedGroup.id ? updatedGroup : g)
       );
       
-      // 3. 新規メンバーのプロフィールも取得してキャッシュに追加
-      const newMemberIds = updatedGroup.members.filter(id => !allUserProfiles.has(id));
-      if (newMemberIds.length > 0) {
-          const newProfilesMap = await (async () => { /* ... (プロフィール取得) ... */ })();
+      // 4. 新規メンバーのプロフィールも取得してキャッシュに追加
+      const newMemberIdsToFetch = newMembers.filter(id => !allUserProfiles.has(id));
+      if (newMemberIdsToFetch.length > 0) {
+          // ★★★ ここからがエラー箇所です ★★★
+          const newProfilesMap = await (async () => {
+              const map = new Map<string, Profile | Friend>();
+              for (const id of newMemberIdsToFetch) { // ★ newMemberIds -> newMemberIdsToFetch
+                  const settingsRef = doc(db, 'users', id, 'settings', 'main');
+                  const docSnap = await getDoc(settingsRef);
+                  if (docSnap.exists() && docSnap.data().profile) {
+                      const userProfile = docSnap.data().profile;
+                      map.set(id, { id: id, displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`, imageUrl: userProfile.imageUrl });
+                  } else {
+                      map.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+                  }
+              }
+              return map; // ★ 関数がMapを返すようにする
+          })();
           setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+          // ★★★ エラー修正ここまで ★★★
       }
     } catch (error)
     {
@@ -472,15 +483,24 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
-    if (view === 'diagnosis') { /* ... */ }
-    if (view === 'habits') { /* ... */ }
-    if (view === 'analytics') { /* ... */ }
-    if (view === 'group') { /* ... */ }
+    if (view === 'diagnosis') {
+      return '現在のあなたのエネルギー状態を4つの側面（身体、精神、感情、知性）から診断し、カレンダーで記録を可視化します。';
+    }
+    if (view === 'habits') {
+      return '日々の習慣を記録して、エネルギーを高めましょう。新しい習慣は右下の＋ボタンから追加できます。';
+    }
+    if (view === 'analytics') {
+      return 'ここでは、診断結果の推移や習慣の達成率をグラフで確認できます。自分のエネルギー状態と行動の関連性を分析し、日々の改善に役立てましょう。';
+    }
+    if (view === 'group') {
+        return '友達とグループを作成し、日々の習慣の進捗を共有できます。コメント機能で励まし合い、モチベーションを高めましょう。';
+    }
     return '';
   }, [view]);
 
   // ★★★ ビューのレンダリング (★修正あり★) ★★★
   const renderView = () => {
+    // ★ 読み込み中は、ローディング画面を表示
     if (isLoading) {
       return <div className="text-center p-10">データを読み込んでいます...</div>;
     }
@@ -496,10 +516,9 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   habits={habits} 
                 />;
       case 'habits':
-        // ★★★ HabitTrackerに energyHistory を渡す (問題③の解決) ★★★
         return <HabitTracker 
                   habits={habits} 
-                  energyHistory={energyHistory} // ★ この行が問題③を解決します
+                  energyHistory={energyHistory}
                   onAddHabit={handleAddHabit}
                   onUpdateHabit={handleUpdateHabit}
                   onDeleteHabit={handleDeleteHabit}
@@ -525,7 +544,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   onAddComment={handleAddComment}
                   habits={habits} 
                   setIsHelpOpen={setIsHelpOpen}
-                  allUserProfiles={allUserProfiles} // ★ プロフィールMAPを渡す (問題1の解決)
+                  allUserProfiles={allUserProfiles}
                 />;
       default:
         return null;
@@ -596,11 +615,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       )}
 
-      {/* ★★★ プロフィールモーダルの修正 (問題②の解決) ★★★ */}
       {isProfileOpen && (
           <ProfileModal 
             profile={profile}
-            onSave={handleProfileSave} // ★ この行が `onSave is not a function` エラーを解決します
+            onSave={handleProfileSave}
             friends={friends}
             onAddFriend={handleAddFriend}
             onClose={() => setIsProfileOpen(false)}
