@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Habit, View, FrequencyType, DiagnosisFrequency } from '../types';
+// ★ EnergyRecord をインポート
+import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
 import HabitDetail from './HabitDetail';
 
 // --- Propsの定義を変更 ---
 interface HabitTrackerProps {
   habits: Habit[];
-  // setHabits: React.Dispatch<React.SetStateAction<Habit[]>>; // 削除
+  energyHistory: EnergyRecord[]; // ★ 診断履歴を受け取る
   
-  // ★ Firestore操作用の関数を MainApp から受け取る
+  // ★ Firestore操作用の関数 (変更なし)
   onAddHabit: (newHabit: Omit<Habit, 'id'>) => void;
   onUpdateHabit: (updatedHabit: Habit) => void;
   onDeleteHabit: (habitId: string) => void;
@@ -19,7 +20,7 @@ interface HabitTrackerProps {
   diagnosisFrequency: DiagnosisFrequency;
 }
 
-// --- Icon Components Start (変更なし) ---
+// --- Icon Components Start (★ CheckCircleIcon を追加) ---
 
 const PlusIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -68,6 +69,15 @@ const EditIcon: React.FC<{className?: string}> = ({className}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
     </svg>
 );
+
+// ★ 完了を示すチェックアイコンを追加
+const CheckCircleIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
+// --- Icon Components End ---
+
 
 // --- Helper Functions Start (変更なし) ---
 
@@ -264,14 +274,14 @@ const HabitListModal: React.FC<{
 // --- Modal Components End ---
 
 
-// --- HabitTracker Component Start (★ここからが修正の核心です) ---
+// --- HabitTracker Component Start ---
 
 const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, 
-  // setHabits, // 削除
-  onAddHabit,     // ★ 追加
-  onUpdateHabit,  // ★ 追加
-  onDeleteHabit,  // ★ 追加
+  energyHistory, // ★ 診断履歴を受け取る
+  onAddHabit,
+  onUpdateHabit,
+  onDeleteHabit,
   setIsHelpOpen, 
   setView, 
   diagnosisFrequency 
@@ -407,80 +417,66 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const isDiagnosisDay = useMemo(() => {
     return isDiagnosisScheduledForDate(diagnosisFrequency, selectedDate);
   }, [diagnosisFrequency, selectedDate]);
+  
+  // ★ 診断が完了しているかチェックするロジック
+  const isDiagnosisCompleted = useMemo(() => {
+      // ★ energyHistory が undefined でないかチェック
+      if (!energyHistory) return false; 
+      return energyHistory.some(record => record.date === selectedDateString);
+  }, [energyHistory, selectedDateString]);
 
 
-  // ★★★ addHabit を修正 ★★★
+  // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)
   const addHabit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newHabitName.trim() === '') return;
-    
-    // IDはFirestoreが生成するため、ここではIDなしのオブジェクトを作成
     const newHabit: Omit<Habit, 'id'> = {
-      // id: Date.now().toString(), // 削除 (FirestoreがIDを生成)
       name: newHabitName.trim(),
       completedDates: [],
       startDate: newHabitStartDate,
       frequencyType: newHabitFrequency.type,
       frequencyValue: newHabitFrequency.value,
     };
-    
-    // setHabits(prev => [...prev, newHabit]); // 削除
-    onAddHabit(newHabit); // ★ MainAppの関数を呼び出す
-    
-    // (↓ フォームのリセットは変更なし)
+    onAddHabit(newHabit);
     setNewHabitName('');
     setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
     setNewHabitFrequency({type: 'daily', value: []});
     setIsAddModalOpen(false);
   };
   
-  // ★★★ deleteHabit を修正 ★★★
   const deleteHabit = (habitId: string) => {
-    // setHabits(habits.filter(h => h.id !== habitId)); // 削除
-    onDeleteHabit(habitId); // ★ MainAppの関数を呼び出す
+    onDeleteHabit(habitId);
   };
   
-  // ★★★ updateHabit を修正 ★★★
   const updateHabit = (updatedHabit: Habit) => {
-    // setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h)); // 削除
-    onUpdateHabit(updatedHabit); // ★ MainAppの関数を呼び出す
+    onUpdateHabit(updatedHabit);
     setSelectedHabit(updatedHabit); 
   };
 
-  // ★★★ toggleHabit を修正 ★★★
   const toggleHabit = (habitId: string) => {
     const habitToToggle = habits.find(h => h.id === habitId);
-    if (!habitToToggle) return; // 習慣が見つからない場合は何もしない
-
+    if (!habitToToggle) return;
     const isCompleted = habitToToggle.completedDates.includes(selectedDateString);
-    
-    // 更新後の習慣オブジェクトを作成
     const updatedHabit: Habit = {
       ...habitToToggle,
       completedDates: isCompleted
         ? habitToToggle.completedDates.filter(date => date !== selectedDateString)
         : [...habitToToggle.completedDates, selectedDateString],
     };
-
-    // setHabits(prev => ...); // 削除
-    onUpdateHabit(updatedHabit); // ★ MainAppの「更新」関数を呼び出す
+    onUpdateHabit(updatedHabit);
   };
   
   // (↓ calculateStreak, handleDateSelect, formattedListDate, handleSelectHabitFromList は変更なし)
   const calculateStreak = (habit: Habit): number => {
       const { completedDates, startDate } = habit;
       if (completedDates.length === 0) return 0;
-
       let streak = 0;
       let currentDate = new Date();
       currentDate.setHours(0,0,0,0);
-
       const sortedDatesSet = new Set(completedDates);
-
       if (!isHabitScheduledForDate(habit, currentDate) || !sortedDatesSet.has(currentDate.toLocaleDateString('sv-SE'))) {
           currentDate.setDate(currentDate.getDate() - 1);
       }
-
       while (new Date(startDate) <= currentDate) {
           if (!isHabitScheduledForDate(habit, currentDate)) {
               currentDate.setDate(currentDate.getDate() - 1);
@@ -688,21 +684,39 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             </div>
         </div>
 
-
+        {/* ★★★ ここからが修正点 ★★★ */}
         <h3 className="text-xl font-bold text-gray-800 mt-6 mb-4 px-2">{formattedListDate}のリスト</h3>
         <div className="space-y-3">
             {isDiagnosisDay && (
                 <div 
-                    onClick={() => setView('diagnosis')}
-                    className="flex items-center p-4 rounded-lg transition cursor-pointer bg-indigo-50 hover:bg-indigo-100"
+                    onClick={() => !isDiagnosisCompleted && setView('diagnosis')} // ★ 完了時はクリックしても遷移しない
+                    className={`flex items-center p-4 rounded-lg transition ${
+                        isDiagnosisCompleted
+                            ? 'bg-green-50 hover:bg-green-100 cursor-default' // 完了時のスタイル
+                            : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer' // 未完了時のスタイル
+                    }`}
                 >
-                    <DiagnosisIcon className="w-6 h-6 text-indigo-600"/>
-                    <span className="flex-grow mx-4 text-lg text-indigo-800 font-semibold">
+                    {isDiagnosisCompleted ? (
+                        <CheckCircleIcon className="w-6 h-6 text-green-600"/> // ★ 完了アイコン
+                    ) : (
+                        <DiagnosisIcon className="w-6 h-6 text-indigo-600"/> // 未完了アイコン
+                    )}
+                    
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${
+                        isDiagnosisCompleted
+                            ? 'line-through text-gray-500' // 完了時のテキスト
+                            : 'text-indigo-800' // 未完了時のテキスト
+                    }`}>
                       エネルギーを診断する
                     </span>
-                    <ChevronRightIcon className="w-6 h-6 text-indigo-600"/>
+
+                    {!isDiagnosisCompleted && (
+                        <ChevronRightIcon className="w-6 h-6 text-indigo-600"/> // ★ 未完了時のみ矢印
+                    )}
                 </div>
             )}
+            {/* ★★★ 修正点ここまで ★★★ */}
+
 
             {scheduledHabits.length > 0 ? (
                 scheduledHabits.map(habit => {

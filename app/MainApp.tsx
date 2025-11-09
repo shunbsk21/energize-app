@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 
-// ★ Firestore関連のモジュールをインポート (writeBatch を削除)
+// ★ Firestore関連のモジュールをインポート
 import {
   collection,
   doc,
@@ -26,7 +26,8 @@ import HabitTracker from './components/HabitTracker';
 import Analytics from './components/Analytics';
 import Group from './components/Group';
 import ProfileModal from './components/Profile';
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types';
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
+
 // --- Icon Components Start (コード変更なし) ---
 
 const DiagnosisIcon: React.FC<{className?: string}> = ({className}) => (
@@ -82,8 +83,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // ★ データをクラウドから読み込み中かを示す状態
   const [isLoading, setIsLoading] = useState(true);
 
-  // ProfileModalで使うローカルストレージ（これはこのまま）
-  const [userProfile, setUserProfile] = useLocalStorage<Profile | null>('userProfile', profile);
+  // ★ ProfileModalで使うローカルストレージを削除
+  // const [userProfile, setUserProfile] = useLocalStorage<Profile | null>('userProfile', profile);
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -160,7 +161,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         if (settingsSnap.exists() && settingsSnap.data().diagnosisFrequency) {
           setDiagnosisFrequency(settingsSnap.data().diagnosisFrequency);
         }
-        // 存在しない場合は useState のデフォルト値が使われる
+        
+        // 7. ★ 保存されているプロフィール情報も読み込む
+        // (page.tsxの初期値より新しい情報があれば上書きする)
+        if (settingsSnap.exists() && settingsSnap.data().profile) {
+            const savedProfile = settingsSnap.data().profile;
+            setProfile(prevProfile => ({
+                ...prevProfile!,
+                displayName: savedProfile.displayName || prevProfile!.displayName,
+                imageUrl: savedProfile.imageUrl || prevProfile!.imageUrl,
+            }));
+        }
 
       } catch (error) {
         console.error("データの読み込みに失敗しました:", error);
@@ -171,7 +182,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
     loadData();
     
-  }, [profile.id]);
+  }, [profile.id, setProfile]); // ★ setProfile を依存配列に追加
 
 
   // ★★★ データの「書き込み」処理 (Firestore) ★★★
@@ -179,23 +190,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // (1) 診断履歴 (変更なし)
   const handleDiagnosisComplete = async (scores: EnergyScores) => {
     if (!profile.id) return;
-
-    const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
-    const newRecord: EnergyRecord = {
-      date: today,
-      ...scores,
-    };
-    
+    const today = new Date().toLocaleDateString('sv-SE');
+    const newRecord: EnergyRecord = { date: today, ...scores };
     try {
       const historyRef = doc(db, 'users', profile.id, 'energyHistory', today);
-      await setDoc(historyRef, newRecord); // setDocで（あれば）上書き
-      
+      await setDoc(historyRef, newRecord);
       setEnergyHistory(prev => {
           const otherDays = prev.filter(r => r.date !== today);
           return [...otherDays, newRecord].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       });
       setView('diagnosis');
-    
     } catch (error) {
       console.error("診断履歴の保存に失敗しました:", error);
     }
@@ -207,7 +211,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const habitsRef = collection(db, 'users', profile.id, 'habits');
       const docRef = await addDoc(habitsRef, newHabitData);
-      
       const createdHabit: Habit = { ...newHabitData, id: docRef.id };
       setHabits(prevHabits => [...prevHabits, createdHabit]);
     } catch (error) {
@@ -220,7 +223,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       const habitRef = doc(db, 'users', profile.id, 'habits', updatedHabit.id);
       const { id, ...dataToSave } = updatedHabit;
       await setDoc(habitRef, dataToSave); 
-      
       setHabits(prevHabits => 
         prevHabits.map(h => h.id === updatedHabit.id ? updatedHabit : h)
       );
@@ -233,82 +235,56 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const habitRef = doc(db, 'users', profile.id, 'habits', habitId);
       await deleteDoc(habitRef);
-      
       setHabits(prevHabits => prevHabits.filter(h => h.id !== habitId));
     } catch (error) {
       console.error("習慣の削除に失敗しました:", error);
     }
   };
   
-  // ★ (3) グループ関連の書き込みハンドラ (★ここが修正点です★) ★
-  
-  // ★ 友達の「追加」ハンドラ (Group.tsx に渡す)
+  // (3) グループ関連 (変更なし)
   const handleAddFriend = async (friendId: string, friendData: Omit<Friend, 'id'>) => {
     if (!profile.id) return;
     try {
-      // 友達のID (friendId) をドキュメントIDとして設定
       const friendRef = doc(db, 'users', profile.id, 'friends', friendId);
       await setDoc(friendRef, friendData);
-      
-      // ローカルの React 状態 (state) にも追加
       const newFriend: Friend = { ...friendData, id: friendId };
       setFriends(prevFriends => [...prevFriends, newFriend]);
-      
     } catch (error) {
       console.error("友達の追加に失敗しました:", error);
     }
   };
-  
-  // ★ グループの「追加」ハンドラ (Group.tsx に渡す)
   const handleAddGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
     if (!profile.id) return;
     try {
       const groupsRef = collection(db, 'users', profile.id, 'groups');
-      // Firestoreにデータを追加 (自動ID生成)
       const docRef = await addDoc(groupsRef, newGroupData);
-      
-      // ローカルの React 状態 (state) にも追加
       const createdGroup: GroupType = { ...newGroupData, id: docRef.id };
       setGroups(prevGroups => [...prevGroups, createdGroup]);
-      
     } catch (error) {
       console.error("グループの追加に失敗しました:", error);
     }
   };
-  
-  // ★ グループの「更新」ハンドラ (Group.tsx に渡す)
   const handleUpdateGroup = async (updatedGroup: GroupType) => {
     if (!profile.id || !updatedGroup.id) return;
     try {
       const groupRef = doc(db, 'users', profile.id, 'groups', updatedGroup.id);
-      
-      // IDは除外してFirestoreに保存
       const { id, ...dataToSave } = updatedGroup;
       await setDoc(groupRef, dataToSave);
-      
-      // ローカルの React 状態 (state) も更新
       setGroups(prevGroups => 
         prevGroups.map(g => g.id === updatedGroup.id ? updatedGroup : g)
       );
-      
     } catch (error)
     {
       console.error("グループの更新に失敗しました:", error);
     }
   };
-  
-  // ★ コメントの「追加」ハンドラ (Group.tsx に渡す)
   const handleAddComment = async (newCommentData: Omit<Comment, 'id'>) => {
     if (!profile.id) return;
     try {
       const commentsRef = collection(db, 'users', profile.id, 'comments');
-      // Firestoreにデータを追加 (自動ID生成)
       const docRef = await addDoc(commentsRef, newCommentData);
-      
-      // ローカルの React 状態 (state) にも追加
       const createdComment: Comment = { ...newCommentData, id: docRef.id };
       setComments(prevComments => [...prevComments, createdComment]);
-      
     } catch (error) {
       console.error("コメントの追加に失敗しました:", error);
     }
@@ -317,9 +293,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // (4) 診断頻度の書き込み (変更なし)
   const handleDiagnosisFrequencyChange = async (newFrequency: DiagnosisFrequency) => {
     if (!profile.id) return;
-    
     setDiagnosisFrequency(newFrequency);
-    
     try {
       const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
       await setDoc(settingsRef, { diagnosisFrequency: newFrequency }, { merge: true });
@@ -327,6 +301,34 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       console.error("設定の保存に失敗しました:", error);
     }
   };
+
+  // ★ (5) プロフィール保存ハンドラ (★ここが修正点です★) ★
+  const handleProfileSave = async (newDisplayName: string, newImageUrl: string | null) => {
+    if (!profile) return;
+
+    // 1. UIを即時反映させるため、page.tsx の state を更新
+    const updatedProfile: Profile = {
+      ...profile,
+      displayName: newDisplayName,
+      imageUrl: newImageUrl,
+    };
+    setProfile(updatedProfile); // page.tsx の state を更新
+
+    // 2. Firestoreに保存
+    try {
+      // 診断頻度と同じ 'settings/main' ドキュメントにマージ(統合)して保存
+      const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
+      await setDoc(settingsRef, { 
+        profile: {
+          displayName: newDisplayName,
+          imageUrl: newImageUrl
+        }
+      }, { merge: true }); // merge: true で既存の diagnosisFrequency を消さずに追記
+    } catch (error) {
+      console.error("プロフィール情報の保存に失敗しました:", error);
+    }
+  };
+
 
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
@@ -363,8 +365,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   habits={habits} 
                 />;
       case 'habits':
+        // ★★★ HabitTrackerに energyHistory を渡す ★★★
         return <HabitTracker 
                   habits={habits} 
+                  energyHistory={energyHistory} // ★ この行を追加しました
                   onAddHabit={handleAddHabit}
                   onUpdateHabit={handleUpdateHabit}
                   onDeleteHabit={handleDeleteHabit}
@@ -379,19 +383,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   setIsHelpOpen={setIsHelpOpen} 
                 />;
       case 'group':
-        // ★★★ Groupに渡すpropsを修正 ★★★
         return <Group 
                   profile={profile} 
                   friends={friends} 
-                  // setFriends={handleFriendsChange} // 削除
-                  onAddFriend={handleAddFriend} // ★ 追加
+                  onAddFriend={handleAddFriend}
                   groups={groups} 
-                  // setGroups={handleGroupsChange} // 削除
-                  onAddGroup={handleAddGroup} // ★ 追加
-                  onUpdateGroup={handleUpdateGroup} // ★ 追加
+                  onAddGroup={handleAddGroup}
+                  onUpdateGroup={handleUpdateGroup}
                   comments={comments} 
-                  // setComments={handleCommentsChange} // 削除
-                  onAddComment={handleAddComment} // ★ 追加
+                  onAddComment={handleAddComment}
                   habits={habits} 
                   setIsHelpOpen={setIsHelpOpen} 
                 />;
@@ -470,10 +470,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       {isProfileOpen && (
           <ProfileModal 
             profile={profile}
-            setProfile={setUserProfile}
+            // setProfile={setUserProfile} // 削除
+            onSave={handleProfileSave} // ★ この行が `onSave is not a function` エラーを解決します
             friends={friends}
-            // setFriends={handleFriendsChange} // 削除
-            onAddFriend={handleAddFriend} // ★ 追加
+            onAddFriend={handleAddFriend}
             onClose={() => setIsProfileOpen(false)}
             onLogout={handleLogout}
           />

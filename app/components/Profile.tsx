@@ -1,18 +1,18 @@
 "use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
 
 import React, { useState, useRef } from 'react';
-// types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { Profile, Friend } from '../types';
+// types.ts が MainApp.tsx と同じ階層にある想定 (`./types`)
+import { Profile, Friend } from './types';
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {
   profile: Profile;
-  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>; // これは useLocalStorage のセッターなので変更なし
+  // setProfile: React.Dispatch<React.SetStateAction<Profile | null>>; // 削除
   friends: Friend[];
-  // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-  onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+  onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void;
   onClose: () => void;
   onLogout: () => void;
+  onSave: (newDisplayName: string, newImageUrl: string | null) => void; // ★ 追加
 }
 
 // --- Icon Components Start (変更なし) ---
@@ -43,19 +43,17 @@ const LogoutIcon: React.FC<{className?: string}> = ({className}) => (
 // --- Icon Components End ---
 
 
-// ★★★ AddFriendModal の Props を修正 ★★★
+// ★ AddFriendModal (変更なし)
 const AddFriendModal: React.FC<{
     profile: Profile;
     friends: Friend[];
-    // setFriends: React.Dispatch<React.SetStateAction<Friend[]>>; // 削除
-    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void; // ★ 追加
+    onAddFriend: (friendId: string, friendData: Omit<Friend, 'id'>) => void;
     onClose: () => void;
 }> = ({ profile, friends, onAddFriend, onClose }) => {
     const [friendId, setFriendId] = useState('');
     const [error, setError] = useState('');
     
     const handleAddFriend = () => {
-        // (↓ エラーチェックは変更なし)
         if (!friendId.trim()) {
             setError('ユーザーIDを入力してください。');
             return;
@@ -68,20 +66,13 @@ const AddFriendModal: React.FC<{
             setError('このユーザーは既に友達です。');
             return;
         }
-
-        // ★ MainApp に渡すデータ (IDは除く)
         const newFriendData: Omit<Friend, 'id'> = {
-            displayName: `ユーザー ${friendId.substring(0, 4)}`, // 仮の名前
+            displayName: `ユーザー ${friendId.substring(0, 4)}`,
             imageUrl: null
         };
-        
-        // ★ MainApp の onAddFriend を呼び出す (ID と データを渡す)
         onAddFriend(friendId, newFriendData);
-        
-        // setFriends(prev => [...prev, newFriend]); // 削除 (MainApp が state を更新)
-
         setError('');
-        onClose(); // 成功したらモーダルを閉じる
+        onClose();
     };
 
     return (
@@ -117,12 +108,12 @@ const AddFriendModal: React.FC<{
 // ★★★ ProfileModal の Props を修正 ★★★
 const ProfileModal: React.FC<ProfileModalProps> = ({ 
     profile, 
-    setProfile, 
+    // setProfile, // 削除
     friends, 
-    // setFriends, // 削除
-    onAddFriend, // ★ 追加
+    onAddFriend,
     onClose, 
-    onLogout 
+    onLogout,
+    onSave       // ★ 追加
 }) => {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [imagePreview, setImagePreview] = useState<string | null>(profile.imageUrl);
@@ -131,7 +122,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // (↓ handleImageChange, handleSave, copyToClipboard は変更なし)
+  // (↓ handleImageChange は変更なし)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -145,19 +136,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   };
   
+  // ★★★ handleSave を修正 ★★★
   const handleSave = () => {
-    setProfile({
-        ...profile,
-        displayName,
-        imageUrl: imageData,
-    });
-    // TODO: ここで setProfile とは別に、
-    // Firestore の "users" コレクションの profile ドキュメントも
-    // 更新するロジックを MainApp.tsx 側で実装し、
-    // (onUpdateProfile のような関数) ここで呼ぶのが望ましい
+    // MainApp に、新しい表示名と画像データを渡して保存を依頼する
+    onSave(displayName, imageData);
     onClose();
   }
 
+  // (↓ copyToClipboard は変更なし)
   const copyToClipboard = () => {
     if(!navigator.clipboard) {
         setCopySuccess('コピー機能が利用できません');
