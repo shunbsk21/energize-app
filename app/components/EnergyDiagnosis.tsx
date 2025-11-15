@@ -275,14 +275,13 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   };
 
   useEffect(() => {
-    if (history.length > 0) {
-      const latestRecordDate = new Date(history[history.length - 1].date + 'T00:00:00');
-      setSelectedDate(latestRecordDate);
-    } else {
+    // 常に「今日」を初期選択します（タブを開いたら今日の結果を表示するため）
+    setSelectedDate(() => {
       const today = new Date();
-      setSelectedDate(today);
-    }
-  }, [history]);
+      today.setHours(0,0,0,0);
+      return today;
+    });
+  }, [/* no deps so this runs once on mount */]);
 
   useEffect(() => {
     if (step !== 'start' && step !== 'results') {
@@ -372,9 +371,10 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-3xl font-bold text-gray-800">エネルギー診断</h2>
+                    {/* メインタイトル: 小さめに調整（モバイル優先） */}
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800">エネルギー診断</h2>
                     <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                        <HelpIcon className="w-6 h-6" />
+                        <HelpIcon className="w-5 h-5" />
                     </button>
                 </div>
 
@@ -417,21 +417,49 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                <CalendarIcon className="w-6 h-6"/>
                             </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        {/* 凡例: 色の説明を上部に1行で表示 */}
+                        <div className="flex items-center gap-3 justify-center mb-4">
+                          {[
+                            { label: '充満', sample: 18 },
+                            { label: '標準', sample: 13 },
+                            { label: '枯渇', sample: 8 },
+                          ].map(l => {
+                            const lev = getEnergyLevel(l.sample);
+                            const bg = (lev as any).bg || (lev as any).color || '';
+                            const text = (lev as any).text || '';
+                            return (
+                              <div key={l.label} className="flex items-center gap-2">
+                                <span className={`w-8 h-8 rounded-full flex items-center justify-center ${bg} ${text} border ${((lev as any).border)||'border-transparent'}`}></span>
+                                <span className="text-xs text-gray-600">{l.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
                             {categoryOrder.map(cat => {
                                 const score = displayedRecord[cat];
                                 const level = getEnergyLevel(score);
-                                const isLowest = lowestEnergy.category === cat;
                                 const Icon = categoryIcons[cat];
+                                const isLowest = lowestEnergy.category === cat;
                                 return (
-                                    <div key={cat} className={`p-4 rounded-lg ${isLowest ? 'border-4' : 'border-2'} ${level.color}`}>
-                                        <div className="flex items-center mb-2">
-                                            <Icon className="w-6 h-6 mr-3" />
-                                            <h4 className="font-bold text-lg">{ENERGY_CATEGORIES[cat].name}</h4>
+                                    <div
+                                        key={cat}
+                                        className={`flex items-center justify-between p-3 rounded-lg ${isLowest ? 'ring-2 ring-offset-1' : ''} ${ (level as any).color || '' } ${ (level as any).border || '' }`}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <Icon className="w-5 h-5 flex-shrink-0 text-gray-700" />
+                                            <div className="min-w-0">
+                                              {/* shortName を使い、長文を避ける */}
+                                              <div className="text-sm font-medium text-gray-800 truncate whitespace-nowrap">
+                                                  {(ENERGY_CATEGORIES[cat] as any).shortName || ENERGY_CATEGORIES[cat].name}
+                                              </div>
+                                            </div>
                                         </div>
-                                        <div className="flex justify-between items-baseline">
-                                            <span className={`font-semibold px-3 py-1 text-sm rounded-full ${level.color}`}>{level.label}</span>
-                                            <p className="text-2xl font-bold">{score}<span className="text-sm font-normal">/20</span></p>
+
+                                        <div className="ml-4 flex-shrink-0 text-right">
+                                          <div className="text-xl font-bold leading-none">{score}</div>
                                         </div>
                                     </div>
                                 );
@@ -444,15 +472,18 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                     </div>
 
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                        <button onClick={() => setIsAdviceOpen(!isAdviceOpen)} className="w-full flex justify-between items-center text-left font-bold text-gray-800">
-                            <h3 className="text-xl">改善のためのパーソナルアドバイス</h3>
+                        <button onClick={() => setIsAdviceOpen(!isAdviceOpen)} className="w-full flex justify-between items-center text-left text-gray-800">
+                            <div className="text-left">
+                                <div className="text-xs text-gray-500">改善のための</div>
+                                <h3 className="text-lg font-bold">パーソナルアドバイス</h3>
+                            </div>
                             <ChevronDownIcon className={`w-6 h-6 transition-transform ${isAdviceOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {isAdviceOpen && (
                             <div className="mt-4 space-y-4 animate-fade-in">
                                 {ADVICE_CONTENT[lowestEnergy.category].map((advice, index) => (
                                     <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                                        <h4 className="font-bold text-indigo-700">{advice.title}</h4>
+                                        <h4 className="font-semibold text-indigo-700 text-sm">{advice.title}</h4>
                                         <ul className="list-disc list-inside text-gray-600 space-y-1 mt-2">
                                             {advice.points.map((point, pIndex) => <li key={pIndex}>{point}</li>)}
                                         </ul>
@@ -480,24 +511,27 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
 
             <div className="bg-white p-6 rounded-xl shadow-md">
                 <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold text-gray-800">過去の診断結果（最新5件）</h3>
+                    {/* 見出しを控えめにして注釈風に */}
+                    <h3 className="text-lg md:text-base font-semibold text-gray-800">過去の診断結果 <span className="text-sm text-gray-500">（最新5件）</span></h3>
                     <div>
+                        {/* カレンダーボタンをコンパクトなアイコンボタンに（テキスト削除） */}
                         <button
                             onClick={() => { setIsPastListOpen(false); setIsDatePickerOpen(true); }}
-                            className="px-3 py-1 text-sm bg-gray-100 rounded-md hover:bg-gray-200"
+                            aria-label="カレンダーで選ぶ"
+                            className="inline-flex items-center justify-center p-2 w-9 h-9 bg-white border border-gray-200 rounded-md shadow-sm hover:bg-gray-50"
                         >
-                            カレンダーで選ぶ
+                            <CalendarIcon className="w-4 h-4 text-gray-600" />
                         </button>
                     </div>
                 </div>
 
-                <p className="text-sm text-gray-500 mb-4">※スコアは20点満点です</p>
+                <p className="text-xs text-gray-500 mb-3">※スコアは20点満点です</p>
 
-                {/* 列ヘッダ（常に表示） */}
-                <div className="grid grid-cols-[180px_repeat(4,1fr)] gap-4 items-center px-3 mb-3 text-sm text-gray-600">
-                    <div className="font-medium">日付</div>
+                {/* 列ヘッダ：小さめ／折返し防止 */}
+                <div className="grid grid-cols-[120px_repeat(4,1fr)] gap-3 items-center px-2 mb-3 text-xs text-gray-600">
+                    <div className="font-medium truncate">日付</div>
                     {categoryOrder.map(cat => (
-                        <div key={cat} className="text-center font-medium">
+                        <div key={cat} className="text-center font-medium whitespace-nowrap text-xs">
                             {(ENERGY_CATEGORIES[cat] as any).shortName || ENERGY_CATEGORIES[cat].name.replace(/エネルギー|の?/g, '')}
                         </div>
                     ))}
@@ -516,13 +550,15 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                     <button
                                         key={r.date}
                                         onClick={() => setSelectedDate(new Date(r.date + 'T00:00:00'))}
-                                        className="w-full text-left p-3 bg-white border border-gray-100 rounded-2xl hover:shadow-lg transition flex items-center gap-4"
+                                        className="w-full text-left p-3 bg-white border border-gray-100 rounded-2xl hover:shadow-md transition flex items-center gap-4"
                                         aria-label={`過去診断 ${dateLabel}`}
                                     >
-                                        <div className="w-[180px] flex-shrink-0">
-                                            <div className="text-sm md:text-base font-medium text-gray-800">{dateLabel}</div>
+                                        {/* 日付（幅を小さめにする） */}
+                                        <div className="w-[120px] flex-shrink-0">
+                                            <div className="text-sm font-medium text-gray-800 truncate">{dateLabel}</div>
                                         </div>
 
+                                        {/* スコア群（ラベルは上部ヘッダ、数値のみ） */}
                                         <div className="flex-1 grid grid-cols-4 gap-3">
                                             {categoryOrder.map(cat => {
                                                 const score = (r as any)[cat] as number;
@@ -533,9 +569,9 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                                 return (
                                                     <div
                                                         key={cat}
-                                                        className={`flex items-center justify-center rounded-lg p-2 min-h-[48px] ${bgClass} ${textClass} ${borderClass}`}
+                                                        className={`flex items-center justify-center rounded-lg p-2 min-h-[44px] ${bgClass} ${textClass} ${borderClass}`}
                                                     >
-                                                        <div className="text-lg font-bold">{score}</div>
+                                                        <div className="text-lg font-bold leading-tight">{score}</div>
                                                     </div>
                                                 );
                                             })}

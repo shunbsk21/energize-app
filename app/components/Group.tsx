@@ -937,7 +937,7 @@ const Group: React.FC<GroupProps> = ({
         <div className="space-y-6 animate-fade-in">
              <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-3xl font-bold text-gray-800">グループ</h2>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800">グループ</h2>
                     <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
                         <HelpIcon className="w-6 h-6" />
                     </button>

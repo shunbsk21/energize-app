@@ -12,7 +12,7 @@ export const ENERGY_CATEGORIES: { [key in EnergyCategory]: { name: string; descr
 export const QUESTIONS: EnergyQuestionnaire = {
   physical: [
     { id: 'p1', text: '朝、すっきりと起きられている。', isReversed: false },
-    { id: 'p2', text: '日中、体のだるさや重さを感じることが少ない。', isReversed: false },
+    { id: 'p2', text: '日中、体のだるさや重さを感じることが多い。', isReversed: true },
     { id: 'p3', text: '体が「軽い」「エネルギッシュだ」と感じる瞬間がある。', isReversed: false },
     { id: 'p4', text: '疲れが抜けず、くたくただと感じる。', isReversed: true },
     { id: 'p5', text: '気力が湧かず、だらだらと過ごしてしまう。', isReversed: true },

@@ -536,7 +536,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     <div className="space-y-6">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-                <h2 className="text-3xl font-bold text-gray-800">習慣トラッカー</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
                 <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
                     <ListBulletIcon className="w-6 h-6" />
                 </button>
