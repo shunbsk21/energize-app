@@ -10,7 +10,8 @@ import {
   getDocs,
   setDoc,
   addDoc,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
 
 // ★ db (データベース本体) をインポート
@@ -502,6 +503,35 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
+  // 共有習慣の更新（自分のユーザー配下の group ドキュメントだけを更新し、local state を更新）
+const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, sharedIds: string[]) => {
+  if (!profile.id || !groupId || !memberId) return;
+  try {
+    const groupRef = doc(db, 'users', profile.id, 'groups', groupId);
+    // フィールドパスを使って自分のドキュメント内に保存
+    await updateDoc(groupRef, { [`sharedByMember.${memberId}`]: sharedIds });
+    // local state を更新（UI に即時反映）
+    setGroups(prev => prev.map(g => g.id === groupId ? { 
+      ...g, 
+      sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
+    } : g));
+    console.log('shared habits updated (local user copy)');
+  } catch (err) {
+    // updateDoc が失敗する（ドキュメントが存在しない等）場合は setDoc(merge) にフォールバック
+    try {
+      const fallbackRef = doc(db, 'users', profile.id, 'groups', groupId);
+      await setDoc(fallbackRef, { sharedByMember: { [memberId]: sharedIds } }, { merge: true });
+      setGroups(prev => prev.map(g => g.id === groupId ? { 
+        ...g, 
+        sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
+      } : g));
+      console.log('shared habits saved via setDoc merge fallback');
+    } catch (err2) {
+      console.error('failed to update shared habits', err, err2);
+    }
+  }
+};
+
 
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
@@ -571,6 +601,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   habits={habits} 
                   setIsHelpOpen={setIsHelpOpen}
                   allUserProfiles={allUserProfiles}
+                  onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
                 />;
       default:
         return null;
@@ -579,43 +610,14 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // --- JSX (変更なし) ---
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-800">
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-28"> {/* pb-28: 下部タブ分の余白 */}
       <header className="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">
                  <div className="flex items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
                  </div>
-                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 md:gap-2 p-1 bg-gray-200/70 rounded-lg">
-                    <button 
-                        onClick={() => setView('diagnosis')}
-                        className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md font-semibold transition-all text-sm ${view === 'diagnosis' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600 hover:bg-white/50'}`}
-                    >
-                        <DiagnosisIcon className="w-5 h-5"/>
-                        <span className="hidden sm:inline">診断</span>
-                    </button>
-                    <button 
-                        onClick={() => setView('habits')}
-                        className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md font-semibold transition-all text-sm ${view === 'habits' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600 hover:bg-white/50'}`}
-                    >
-                        <HabitIcon className="w-5 h-5" />
-                        <span className="hidden sm:inline">習慣</span>
-                    </button>
-                     <button 
-                        onClick={() => setView('group')}
-                        className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md font-semibold transition-all text-sm ${view === 'group' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600 hover:bg-white/50'}`}
-                    >
-                        <GroupIcon className="w-5 h-5" />
-                        <span className="hidden sm:inline">グループ</span>
-                    </button>
-                    <button 
-                        onClick={() => setView('analytics')}
-                        className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-md font-semibold transition-all text-sm ${view === 'analytics' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600 hover:bg-white/50'}`}
-                    >
-                        <AnalyticsIcon className="w-5 h-5" />
-                        <span className="hidden sm:inline">分析</span>
-                    </button>
-                 </div>
+
                  <div className="flex items-center">
                      <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
                         {profile.imageUrl ? (
@@ -628,7 +630,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             </div>
         </div>
       </header>
-      
+
       {isHelpOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsHelpOpen(false)}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -655,10 +657,60 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       <main className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
         {renderView()}
+
+        {/* タブごとの説明テキスト（メイン下部に表示） */}
+        <div className="mt-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm text-sm text-gray-600">
+            {helpText}
+          </div>
+        </div>
       </main>
-       <footer className="text-center py-6 text-gray-500 text-sm">
-        <p>Your personal dashboard for a better self.</p>
-      </footer>
+
+      {/* 下部固定タブバー */}
+      <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white/90 border-t border-gray-100 safe-bottom">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-18 py-3">
+            <button
+              onClick={() => setView('diagnosis')}
+              className={`flex flex-col items-center text-xs w-1/4 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
+            >
+              <DiagnosisIcon className="w-6 h-6 mb-1" />
+              <span className="text-sm">診断</span>
+            </button>
+
+            <button
+              onClick={() => setView('habits')}
+              className={`flex flex-col items-center text-xs w-1/4 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
+            >
+              <HabitIcon className="w-6 h-6 mb-1" />
+              <span className="text-sm">習慣</span>
+            </button>
+
+            <button
+              onClick={() => setView('group')}
+              className={`flex flex-col items-center text-xs w-1/4 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
+            >
+              <GroupIcon className="w-6 h-6 mb-1" />
+              <span className="text-sm">グループ</span>
+            </button>
+
+            <button
+              onClick={() => setView('analytics')}
+              className={`flex flex-col items-center text-xs w-1/4 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
+            >
+              <AnalyticsIcon className="w-6 h-6 mb-1" />
+              <span className="text-sm">分析</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* 既存のフッターは簡素化 */}
+      <div className="hidden sm:block">
+        <footer className="text-center py-6 text-gray-500 text-sm">
+          <p>Your personal dashboard for a better self.</p>
+        </footer>
+      </div>
     </div>
   );
 };

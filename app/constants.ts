@@ -2,11 +2,11 @@
 // This file now correctly separates constants from type definitions.
 import type { EnergyCategory, EnergyQuestionnaire, Advice } from '../app/types';
 
-export const ENERGY_CATEGORIES: { [key in EnergyCategory]: { name: string; description: string; color: string; } } = {
-  physical: { name: '身体的エネルギー', description: 'フィジカル', color: '#34D399' },
-  mental: { name: '精神的エネルギー', description: '目的意識', color: '#FBBF24' },
-  emotional: { name: '感情的エネルギー', description: '意欲・ポジティブさ', color: '#F87171' },
-  intellectual: { name: '頭脳エネルギー', description: '集中力・思考力', color: '#60A5FA' },
+export const ENERGY_CATEGORIES: { [key in EnergyCategory]: { name: string; description: string; color: string; shortName: string; } } = {
+  physical: { name: '身体的エネルギー', description: 'フィジカル', color: '#34D399', shortName: '身体' },
+  mental: { name: '精神的エネルギー', description: '目的意識', color: '#FBBF24', shortName: '精神' },
+  emotional: { name: '感情的エネルギー', description: '意欲・ポジティブさ', color: '#F87171', shortName: '感情' },
+  intellectual: { name: '頭脳エネルギー', description: '集中力・思考力', color: '#60A5FA', shortName: '頭脳' },
 };
 
 export const QUESTIONS: EnergyQuestionnaire = {

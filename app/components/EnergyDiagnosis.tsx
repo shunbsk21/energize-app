@@ -152,8 +152,6 @@ const DatePickerModal: React.FC<{
           const hasRecord = highlightedDates?.has(dateStr);
           const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
 
-          const completionStatus = habits ? calculateCompletionStatus(date, habits) : 'none';
-
           calendarDays.push(
             <div 
                 key={day} 
@@ -163,11 +161,12 @@ const DatePickerModal: React.FC<{
               <span className={`w-8 h-8 flex items-center justify-center rounded-full ${isSelected ? 'bg-indigo-600 text-white' : ''}`}>
                 {day}
               </span>
-              <div className="absolute bottom-1 flex items-center justify-center gap-0.5">
-                {hasRecord && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>}
-                {completionStatus === 'full' && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
-                {completionStatus === 'partial' && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div>}
-              </div>
+              {/* エネルギー診断の記録がある日だけ青いドットを表示（他の達成率ドットは表示しない） */}
+              {hasRecord && (
+                <div className="absolute bottom-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
+                </div>
+              )}
             </div>
           );
         }
@@ -255,27 +254,26 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isAdviceOpen, setIsAdviceOpen] = useState(true);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
+  const [isPastListOpen, setIsPastListOpen] = useState(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
-  
-  // ★ localFrequency は、親 (MainApp) から渡される diagnosisFrequency を初期値とする
+
+  // local frequency state
   const [localFrequency, setLocalFrequency] = useState(diagnosisFrequency);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  
-  // ★ 親から渡される diagnosisFrequency が変わったら、localFrequency も更新する
+
   useEffect(() => {
     setLocalFrequency(diagnosisFrequency);
   }, [diagnosisFrequency]);
 
-
-  // ★ handleSaveFrequency を修正
+  // handle save -> call parent setter
   const handleSaveFrequency = () => {
-    // 親 (MainApp) から渡された setDiagnosisFrequency (Firestore保存関数) を呼び出す
     setDiagnosisFrequency(localFrequency);
     setShowSaveSuccess(true);
     setTimeout(() => setShowSaveSuccess(false), 2000);
+    setIsFrequencyModalOpen(false);
   };
-  
-  // (↓ useEffect[history] は変更なし)
+
   useEffect(() => {
     if (history.length > 0) {
       const latestRecordDate = new Date(history[history.length - 1].date + 'T00:00:00');
@@ -285,15 +283,13 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
       setSelectedDate(today);
     }
   }, [history]);
-  
-  // (↓ useEffect[step] は変更なし)
+
   useEffect(() => {
     if (step !== 'start' && step !== 'results') {
       quizContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [step]);
 
-  // (↓ handleAnswer, handleNext, startQuiz は変更なし)
   const handleAnswer = (questionId: string, value: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
@@ -323,14 +319,12 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     setStep(categoryOrder[0]);
   }
 
-  // (↓ recordDates, displayedRecord, lowestEnergy, currentQuestions, isCurrentStepAnswered は変更なし)
   const recordDates = useMemo(() => new Set(history.map(r => r.date)), [history]);
-  
+
   const displayedRecord = useMemo(() => {
     const dateString = selectedDate.toLocaleDateString('sv-SE');
     return history.find(r => r.date === dateString) || null;
   }, [history, selectedDate]);
-
 
   const lowestEnergy = useMemo(() => {
     if (!displayedRecord) return null;
@@ -340,12 +334,39 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     }, { category: 'physical' as EnergyCategory, score: Infinity });
   }, [displayedRecord]);
 
-
   const currentQuestions = (step !== 'start' && step !== 'results') ? QUESTIONS[step as EnergyCategory] : [];
   const isCurrentStepAnswered = currentQuestions.every(q => answers[q.id] !== undefined);
 
+  // Past records list component (simple)
+  const PastRecordsList: React.FC = () => {
+    if (!history || history.length === 0) {
+      return <p className="text-sm text-gray-500">過去の診断はありません。</p>;
+    }
+    const sorted = [...history].sort((a,b) => b.date.localeCompare(a.date));
+    return (
+      <ul className="space-y-2 max-h-48 overflow-y-auto">
+        {sorted.map(r => {
+          const dateLabel = new Date(r.date + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
+          return (
+            <li key={r.date}>
+              <button
+                className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 flex justify-between items-center"
+                onClick={() => { setSelectedDate(new Date(r.date + 'T00:00:00')); setIsPastListOpen(false); }}
+              >
+                <div>
+                  <div className="font-medium text-gray-800">{dateLabel}</div>
+                  <div className="text-xs text-gray-500">{Object.entries(r).filter(([k])=>k!=='date').map(([k,v])=>`${ENERGY_CATEGORIES[k as EnergyCategory].name}: ${v}/20`).join(' ・ ')}</div>
+                </div>
+                <div className="text-sm text-indigo-600">詳細</div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
 
-  // --- JSX (変更なし) ---
+  // --- JSX ---
   if (step === 'start' || step === 'results') {
     return (
         <div className="space-y-6">
@@ -356,15 +377,26 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                         <HelpIcon className="w-6 h-6" />
                     </button>
                 </div>
-                <button
-                    onClick={startQuiz}
-                    className="bg-indigo-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md text-sm sm:text-base whitespace-nowrap"
-                >
-                    {history.length > 0 ? '再診断する' : '診断を開始する'}
-                </button>
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={startQuiz}
+                        className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors shadow-md text-sm whitespace-nowrap"
+                    >
+                        {history.length > 0 ? '再診断する' : '診断を開始する'}
+                    </button>
+
+                    <button
+                      onClick={() => setIsFrequencyModalOpen(true)}
+                      className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                      title="診断の頻度を設定"
+                    >
+                      頻度設定
+                    </button>
+                </div>
             </div>
-            
-             <DatePickerModal 
+
+            <DatePickerModal 
                 isOpen={isDatePickerOpen}
                 onClose={() => setIsDatePickerOpen(false)}
                 onDateSelect={(date) => {
@@ -431,34 +463,104 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                     </div>
                 </div>
             ) : (
-                <div className="bg-white p-6 rounded-xl shadow-md text-center text-gray-500">
-                    <p>
-                        <button onClick={() => setIsDatePickerOpen(true)} className="text-indigo-600 font-semibold hover:underline">
-                         {selectedDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </button>
-                        の診断記録はありません。
+                <div className="bg-white p-8 rounded-xl shadow-md text-center">
+                    <p className="text-lg font-semibold text-gray-800 mb-4 max-w-xl mx-auto leading-relaxed">
+                        診断結果はありません。<br/>ぜひ診断してみてください！
                     </p>
-                    <p>カレンダーから記録のある日付を選択してください。</p>
+                    <div className="flex items-center justify-center gap-3 mt-2">
+                        <button
+                            onClick={startQuiz}
+                            className="px-6 py-3 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition"
+                        >
+                            診断を開始する
+                        </button>
+                    </div>
                 </div>
             )}
 
             <div className="bg-white p-6 rounded-xl shadow-md">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">診断の頻度設定</h3>
-                <p className="text-gray-600 mb-4 text-sm">ここで設定した頻度に合わせて、「習慣トラッカー」に診断タスクが表示されます。</p>
-                {/* FrequencyEditor は localFrequency (ローカルのuseState) を操作する
-                  これは変更ありません
-                */}
-                <FrequencyEditor frequency={localFrequency} setFrequency={setLocalFrequency} />
-                <div className="mt-4 text-right">
-                    <button
-                        onClick={handleSaveFrequency} // ★ 保存ボタンが押された時に Firestore保存関数を呼ぶ
-                        className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-md disabled:bg-gray-400"
-                        disabled={JSON.stringify(localFrequency) === JSON.stringify(diagnosisFrequency)}
-                    >
-                        {showSaveSuccess ? '保存しました！' : '設定を保存'}
-                    </button>
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xl font-bold text-gray-800">過去の診断結果（最新5件）</h3>
+                    <div>
+                        <button
+                            onClick={() => { setIsPastListOpen(false); setIsDatePickerOpen(true); }}
+                            className="px-3 py-1 text-sm bg-gray-100 rounded-md hover:bg-gray-200"
+                        >
+                            カレンダーで選ぶ
+                        </button>
+                    </div>
+                </div>
+
+                <p className="text-sm text-gray-500 mb-4">※スコアは20点満点です</p>
+
+                {/* 列ヘッダ（常に表示） */}
+                <div className="grid grid-cols-[180px_repeat(4,1fr)] gap-4 items-center px-3 mb-3 text-sm text-gray-600">
+                    <div className="font-medium">日付</div>
+                    {categoryOrder.map(cat => (
+                        <div key={cat} className="text-center font-medium">
+                            {(ENERGY_CATEGORIES[cat] as any).shortName || ENERGY_CATEGORIES[cat].name.replace(/エネルギー|の?/g, '')}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="space-y-3">
+                    {history.length === 0 ? (
+                        <p className="text-sm text-gray-500">過去の診断はありません。</p>
+                    ) : (
+                        [...history]
+                            .sort((a, b) => b.date.localeCompare(a.date))
+                            .slice(0, 5)
+                            .map(r => {
+                                const dateLabel = new Date(r.date + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
+                                return (
+                                    <button
+                                        key={r.date}
+                                        onClick={() => setSelectedDate(new Date(r.date + 'T00:00:00'))}
+                                        className="w-full text-left p-3 bg-white border border-gray-100 rounded-2xl hover:shadow-lg transition flex items-center gap-4"
+                                        aria-label={`過去診断 ${dateLabel}`}
+                                    >
+                                        <div className="w-[180px] flex-shrink-0">
+                                            <div className="text-sm md:text-base font-medium text-gray-800">{dateLabel}</div>
+                                        </div>
+
+                                        <div className="flex-1 grid grid-cols-4 gap-3">
+                                            {categoryOrder.map(cat => {
+                                                const score = (r as any)[cat] as number;
+                                                const level = getEnergyLevel(score);
+                                                const bgClass = (level as any).bg || (level as any).color || '';
+                                                const textClass = (level as any).text || '';
+                                                const borderClass = (level as any).border || '';
+                                                return (
+                                                    <div
+                                                        key={cat}
+                                                        className={`flex items-center justify-center rounded-lg p-2 min-h-[48px] ${bgClass} ${textClass} ${borderClass}`}
+                                                    >
+                                                        <div className="text-lg font-bold">{score}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </button>
+                                );
+                            })
+                    )}
                 </div>
             </div>
+
+            {/* Frequency modal (topの頻度設定ボタンで開く) */}
+            {isFrequencyModalOpen && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setIsFrequencyModalOpen(false)}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-lg font-bold mb-3">診断の頻度設定</h3>
+                  <FrequencyEditor frequency={localFrequency} setFrequency={setLocalFrequency} />
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button onClick={() => setIsFrequencyModalOpen(false)} className="px-4 py-2 rounded-lg bg-white border">キャンセル</button>
+                    <button onClick={handleSaveFrequency} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">保存</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
         </div>
     );
   }
