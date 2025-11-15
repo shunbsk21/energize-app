@@ -308,7 +308,7 @@ const MemberHabitsModal: React.FC<{
         return '';
     };
     const getTitle = (habit: Habit) => {
-      const h: any = habit;  
+      const h: any = habit;
       return h.title || h.name || h.label || '無題の習慣';
     };
 
@@ -439,6 +439,10 @@ const SharedHabitsModal: React.FC<{
         return '';
     };
 
+    const getTitle = (habit: Habit) => {
+      const h: any = habit;
+      return h.title || h.name || h.label || '無題の習慣';
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]" onClick={onClose}>
