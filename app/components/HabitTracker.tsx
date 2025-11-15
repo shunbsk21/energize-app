@@ -16,12 +16,12 @@ interface HabitTrackerProps {
   setView: (view: View) => void;
   diagnosisFrequency: DiagnosisFrequency;
   checkins?: { id: string; date: string; value: number; note?: string; createdAt?: string }[];
-  checkouts?: { id: string; date: string; gratitude?: string; note?: string; rating?: number; createdAt?: string }[];
+  checkouts?: { id: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[];
   // 変更: 保存時に日付文字列(sv-SE)を渡すシグネチャに変更
   onAddCheckin?: (value: number, note?: string, dateStr?: string) => void;
-  onAddCheckout?: (gratitude?: string, note?: string, rating?: number, dateStr?: string) => void;
+  onAddCheckout?: (gratitude?: string, note?: string, rating?: number | null, dateStr?: string) => void;
   onUpdateCheckin?: (id: string, value: number, note?: string) => void;
-  onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number) => void;
+  onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number | null) => void;
 }
 
 // --- Icon Components Start (★ CheckCircleIcon を追加) ---
