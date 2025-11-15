@@ -84,7 +84,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 新規: チェックイン / チェックアウトの state
   const [checkins, setCheckins] = useState<{ id: string; date: string; value: number; note?: string; createdAt?: string }[]>([]);
-  const [checkouts, setCheckouts] = useState<{ id: string; date: string; gratitude?: string; note?: string; rating?: number; createdAt?: string }[]>([]);
+  const [checkouts, setCheckouts] = useState<{ id: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[]>([]);
   
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
