@@ -9,15 +9,19 @@ import HabitDetail from './HabitDetail';
 interface HabitTrackerProps {
   habits: Habit[];
   energyHistory: EnergyRecord[]; // ★ 診断履歴を受け取る
-  
-  // ★ Firestore操作用の関数 (変更なし)
   onAddHabit: (newHabit: Omit<Habit, 'id'>) => void;
   onUpdateHabit: (updatedHabit: Habit) => void;
   onDeleteHabit: (habitId: string) => void;
-
   setIsHelpOpen: (isOpen: boolean) => void;
   setView: (view: View) => void;
   diagnosisFrequency: DiagnosisFrequency;
+  checkins?: { id: string; date: string; value: number; note?: string; createdAt?: string }[];
+  checkouts?: { id: string; date: string; gratitude?: string; note?: string; rating?: number; createdAt?: string }[];
+  // 変更: 保存時に日付文字列(sv-SE)を渡すシグネチャに変更
+  onAddCheckin?: (value: number, note?: string, dateStr?: string) => void;
+  onAddCheckout?: (gratitude?: string, note?: string, rating?: number, dateStr?: string) => void;
+  onUpdateCheckin?: (id: string, value: number, note?: string) => void;
+  onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number) => void;
 }
 
 // --- Icon Components Start (★ CheckCircleIcon を追加) ---
@@ -76,6 +80,18 @@ const CheckCircleIcon: React.FC<{className?: string}> = ({className}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
 );
+
+const MoodIcon = ({ level }: { level: number }) => {
+  // 簡易アイコン: emoji を利用（スタイルは調整可能）
+  const map = {
+    5: '⚡️',
+    4: '😊',
+    3: '😐',
+    2: '😴',
+    1: '🥀'
+  } as any;
+  return <span className="text-xl">{map[level]}</span>;
+};
 // --- Icon Components End ---
 
 
@@ -273,18 +289,221 @@ const HabitListModal: React.FC<{
 
 // --- Modal Components End ---
 
+// --- HabitTracker の中にモーダルを追加 ---
+// --- モーダル内 textarea の自動リサイズ用ヘルパ（モジュール内どこでも可） ---
+function autoGrowTextArea(el?: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
+}
+
+const CheckInModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (value: number, note?: string) => void; initial?: { value:number; note?:string } }> = ({ isOpen, onClose, onSave, initial }) => {
+  const [value, setValue] = useState<number>(initial?.value ?? 4);
+  const [note, setNote] = useState<string>(initial?.note ?? '');
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setValue(initial?.value ?? 4);
+      setNote(initial?.note ?? '');
+      setTimeout(() => autoGrowTextArea(noteRef.current), 0);
+    }
+  }, [isOpen, initial]);
+
+  const DESCRIPTIONS: { [k: number]: { short: string; full: string } } = {
+    5: { short: 'エネルギー満タン', full: '活力が最大限で、集中力・やる気ともに高い状態。' },
+    4: { short: '元気', full: '通常のレベルより調子が良く、前向きに取り組める状態。' },
+    3: { short: '普通', full: '可もなく不可もなく、日常の業務をこなせる安定した状態。' },
+    2: { short: '疲労気味', full: '集中力が切れやすく、休息やリフレッシュが必要な状態。' },
+    1: { short: 'エネルギー枯渇', full: '意欲や体力がなく、十分な回復を最優先すべき危険な状態。' },
+  };
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-lg p-3 w-full max-w-md max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-2">チェックイン: 今日のエネルギー</h3>
+
+        {/* モーダル内部スクロール領域 */}
+        <div className="max-h-[60vh] overflow-auto pr-2">
+          {/* 短い表示のみ縦並び（降順）。各行をコンパクトに */}
+          <div className="space-y-2 mb-3">
+            {[5,4,3,2,1].map(v => (
+              <button
+                key={v}
+                onClick={() => setValue(v)}
+                aria-pressed={value === v}
+                className={`w-full text-left rounded-md border transition flex items-center gap-3 py-2 px-3 ${value === v ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              >
+                {/* 数字を左に */}
+                <div className="w-6 flex-shrink-0 text-sm font-medium text-gray-600">{v}.</div>
+
+                {/* アイコンは中央寄せ */}
+                <div className="w-8 flex items-center justify-center flex-shrink-0">
+                  <MoodIcon level={v} />
+                </div>
+
+                {/* テキストは中央揃え（縦中央） */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-800 leading-tight">{DESCRIPTIONS[v].short}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* 選択したものの詳細説明は選択欄下にコンパクトに表示 */}
+          <div className="mb-3 text-sm text-gray-700">
+            <div className="text-xs text-gray-500 mb-1">選択: <span className="font-medium">{DESCRIPTIONS[value].short}</span></div>
+            <div className="p-2 bg-gray-50 rounded text-sm text-gray-600 leading-relaxed">{DESCRIPTIONS[value].full}</div>
+          </div>
+
+          <textarea
+            ref={noteRef}
+            value={note}
+            onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+            onChange={e => setNote(e.target.value)}
+            placeholder="メモ（任意）"
+            rows={3}
+            className="w-full p-2 border border-gray-200 rounded-md mb-3 resize-none text-sm"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 mt-2">
+          <button onClick={onClose} className="px-3 py-2 rounded-md bg-white border text-sm">キャンセル</button>
+          <button onClick={() => { onSave(value, note); onClose(); }} className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm">保存</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- CheckOutModal (差し替え) ---
+const CheckOutModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (gratitude?: string, note?: string, rating?: number) => void; initial?: { rating:number; gratitude?:string; note?:string } }> = ({ isOpen, onClose, onSave, initial }) => {
+  const [rating, setRating] = useState<number>(initial?.rating ?? 4);
+  const [gratitude, setGratitude] = useState<string>(initial?.gratitude ?? '');
+  const [note, setNote] = useState<string>(initial?.note ?? '');
+  const gratitudeRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRating(initial?.rating ?? 4);
+      setGratitude(initial?.gratitude ?? '');
+      setNote(initial?.note ?? '');
+      setTimeout(() => { autoGrowTextArea(gratitudeRef.current); autoGrowTextArea(noteRef.current); }, 0);
+    }
+  }, [isOpen, initial]);
+
+  const SAT_DESCRIPTIONS: { [k: number]: { short: string; full: string } } = {
+    5: { short: '今日は最高だった', full: '非常に満足しており、達成感や喜びを感じる充実した一日。' },
+    4: { short: '今日は良かった', full: '概ね満足しており、良い出来事が多かった一日。' },
+    3: { short: '今日は普通', full: '特に大きな出来事もなく、平穏に過ごした一日。' },
+    2: { short: 'ちょっと残念', full: 'ストレスや小さな失敗があり、気分が沈んだ一日。' },
+    1: { short: '今日は最悪だった', full: '予期せぬ大きな問題や、強い不満を感じた一日。' },
+  };
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-lg p-3 w-full max-w-lg max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-2">チェックアウト: 感謝・日記</h3>
+
+        <div className="max-h-[64vh] overflow-auto pr-2">
+          <div className="text-sm text-gray-700 mb-2">今日の気分を選択してください</div>
+
+          {/* 短い表示のみ縦並び（降順）・コンパクト */}
+          <div className="space-y-2 mb-3">
+            {[5,4,3,2,1].map(v => (
+              <button
+                key={v}
+                onClick={() => setRating(v)}
+                aria-pressed={rating === v}
+                className={`w-full text-left rounded-md border transition flex items-center gap-3 py-2 px-3 ${rating === v ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              >
+                {/* 数字を左 */}
+                <div className="w-6 flex-shrink-0 text-sm font-medium text-gray-600">{v}.</div>
+
+                {/* アイコン */}
+                <div className="w-8 flex items-center justify-center flex-shrink-0">
+                  <MoodIcon level={v} />
+                </div>
+
+                {/* テキスト */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-800 leading-tight">{SAT_DESCRIPTIONS[v].short}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* 選択したものの詳細説明 */}
+          <div className="mb-4 text-sm text-gray-700">
+            <div className="text-xs text-gray-500 mb-1">選択: <span className="font-medium">{SAT_DESCRIPTIONS[rating].short}</span></div>
+            <div className="p-2 bg-gray-50 rounded text-sm text-gray-600 leading-relaxed">{SAT_DESCRIPTIONS[rating].full}</div>
+          </div>
+
+          <div className="mb-3">
+            <label className="text-sm text-gray-600">今日の感謝</label>
+            <textarea
+              ref={gratitudeRef}
+              value={gratitude}
+              onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+              onChange={e => setGratitude(e.target.value)}
+              placeholder="例: 一緒にランチしてくれた同僚に感謝"
+              rows={1}
+              className="w-full p-3 border border-gray-200 rounded-md mt-1 mb-2 resize-none text-sm"
+            />
+            <label className="text-sm text-gray-600">日記（任意・詳細）</label>
+            <textarea
+              ref={noteRef}
+              value={note}
+              onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+              onChange={e => setNote(e.target.value)}
+              placeholder="今日の出来事や振り返りを書き留めましょう"
+              rows={3}
+              className="w-full p-3 border border-gray-200 rounded-md mt-1 resize-none text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-2">
+          <button onClick={onClose} className="px-3 py-2 rounded-md bg-white border text-sm">キャンセル</button>
+          <button onClick={() => { onSave(gratitude, note, rating); onClose(); }} className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm">保存</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Icon Components: add Sun/Moon (for check-in/check-out) ---
+const SunIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2M12 19v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 7a5 5 0 100 10 5 5 0 000-10z"/>
+  </svg>
+);
+const MoonIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+  </svg>
+);
 
 // --- HabitTracker Component Start ---
 
 const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, 
-  energyHistory, // ★ 診断履歴を受け取る
+  energyHistory,
   onAddHabit,
   onUpdateHabit,
   onDeleteHabit,
   setIsHelpOpen, 
   setView, 
-  diagnosisFrequency 
+  diagnosisFrequency,
+  checkins,
+  checkouts,
+  onAddCheckin,
+  onAddCheckout,
+  onUpdateCheckin,
+  onUpdateCheckout
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
@@ -296,6 +515,11 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   
+  const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+  const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
+  const [checkedInToday, setCheckedInToday] = useState(false);
+  const [checkedOutToday, setCheckedOutToday] = useState(false);
+
   // (↓ getWeekStart, weekStart, スワイプ関連のロジックは変更なし)
   const getWeekStart = (date: Date) => {
     const d = new Date(date);
@@ -315,6 +539,52 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const dragStartRef = useRef(0);
   const dragOffsetRef = useRef(0);
   
+  // helper to avoid TS undefined since props names are in scope
+  function propsOrEmpty<T>(v?: T) { return v ?? [] as unknown as T; }
+
+  // --- checkin/checkout lookup helpers (date format: sv-SE) ---
+  const getCheckinForDate = (date: Date) => {
+    const d = date.toLocaleDateString('sv-SE');
+    return (propsOrEmpty(checkins) || []).find((c:any) => c.date === d) || null;
+  };
+  const getCheckoutForDate = (date: Date) => {
+    const d = date.toLocaleDateString('sv-SE');
+    return (propsOrEmpty(checkouts) || []).find((c:any) => c.date === d) || null;
+  };
+
+  // --- モーダル用ドラフト state（open 時に既存値で初期化） ---
+  const [checkinDraft, setCheckinDraft] = useState<{ id?: string; value: number; note?: string }>({ value: 4 });
+  const [checkoutDraft, setCheckoutDraft] = useState<{ id?: string; rating: number; gratitude?: string; note?: string }>({ rating: 4 });
+
+  // when opening modals, initialize drafts from existing records
+  useEffect(() => {
+    if (isCheckInOpen) {
+      const rec = getCheckinForDate(selectedDate);
+      if (rec) {
+        setCheckinDraft({ id: rec.id, value: rec.value, note: rec.note || '' });
+      } else {
+        setCheckinDraft({ value: 4, note: '' });
+      }
+    }
+  }, [isCheckInOpen, selectedDate, checkins]);
+
+  useEffect(() => {
+    if (isCheckOutOpen) {
+      const rec = getCheckoutForDate(selectedDate);
+      if (rec) {
+        setCheckoutDraft({ id: rec.id, rating: rec.rating ?? 4, gratitude: rec.gratitude || '', note: rec.note || '' });
+      } else {
+        setCheckoutDraft({ rating: 4, gratitude: '', note: '' });
+      }
+    }
+  }, [isCheckOutOpen, selectedDate, checkouts]);
+
+  // reflect presence for button decoration
+  useEffect(() => {
+    setCheckedInToday(Boolean(getCheckinForDate(selectedDate)));
+    setCheckedOutToday(Boolean(getCheckoutForDate(selectedDate)));
+  }, [selectedDate, checkins, checkouts]);
+
   useEffect(() => {
     const resizeObserver = new ResizeObserver(entries => {
         if(entries[0]) {
@@ -531,27 +801,89 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     </div>
   ));
 
+  // --- モーダル onSave を差し替えて create / update を切替える ---
+  // CheckInModal の onSave -> handleSaveCheckin
+  const handleSaveCheckin = (value: number, note?: string) => {
+  const rec = getCheckinForDate(selectedDate);
+  if (rec && onUpdateCheckin) {
+    onUpdateCheckin(rec.id, value, note);
+  } else if (!rec && onAddCheckin) {
+    const dateStr = selectedDate.toLocaleDateString('sv-SE');
+    onAddCheckin(value, note, dateStr);
+  }
+  setCheckedInToday(true);
+};
+
+const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) => {
+  const rec = getCheckoutForDate(selectedDate);
+  if (rec && onUpdateCheckout) {
+    onUpdateCheckout(rec.id, gratitude, note, rating);
+  } else if (!rec && onAddCheckout) {
+    const dateStr = selectedDate.toLocaleDateString('sv-SE');
+    onAddCheckout(gratitude, note, rating, dateStr);
+  }
+  setCheckedOutToday(true);
+};
+
+
+  
   // --- JSX (変更なし) ---
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
-                <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                    <ListBulletIcon className="w-6 h-6" />
-                </button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
+              <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                  <ListBulletIcon className="w-6 h-6" />
+              </button>
+          </div>
+          {/* タイトルの下に表示されるボタン群（モバイルでは縦、デスクトップでは横） */}
+          <div className="w-full sm:w-auto flex justify-start sm:justify-end">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+              <button
+                onClick={() => setIsCheckInOpen(true)}
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+                aria-pressed={checkedInToday}
+              >
+                <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
+                <span className="text-sm font-medium text-gray-800">チェックイン</span>
+                {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
+              </button>
+              <button
+                onClick={() => setIsCheckOutOpen(true)}
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+                aria-pressed={checkedOutToday}
+              >
+                <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
+                <span className="text-sm font-medium text-gray-800">チェックアウト</span>
+                {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
+              </button>
             </div>
-             <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+            <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors ml-3 hidden sm:inline-flex">
                 <HelpIcon className="w-6 h-6" />
             </button>
+          </div>
         </div>
-       <DatePickerModal 
-          isOpen={isDatePickerOpen}
-          onClose={() => setIsDatePickerOpen(false)}
-          onDateSelect={handleDateSelect}
-          initialDate={selectedDate}
-          habits={habits}
-       />
+
+        <CheckInModal
+          isOpen={isCheckInOpen}
+          onClose={() => setIsCheckInOpen(false)}
+          onSave={(v,n) => { handleSaveCheckin(v,n); }}
+          initial={checkinDraft}
+        />
+        <CheckOutModal
+          isOpen={isCheckOutOpen}
+          onClose={() => setIsCheckOutOpen(false)}
+          onSave={(g,n,r) => { handleSaveCheckout(g,n,r); }}
+          initial={checkoutDraft}
+        />
+        <DatePickerModal 
+            isOpen={isDatePickerOpen}
+            onClose={() => setIsDatePickerOpen(false)}
+            onDateSelect={handleDateSelect}
+            initialDate={selectedDate}
+            habits={habits}
+        />
         <HabitListModal 
             isOpen={isListModalOpen}
             onClose={() => setIsListModalOpen(false)}

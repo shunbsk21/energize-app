@@ -23,6 +23,7 @@ import EnergyDiagnosis from './components/EnergyDiagnosis';
 import HabitTracker from './components/HabitTracker';
 import Analytics from './components/Analytics';
 import Group from './components/Group';
+import Records from './components/Records';
 import ProfileModal from './components/Profile';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
@@ -53,11 +54,17 @@ const GroupIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const ListBulletIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h10M7 16h10M4 8h.01M4 12h.01M4 16h.01" />
+  </svg>
+);
 
 const UserIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>);
+    </svg>
+);
 
 // --- Icon Components End ---
 
@@ -74,6 +81,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
+
+  // 新規: チェックイン / チェックアウトの state
+  const [checkins, setCheckins] = useState<{ id: string; date: string; value: number; note?: string; createdAt?: string }[]>([]);
+  const [checkouts, setCheckouts] = useState<{ id: string; date: string; gratitude?: string; note?: string; rating?: number; createdAt?: string }[]>([]);
   
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
@@ -143,7 +154,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const baseRef = doc(db, 'users', profile.id);
         const habitsRef = collection(baseRef, 'habits');
         const historyRef = collection(baseRef, 'energyHistory');
-        // const commentsRef = collection(baseRef, 'comments'); // 削除
+        const checkinsRef = collection(baseRef, 'checkins');
+        const checkoutsRef = collection(baseRef, 'checkouts');
         const settingsRef = doc(baseRef, 'settings', 'main');
         
         const followingRef = collection(baseRef, 'following');
@@ -152,17 +164,19 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const groupInvitesRef = collection(baseRef, 'group_invites');
 
         const [
-            settingsSnap, habitsSnap, historySnap, /* commentsSnap, */
-            followingSnap, followersSnap, groupsSnap, groupInvitesSnap
+            settingsSnap, habitsSnap, historySnap,
+            followingSnap, followersSnap, groupsSnap, groupInvitesSnap,
+            checkinsSnap, checkoutsSnap
         ] = await Promise.all([
             getDoc(settingsRef),
             getDocs(habitsRef),
             getDocs(historyRef),
-            // getDocs(commentsRef), // 削除
             getDocs(followingRef),
             getDocs(followersRef),
             getDocs(groupsRef),
-            getDocs(groupInvitesRef)
+            getDocs(groupInvitesRef),
+            getDocs(checkinsRef),
+            getDocs(checkoutsRef)
         ]);
 
         // --- 読み込んだデータを state にセット ---
@@ -173,8 +187,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const loadedHistory = historySnap.docs.map(d => d.data() as EnergyRecord);
         setEnergyHistory(loadedHistory);
 
-        // const loadedComments = commentsSnap.docs.map(d => ({ ...d.data() as Omit<Comment, 'id'>, id: d.id })); // 削除
-        // setComments(loadedComments); // 削除
+        // checkins / checkouts を state に入れる
+        const loadedCheckins = checkinsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        const loadedCheckouts = checkoutsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        setCheckins(loadedCheckins.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
+        setCheckouts(loadedCheckouts.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
         
         const loadedFollowing = followingSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         const loadedFollowers = followersSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
@@ -504,33 +521,91 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   };
 
   // 共有習慣の更新（自分のユーザー配下の group ドキュメントだけを更新し、local state を更新）
-const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, sharedIds: string[]) => {
-  if (!profile.id || !groupId || !memberId) return;
-  try {
-    const groupRef = doc(db, 'users', profile.id, 'groups', groupId);
-    // フィールドパスを使って自分のドキュメント内に保存
-    await updateDoc(groupRef, { [`sharedByMember.${memberId}`]: sharedIds });
-    // local state を更新（UI に即時反映）
-    setGroups(prev => prev.map(g => g.id === groupId ? { 
-      ...g, 
-      sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
-    } : g));
-    console.log('shared habits updated (local user copy)');
-  } catch (err) {
-    // updateDoc が失敗する（ドキュメントが存在しない等）場合は setDoc(merge) にフォールバック
+  const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, sharedIds: string[]) => {
+    if (!profile.id || !groupId || !memberId) return;
     try {
-      const fallbackRef = doc(db, 'users', profile.id, 'groups', groupId);
-      await setDoc(fallbackRef, { sharedByMember: { [memberId]: sharedIds } }, { merge: true });
+      const groupRef = doc(db, 'users', profile.id, 'groups', groupId);
+      // フィールドパスを使って自分のドキュメント内に保存
+      await updateDoc(groupRef, { [`sharedByMember.${memberId}`]: sharedIds });
+      // local state を更新（UI に即時反映）
       setGroups(prev => prev.map(g => g.id === groupId ? { 
         ...g, 
         sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
       } : g));
-      console.log('shared habits saved via setDoc merge fallback');
-    } catch (err2) {
-      console.error('failed to update shared habits', err, err2);
+      console.log('shared habits updated (local user copy)');
+    } catch (err) {
+      // updateDoc が失敗する（ドキュメントが存在しない等）場合は setDoc(merge) にフォールバック
+      try {
+        const fallbackRef = doc(db, 'users', profile.id, 'groups', groupId);
+        await setDoc(fallbackRef, { sharedByMember: { [memberId]: sharedIds } }, { merge: true });
+        setGroups(prev => prev.map(g => g.id === groupId ? { 
+          ...g, 
+          sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
+        } : g));
+        console.log('shared habits saved via setDoc merge fallback');
+      } catch (err2) {
+        console.error('failed to update shared habits', err, err2);
+      }
     }
-  }
-};
+  };
+
+  // --- チェックイン / チェックアウト 書き込みハンドラ ---
+  const handleAddCheckin = async (value: number, note?: string, dateStr?: string) => {
+    if (!profile.id) return;
+    try {
+      const ref = collection(db, 'users', profile.id, 'checkins');
+      const payload = {
+        date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
+        value,
+        note: note || '',
+        createdAt: new Date().toISOString()
+      };
+      const docRef = await addDoc(ref, payload);
+      setCheckins(prev => [{ id: docRef.id, ...payload }, ...prev]);
+    } catch (err) {
+      console.error('チェックイン保存に失敗しました', err);
+    }
+  };
+
+  const handleAddCheckout = async (gratitude?: string, note?: string, rating?: number, dateStr?: string) => {
+    if (!profile.id) return;
+    try {
+      const ref = collection(db, 'users', profile.id, 'checkouts');
+      const payload = {
+        date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
+        gratitude: gratitude || '',
+        note: note || '',
+        rating: rating ?? null,
+        createdAt: new Date().toISOString()
+      };
+      const docRef = await addDoc(ref, payload);
+      setCheckouts(prev => [{ id: docRef.id, ...payload }, ...prev]);
+    } catch (err) {
+      console.error('チェックアウト保存に失敗しました', err);
+    }
+  };
+
+  const handleUpdateCheckin = async (id: string, value: number, note?: string) => {
+    if (!profile.id) return;
+    try {
+      const ref = doc(db, 'users', profile.id, 'checkins', id);
+      await updateDoc(ref, { value, note: note || '', updatedAt: new Date().toISOString() });
+      setCheckins(prev => prev.map(c => c.id === id ? { ...c, value, note } : c));
+    } catch (err) {
+      console.error('チェックイン更新に失敗しました', err);
+    }
+  };
+
+  const handleUpdateCheckout = async (id: string, gratitude?: string, note?: string, rating?: number) => {
+    if (!profile.id) return;
+    try {
+      const ref = doc(db, 'users', profile.id, 'checkouts', id);
+      await updateDoc(ref, { gratitude: gratitude || '', note: note || '', rating: rating ?? null, updatedAt: new Date().toISOString() });
+      setCheckouts(prev => prev.map(c => c.id === id ? { ...c, gratitude, note, rating } : c));
+    } catch (err) {
+      console.error('チェックアウト更新に失敗しました', err);
+    }
+  };
 
 
   // --- ヘルプテキスト (変更なし) ---
@@ -546,6 +621,9 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
     }
     if (view === 'group') {
         return '友達とグループを作成し、日々の習慣の進捗を共有できます。コメント機能で励まし合い、モチベーションを高めましょう。';
+    }
+    if (view === 'records') {
+        return '日々のチェックイン / チェックアウトの記録を確認できます。自分のエネルギー状態を振り返り、改善点を見つけましょう。';
     }
     return '';
   }, [view]);
@@ -575,13 +653,20 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
                   onDeleteHabit={handleDeleteHabit}
                   setIsHelpOpen={setIsHelpOpen} 
                   setView={setView} 
-                  diagnosisFrequency={diagnosisFrequency} 
+                  diagnosisFrequency={diagnosisFrequency}
+                  onAddCheckin={handleAddCheckin}
+                  onAddCheckout={handleAddCheckout}
+                  checkins={checkins}
+                  checkouts={checkouts}
+                  onUpdateCheckin={handleUpdateCheckin}
+                  onUpdateCheckout={handleUpdateCheckout}
                 />;
       case 'analytics':
         return <Analytics 
                   energyHistory={energyHistory} 
                   habits={habits} 
-                  setIsHelpOpen={setIsHelpOpen} 
+                  setIsHelpOpen={setIsHelpOpen}
+                  checkins={checkins}                     // 追加
                 />;
       case 'group':
         return <Group 
@@ -596,13 +681,14 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
                   onAcceptGroupInvite={handleAcceptGroupInvite}
                   onDeclineGroupInvite={handleDeclineGroupInvite}
                   onRemoveMember={handleRemoveMember}
-                  // comments={comments} // 削除
-                  onAddComment={handleAddComment} // ★ 修正
+                  onAddComment={handleAddComment}
                   habits={habits} 
                   setIsHelpOpen={setIsHelpOpen}
                   allUserProfiles={allUserProfiles}
                   onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
                 />;
+      case 'records':
+        return <Records checkouts={checkouts} />
       default:
         return null;
     }
@@ -672,7 +758,7 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
           <div className="flex justify-between items-center h-18 py-3">
             <button
               onClick={() => setView('diagnosis')}
-              className={`flex flex-col items-center text-xs w-1/4 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center text-xs w-1/5 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
             >
               <DiagnosisIcon className="w-6 h-6 mb-1" />
               <span className="text-sm">診断</span>
@@ -680,7 +766,7 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
 
             <button
               onClick={() => setView('habits')}
-              className={`flex flex-col items-center text-xs w-1/4 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center text-xs w-1/5 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
             >
               <HabitIcon className="w-6 h-6 mb-1" />
               <span className="text-sm">習慣</span>
@@ -688,15 +774,23 @@ const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, 
 
             <button
               onClick={() => setView('group')}
-              className={`flex flex-col items-center text-xs w-1/4 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center text-xs w-1/5 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
             >
               <GroupIcon className="w-6 h-6 mb-1" />
               <span className="text-sm">グループ</span>
             </button>
 
             <button
+              onClick={() => setView('records')}
+              className={`flex flex-col items-center text-xs w-1/5 ${view === 'records' ? 'text-indigo-600' : 'text-gray-500'}`}
+            >
+              <ListBulletIcon className="w-6 h-6 mb-1" />
+              <span className="text-sm">記録</span>
+            </button>
+
+            <button
               onClick={() => setView('analytics')}
-              className={`flex flex-col items-center text-xs w-1/4 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center text-xs w-1/5 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
             >
               <AnalyticsIcon className="w-6 h-6 mb-1" />
               <span className="text-sm">分析</span>

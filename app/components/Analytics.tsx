@@ -8,13 +8,15 @@ interface AnalyticsProps {
   energyHistory: EnergyRecord[];
   habits: Habit[];
   setIsHelpOpen: (isOpen: boolean) => void;
+  // 追加: checkins を受け取ってチャート表示
+  checkins?: { id?: string; date: string; value: number; createdAt?: string }[];
 }
 
 type Period = 7 | 30 | 'all';
 type TooltipData = { x: number; y: number; content: React.ReactNode; };
 
 const HelpIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9
  0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
     </svg>
@@ -40,7 +42,7 @@ const createSpline = (points: {x: number; y: number}[]) => {
 };
 
 
-const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpOpen }) => {
+const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpOpen, checkins }) => {
   const [period, setPeriod] = useState<Period>(7);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -323,6 +325,38 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
         <h3 className="text-xl font-bold text-gray-800 mb-4">習慣達成率</h3>
         {renderHabitChart()}
       </div>
+
+      {/* 追加: チェックイン推移（1-5） */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">チェックインの推移</h3>
+        {(!checkins || checkins.length < 2) ? (
+          <p className="text-gray-500 text-center py-6">チェックインが2件以上必要です。</p>
+        ) : (
+          (() => {
+            const data = (checkins || []).slice().sort((a,b) => (new Date(a.createdAt || a.date)).getTime() - (new Date(b.createdAt || b.date)).getTime());
+            const width = 600, height = 140, margin = { left: 24, right: 20, top: 10, bottom: 24 };
+            const x = (i:number) => margin.left + i * (width - margin.left - margin.right) / Math.max(1, data.length - 1);
+            const y = (v:number) => margin.top + (5 - v) * ((height - margin.top - margin.bottom) / 4);
+            const points = data.map((d,i) => ({ x: x(i), y: y(d.value), v: d }));
+            const path = createSpline(points.map(p => ({x:p.x,y:p.y})));
+            return (
+              <div className="relative overflow-auto">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
+                  <path d={path} fill="none" stroke="#4F46E5" strokeWidth="2" />
+                  {points.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={4} fill="#4F46E5" />)}
+                  {data.map((d,i) => (
+                    (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
+                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="10" fill="#6B7281">
+                      {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
+                    </text>
+                  ))}
+                </svg>
+              </div>
+            );
+          })()
+        )}
+      </div>
+
     </div>
   );
 };
