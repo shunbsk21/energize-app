@@ -597,7 +597,8 @@ const GroupDetail: React.FC<{
             }
         })();
         return () => { cancelled = true; };
-    }, [selectedMemberId, JSON.stringify(memberHabitsMap[selectedMemberId] || [])]);
+    // 依存配列で selectedMemberId の有無を考慮して参照するように変更
+    }, [selectedMemberId, JSON.stringify(selectedMemberId ? (memberHabitsMap[selectedMemberId] || []) : [])]);
 
     // デバッグログ: メンバーモーダルを開くときに resolvedShared をログに出す（関数をJSXとして返していた箇所を修正）
     const _resolvedSharedJSON = selectedMemberId ? JSON.stringify(memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []) : '[]';
