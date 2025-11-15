@@ -252,6 +252,27 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     
   }, [profile.id, setProfile, profile, fetchUserProfiles]);
 
+  // --- helper: VAPID 公開鍵を env か runtime で渡す ---
+  // 環境に応じて置き換えてください（例: NEXT_PUBLIC_VAPID_KEYを設定）
+  const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '<PUT_PUBLIC_KEY_HERE>';
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+  // --- inside MainApp component (ユーザー profile が利用できる箇所に追加) ---
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registered', reg.scope))
+      .catch(err => console.error('SW registration failed', err));
+  }, []);
 
   // ★★★ データの「書き込み」処理 (Firestore) ★★★
 

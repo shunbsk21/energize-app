@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
@@ -498,6 +499,8 @@ const GroupDetail: React.FC<{
     const [memberToRemove, setMemberToRemove] = useState<(Profile | Friend) | null>(null);
     const [messages, setMessages] = useState<Comment[]>([]);
 
+    const initialLoadRef = useRef<boolean>(true);
+
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
@@ -513,21 +516,38 @@ const GroupDetail: React.FC<{
             collection(db, 'group_chats', group.id, 'messages'),
             orderBy('timestamp', 'asc')
         );
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const loadedMessages: Comment[] = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                loadedMessages.push({
-                    id: doc.id,
-                    groupId: data.groupId,
-                    authorId: data.authorId,
-                    authorName: data.authorName,
-                    text: data.text,
-                    timestamp: data.timestamp,
-                    authorImageUrl: data.authorImageUrl || null
-                } as Comment);
-            });
-            setMessages(loadedMessages);
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const loadedMessages: Comment[] = [];
+          querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              loadedMessages.push({
+                  id: doc.id,
+                  groupId: data.groupId,
+                  authorId: data.authorId,
+                  authorName: data.authorName,
+                  text: data.text,
+                  timestamp: data.timestamp,
+                  authorImageUrl: data.authorImageUrl || null
+              } as Comment);
+          });
+          // docChanges to detect newly added messages
+          querySnapshot.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                  const data = change.doc.data() as any;
+                  // skip toast for initial load
+                  if (!initialLoadRef.current && data && data.text) {
+                      // avoid notifying sender on their own new message
+                      if (data.authorId !== profile.id) {
+                          const authorLabel = data.authorName || '名無し';
+                          toast(`${authorLabel}: ${String(data.text)}`, { duration: 4000 });
+                      }
+                  }
+              }
+          });
++
+          setMessages(loadedMessages);
+          if (initialLoadRef.current) initialLoadRef.current = false;
         }, (error) => {
             console.error("チャットの読み込みに失敗しました:", error);
         });
