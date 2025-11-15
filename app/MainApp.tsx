@@ -567,7 +567,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  const handleAddCheckout = async (gratitude?: string, note?: string, rating?: number, dateStr?: string) => {
+  const handleAddCheckout = async (gratitude?: string, note?: string, rating?: number | null, dateStr?: string) => {
     if (!profile.id) return;
     try {
       const ref = collection(db, 'users', profile.id, 'checkouts');
@@ -596,7 +596,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  const handleUpdateCheckout = async (id: string, gratitude?: string, note?: string, rating?: number) => {
+  const handleUpdateCheckout = async (id: string, gratitude?: string, note?: string, rating?: number | null) => {
     if (!profile.id) return;
     try {
       const ref = doc(db, 'users', profile.id, 'checkouts', id);
