@@ -121,18 +121,25 @@ const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'parti
     const dateStr = date.toLocaleDateString('sv-SE');
     const scheduledHabits = habits.filter(h => isHabitScheduledForDate(h, date));
 
-    if (scheduledHabits.length === 0) {
-        return 'none';
-    }
+    if (scheduledHabits.length === 0) return 'none';
 
-    const completedCount = scheduledHabits.filter(h => h.completedDates.includes(dateStr)).length;
+    // count as completed depending on habit type:
+    const completedCount = scheduledHabits.reduce((acc, h) => {
+        const type = (h.type ?? 'binary');
+        if (type === 'amount') {
+            const amountMap = h.completedAmounts || {};
+            const val = amountMap[dateStr] ?? 0;
+            const target = h.target ?? 0;
+            const satisfied = target > 0 ? val >= target : val > 0;
+            return acc + (satisfied ? 1 : 0);
+        } else {
+            const dates = h.completedDates || [];
+            return acc + (dates.includes(dateStr) ? 1 : 0);
+        }
+    }, 0);
 
-    if (completedCount === 0) {
-        return 'none';
-    }
-    if (completedCount === scheduledHabits.length) {
-        return 'full';
-    }
+    if (completedCount === 0) return 'none';
+    if (completedCount === scheduledHabits.length) return 'full';
     return 'partial';
 };
 
@@ -170,11 +177,11 @@ const DatePickerModal: React.FC<{
     if (!isOpen) return null;
 
     const changeMonth = (amount: number) => {
-        setDisplayDate(prev => {
-          const newDate = new Date(prev);
-          newDate.setMonth(newDate.getMonth() + amount);
-          return newDate;
-        });
+      setDisplayDate(prev => {
+        const newDate = new Date(prev);
+        newDate.setMonth(newDate.getMonth() + amount);
+        return newDate;
+      });
     };
 
     const generateCalendar = () => {
@@ -508,6 +515,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
   const [newHabitFrequency, setNewHabitFrequency] = useState<{type: FrequencyType, value: number[]}>({type: 'daily', value: []});
+  const [newHabitType, setNewHabitType] = useState<'binary' | 'amount'>('binary');
+  const [newHabitTarget, setNewHabitTarget] = useState<number | undefined>(undefined);
+  const [newHabitUnit, setNewHabitUnit] = useState<string>('');
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
@@ -522,12 +532,18 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // (↓ getWeekStart, weekStart, スワイプ関連のロジックは変更なし)
   const getWeekStart = (date: Date) => {
+    // return Monday-start week start date for given date
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday-start week
-    return new Date(d.setDate(diff));
-  }
+    const day = d.getDay(); // 0=Sun ... 6=Sat
+    // convert to Monday-start: (0 -> 6), 1 -> 0, 2 -> 1 ...
+    const offset = (day + 6) % 7;
+    const diff = d.getDate() - offset;
+    const start = new Date(d);
+    start.setDate(diff);
+    start.setHours(0,0,0,0);
+    return start;
+  };
 
   const [weekStart, setWeekStart] = useState(getWeekStart(selectedDate));
   
@@ -603,7 +619,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     const current = [];
     for (let i = 0; i < 7; i++) {
         const day = new Date(weekStart);
-        day.setDate(day.getDate() + i);
+        day.setDate(day.getDate() +i);
         current.push(day);
     }
     const prev = current.map(d => { const newD = new Date(d); newD.setDate(d.getDate() - 7); return newD; });
@@ -703,7 +719,11 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (newHabitName.trim() === '') return;
     const newHabit: Omit<Habit, 'id'> = {
       name: newHabitName.trim(),
+      type: newHabitType,
       completedDates: [],
+      completedAmounts: newHabitType === 'amount' ? {} : undefined,
+      target: newHabitType === 'amount' ? (newHabitTarget ?? undefined) : undefined,
+      unit: newHabitType === 'amount' ? (newHabitUnit || undefined) : undefined,
       startDate: newHabitStartDate,
       frequencyType: newHabitFrequency.type,
       frequencyValue: newHabitFrequency.value,
@@ -712,6 +732,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     setNewHabitName('');
     setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
     setNewHabitFrequency({type: 'daily', value: []});
+    setNewHabitType('binary');
+    setNewHabitTarget(undefined);
+    setNewHabitUnit('');
     setIsAddModalOpen(false);
   };
   
@@ -724,9 +747,28 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     setSelectedHabit(updatedHabit); 
   };
 
+  // binary は toggle、amount は数値入力で記録
+  const recordAmountForHabit = async (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+    const input = window.prompt(`達成量を入力してください（${habit.unit ?? ''}）`, '');
+    if (input === null) return;
+    const value = parseFloat(input.replace(',', '.'));
+    if (isNaN(value)) return alert('数値を入力してください');
+    const amounts = { ...(habit.completedAmounts || {}) };
+    amounts[selectedDateString] = value;
+    const updated: Habit = { ...habit, completedAmounts: amounts };
+    onUpdateHabit(updated);
+  };
+
   const toggleHabit = (habitId: string) => {
     const habitToToggle = habits.find(h => h.id === habitId);
     if (!habitToToggle) return;
+    if (habitToToggle.type === 'amount') {
+      // amount 型は prompt で値を記録する
+      recordAmountForHabit(habitId);
+      return;
+    }
     const isCompleted = habitToToggle.completedDates.includes(selectedDateString);
     const updatedHabit: Habit = {
       ...habitToToggle,
@@ -739,28 +781,42 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   
   // (↓ calculateStreak, handleDateSelect, formattedListDate, handleSelectHabitFromList は変更なし)
   const calculateStreak = (habit: Habit): number => {
-      const { completedDates, startDate } = habit;
-      if (completedDates.length === 0) return 0;
-      let streak = 0;
-      let currentDate = new Date();
-      currentDate.setHours(0,0,0,0);
-      const sortedDatesSet = new Set(completedDates);
-      if (!isHabitScheduledForDate(habit, currentDate) || !sortedDatesSet.has(currentDate.toLocaleDateString('sv-SE'))) {
-          currentDate.setDate(currentDate.getDate() - 1);
-      }
-      while (new Date(startDate) <= currentDate) {
-          if (!isHabitScheduledForDate(habit, currentDate)) {
-              currentDate.setDate(currentDate.getDate() - 1);
-              continue;
-          }
-          if (sortedDatesSet.has(currentDate.toLocaleDateString('sv-SE'))) {
-              streak++;
-              currentDate.setDate(currentDate.getDate() - 1);
-          } else {
-              break;
-          }
-      }
-      return streak;
+    const startDate = new Date(habit.startDate);
+    startDate.setHours(0,0,0,0);
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0,0,0,0);
+
+    const dateKey = (d: Date) => d.toLocaleDateString('sv-SE');
+
+    // 日毎にスケジュールされているか確認しつつ連続日数を数える
+    while (currentDate >= startDate) {
+        if (!isHabitScheduledForDate(habit, currentDate)) {
+            currentDate.setDate(currentDate.getDate() - 1);
+            continue;
+        }
+        const key = dateKey(currentDate);
+        if (habit.type === 'amount') {
+            const amountMap = habit.completedAmounts || {};
+            const achieved = amountMap[key] ?? 0;
+            const target = habit.target ?? 0;
+            if (target > 0 ? achieved >= target : achieved > 0) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+                continue;
+            }
+            break;
+        } else {
+            const completedDatesSet = new Set(habit.completedDates || []);
+            if (completedDatesSet.has(key)) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+                continue;
+            }
+            break;
+        }
+    }
+    return streak;
   }
 
   const handleDateSelect = (date: Date) => {
@@ -769,7 +825,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     setIsDatePickerOpen(false);
   }
   
-  const formattedListDate = `${selectedDate.getFullYear()}-${selectedDate.getMonth() + 1}-${selectedDate.getDate()}(${selectedDate.toLocaleDateString('ja-JP', { weekday: 'short' })})`;
+  const formattedListDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2,'0')}-${String(selectedDate.getDate()).padStart(2,'0')} (${selectedDate.toLocaleDateString('ja-JP', { weekday: 'short' })})`;
 
   const handleSelectHabitFromList = (habit: Habit) => {
     setSelectedHabit(habit);
@@ -934,6 +990,31 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
                       <option value="monthly">月次</option>
                     </select>
                   </div>
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="habitType" value="binary" checked={newHabitType==='binary'} onChange={() => setNewHabitType('binary')} />
+                          <span className="text-sm">1回でも実施</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="habitType" value="amount" checked={newHabitType==='amount'} onChange={() => setNewHabitType('amount')} />
+                          <span className="text-sm">規定量の実施</span>
+                        </label>
+                      </div>
+                  </div>
+                  {newHabitType === 'amount' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">目標値</label>
+                        <input type="number" value={newHabitTarget ?? ''} onChange={e => setNewHabitTarget(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">単位</label>
+                        <input type="text" value={newHabitUnit} onChange={e => setNewHabitUnit(e.target.value)} placeholder="例: km, 分, 回" className="w-full p-3 border border-gray-300 rounded-lg" />
+                      </div>
+                    </div>
+                  )}
                   {newHabitFrequency.type === 'weekly' && (
                     <div className="flex justify-center gap-1">
                       {WEEK_DAYS.map((day, index) => (
@@ -1053,27 +1134,38 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
 
             {scheduledHabits.length > 0 ? (
                 scheduledHabits.map(habit => {
-                  const isCompleted = habit.completedDates.includes(selectedDateString);
                   const streak = calculateStreak(habit);
+                  const habitType = (habit.type ?? 'binary');
+                  const isBinaryCompleted = (habit.completedDates || []).includes(selectedDateString);
+                  const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
+                  const amountTarget = habit.target ?? 0;
+                  const isAmountCompleted = amountTarget > 0 ? amountVal >= amountTarget : amountVal > 0;
+                  const isCompleted = habitType === 'amount' ? isAmountCompleted : isBinaryCompleted;
+
                   return (
                     <div 
                         key={habit.id} 
                         onClick={() => setSelectedHabit(habit)}
-                        className={`flex items-center p-4 rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
+                        className={`flex items-center p-3 rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
                     >
                         <input
                           type="checkbox"
-                          checked={isCompleted}
+                          checked={habitType === 'binary' ? isBinaryCompleted : Boolean(amountVal)}
                           onChange={() => toggleHabit(habit.id)}
-                          className="h-6 w-6 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           onClick={e => e.stopPropagation()} // Prevent opening detail modal
                         />
-                        <span className={`flex-grow mx-4 text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                        <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
                           {habit.name}
                         </span>
-                        {streak > 0 && 
-                          <span className="text-orange-500 font-bold mr-4">🔥 {streak}日</span>
-                        }
+
+                        {habitType === 'amount' ? (
+                          <div className="text-sm text-gray-700 font-semibold mr-3">
+                            {amountVal}{habit.unit ? `${habit.unit}` : ''}{habit.target ? ` / ${habit.target}` : ''}
+                          </div>
+                        ) : (
+                          streak > 0 && <span className="text-orange-500 font-bold text-sm md:text-base mr-3">🔥 {streak}日</span>
+                        )}
                     </div>
                   );
                 })

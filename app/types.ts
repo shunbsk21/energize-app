@@ -35,7 +35,16 @@ export type EnergyRecord = {
 export interface Habit {
   id: string;
   name: string;
+  // 実施タイプ: 'binary' = 1回でも実施 / 'amount' = 規定量の実施
+  type: 'binary' | 'amount';
+  // binary 用: 実施日リスト（既存の挙動）
   completedDates: string[];
+  // amount 用: 日付 -> 実施量 を保存
+  completedAmounts?: { [date: string]: number };
+  // amount 用の目標値 / 単位（例: target=10, unit='km'）
+  target?: number;
+  unit?: string;
+  skippedDates?: string[];
   startDate: string;
   frequencyType: FrequencyType;
   frequencyValue: number[];

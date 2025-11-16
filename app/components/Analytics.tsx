@@ -10,6 +10,8 @@ interface AnalyticsProps {
   setIsHelpOpen: (isOpen: boolean) => void;
   // 追加: checkins を受け取ってチャート表示
   checkins?: { id?: string; date: string; value: number; createdAt?: string }[];
+  // 追加: チェックアウトの推移（オプション）
+  checkouts?: { id?: string; date: string; value: number; createdAt?: string }[];
 }
 
 type Period = 7 | 30 | 'all';
@@ -42,7 +44,7 @@ const createSpline = (points: {x: number; y: number}[]) => {
 };
 
 
-const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpOpen, checkins }) => {
+const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpOpen, checkins, checkouts }) => {
   const [period, setPeriod] = useState<Period>(7);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -161,13 +163,13 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                 <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="#D1D5DB" />
                 {yAxisTicks.map(val => (
                     <g key={val}>
-                        <text x={margin.left - 8} y={yScale(val) + 4} textAnchor="end" fontSize="10" fill="#6B7281">{val}</text>
+                        <text x={margin.left - 8} y={yScale(val) + 4} textAnchor="end" fontSize="12" fill="#6B7281">{val}</text>
                         <line x1={margin.left} y1={yScale(val)} x2={width - margin.right} y2={yScale(val)} stroke="#E5E7EB" strokeDasharray="2,2"/>
                     </g>
                 ))}
                 {data.map((d, i) => (
                     (i % Math.max(1, Math.floor(data.length / 7)) === 0) &&
-                    <text key={i} x={xScale(i)} y={height - margin.bottom + 15} textAnchor="middle" fontSize="10" fill="#6B7281">
+                    <text key={i} x={xScale(i)} y={height - margin.bottom + 15} textAnchor="middle" fontSize="12" fill="#6B7281">
                         {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
                     </text>
                 ))}
@@ -251,13 +253,13 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                 <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="#D1D5DB" />
                 {[0, 25, 50, 75, 100].map(val => (
                     <g key={val}>
-                        <text x={margin.left - 8} y={yScale(val) + 4} textAnchor="end" fontSize="10" fill="#6B7281">{val}%</text>
+                        <text x={margin.left - 8} y={yScale(val) + 4} textAnchor="end" fontSize="12" fill="#6B7281">{val}%</text>
                         <line x1={margin.left} y1={yScale(val)} x2={width - margin.right} y2={yScale(val)} stroke="#E5E7EB" strokeDasharray="2,2"/>
                     </g>
                 ))}
                 {data.map((d, i) => (
                     (i % Math.max(1, Math.floor(data.length / 10)) === 0) &&
-                    <text key={i} x={xScale(i)} y={height - margin.bottom + 15} textAnchor="middle" fontSize="10" fill="#6B7281">
+                    <text key={i} x={xScale(i)} y={height - margin.bottom + 15} textAnchor="middle" fontSize="12" fill="#6B7281">
                         {d.date.toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
                     </text>
                 ))}
@@ -334,7 +336,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
         ) : (
           (() => {
             const data = (checkins || []).slice().sort((a,b) => (new Date(a.createdAt || a.date)).getTime() - (new Date(b.createdAt || b.date)).getTime());
-            const width = 600, height = 140, margin = { left: 24, right: 20, top: 10, bottom: 24 };
+            const width = 600, height = 140, margin = { left: 40, right: 20, top: 10, bottom: 28 };
             const x = (i:number) => margin.left + i * (width - margin.left - margin.right) / Math.max(1, data.length - 1);
             const y = (v:number) => margin.top + (5 - v) * ((height - margin.top - margin.bottom) / 4);
             const points = data.map((d,i) => ({ x: x(i), y: y(d.value), v: d }));
@@ -342,15 +344,79 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             return (
               <div className="relative overflow-auto">
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
+                  {/* 左軸: 1-5 の目盛り */}
+                  {[1,2,3,4,5].map(val => {
+                    const yy = y(val);
+                    return (
+                      <g key={val}>
+                        <text x={margin.left - 12} y={yy + 4} textAnchor="end" fontSize="12" fill="#6B7281">{val}</text>
+                        <line x1={margin.left} y1={yy} x2={width - margin.right} y2={yy} stroke="#F3F4F6" strokeDasharray="2,2" />
+                      </g>
+                    )
+                  })}
                   <path d={path} fill="none" stroke="#4F46E5" strokeWidth="2" />
-                  {points.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={4} fill="#4F46E5" />)}
+                  {points.map((p,i) => (
+                    <g key={i}>
+                      <circle cx={p.x} cy={p.y} r={5} fill="#4F46E5" />
+                    </g>
+                  ))}
                   {data.map((d,i) => (
                     (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
-                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="10" fill="#6B7281">
+                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">
                       {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
                     </text>
                   ))}
                 </svg>
+
+                {/* 凡例: 1-5 の意味を表示 */}
+                <div className="mt-3 text-sm text-gray-600 flex flex-wrap gap-3">
+                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />1: とても低い</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />2: 低い</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />3: 普通</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />4: 高い</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />5: とても高い</div>
+                </div>
+              </div>
+            );
+          })()
+        )}
+      </div>
+
+      {/* チェックアウトの推移（オプション） */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">チェックアウトの推移</h3>
+        {(!checkouts || checkouts.length < 2) ? (
+          <p className="text-gray-500 text-center py-6">チェックアウトデータが2件以上必要です。</p>
+        ) : (
+          (() => {
+            const data = (checkouts || []).slice().sort((a,b) => (new Date(a.createdAt || a.date)).getTime() - (new Date(b.createdAt || b.date)).getTime());
+            const width = 600, height = 140, margin = { left: 40, right: 20, top: 10, bottom: 28 };
+            const x = (i:number) => margin.left + i * (width - margin.left - margin.right) / Math.max(1, data.length - 1);
+            const y = (v:number) => margin.top + (5 - v) * ((height - margin.top - margin.bottom) / 4);
+            const points = data.map((d,i) => ({ x: x(i), y: y(d.value), v: d }));
+            const path = createSpline(points.map(p => ({x:p.x,y:p.y})));
+            return (
+              <div className="relative overflow-auto">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
+                  {[1,2,3,4,5].map(val => {
+                    const yy = y(val);
+                    return (
+                      <g key={val}>
+                        <text x={margin.left - 12} y={yy + 4} textAnchor="end" fontSize="12" fill="#6B7281">{val}</text>
+                        <line x1={margin.left} y1={yy} x2={width - margin.right} y2={yy} stroke="#F3F4F6" strokeDasharray="2,2" />
+                      </g>
+                    )
+                  })}
+                  <path d={path} fill="none" stroke="#10B981" strokeWidth="2" />
+                  {points.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={5} fill="#10B981" />)}
+                  {data.map((d,i) => (
+                    (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
+                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">
+                      {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
+                    </text>
+                  ))}
+                </svg>
+                <div className="mt-3 text-sm text-gray-600">チェックアウト: 1(低)〜5(高)</div>
               </div>
             );
           })()
