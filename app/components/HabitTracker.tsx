@@ -524,7 +524,12 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
-  
+  const [isNonScheduledOpen, setIsNonScheduledOpen] = useState(false);
+  // --- 新: 固定量入力モーダル用 state（prompt を置き換える） ---
+  const [isAmountModalOpen, setIsAmountModalOpen] = useState(false);
+  const [amountModalHabit, setAmountModalHabit] = useState<Habit | null>(null);
+  const [amountModalValue, setAmountModalValue] = useState<string>('');
+
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(false);
@@ -694,11 +699,76 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // (↑ スワイプ関連のロジックここまで)
 
 
-  const selectedDateString = selectedDate.toLocaleDateString('sv-SE');
-
-  const scheduledHabits = useMemo(() => {
-    return habits.filter(h => isHabitScheduledForDate(h, selectedDate));
-  }, [habits, selectedDate]);
+    // ...existing code...
+    const selectedDateString = selectedDate.toLocaleDateString('sv-SE');
+  
+    const scheduledHabits = useMemo(() => {
+      return habits.filter(h => isHabitScheduledForDate(h, selectedDate));
+    }, [habits, selectedDate]);
+  
+    const nonScheduledHabits = useMemo(() => {
+      const key = selectedDate.toLocaleDateString('sv-SE');
+      return habits.filter(h => {
+        // not scheduled by frequency OR explicitly scheduled but we still want "not in scheduled list"
+        return !isHabitScheduledForDate(h, selectedDate);
+      });
+    }, [habits, selectedDate]);
+  
+    // helper: その日 Habit が完了扱いか（scheduledHabits を参照する前に定義）
+    const isHabitCompletedOnDate = (habit: Habit, dkey: string) => {
+      const type = (habit.type ?? 'binary');
+      if (type === 'amount') {
+        const amount = (habit.completedAmounts || {})[dkey] ?? 0;
+        const target = habit.target ?? 0;
+        return target > 0 ? amount >= target : amount > 0;
+      } else {
+        return (habit.completedDates || []).includes(dkey);
+      }
+    };
+  
+    // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
+    const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
+  
+    const getDisplayedHabit = (h: Habit) => optimistic[h.id] ?? h;
+  
+    // --- 追加: 達成率表示・祝福用 state（明示トリガー方式に変更） ---
+    const [showCelebrate, setShowCelebrate] = useState(false);
+    const [lastCelebrateKey, setLastCelebrateKey] = useState<string | null>(null);
+  
+    // completionPercent は optimistic を考慮して計算する
+    const displayedScheduled = scheduledHabits.map(h => getDisplayedHabit(h));
+    const scheduledCount = displayedScheduled.length;
+    const completedCount = displayedScheduled.reduce((acc, h) => acc + (isHabitCompletedOnDate(h, selectedDateString) ? 1 : 0), 0);
+    const completionPercent = scheduledCount > 0 ? Math.round((completedCount / scheduledCount) * 100) : 0;
+  
+    // 明示的に呼び出して祝福判定を行う（更新後の状態を想定して判定できるようにする）
+    const checkAndTriggerCelebrateWith = (maybeUpdatedHabit?: Habit, dateKey?: string) => {
+      const dkey = dateKey ?? selectedDateString;
+      // 仮想的な habits 配列を作る（もし maybeUpdatedHabit が渡れば置換）
+      const hypothetical = maybeUpdatedHabit ? habits.map(h => h.id === maybeUpdatedHabit.id ? maybeUpdatedHabit : h) : habits;
+      // しかし判定は optimistic 反映済みの表示状態を優先するため、
+      // optimistic を適用した配列を作る
+      const hypoWithOptimistic = hypothetical.map(h => optimistic[h.id] ?? h);
+      const scheduled = hypoWithOptimistic.filter(h => isHabitScheduledForDate(h, selectedDate));
+      const scheduledCountLocal = scheduled.length;
+      const completedCountLocal = scheduled.reduce((acc, h) => acc + (isHabitCompletedOnDate(h, dkey) ? 1 : 0), 0);
+      const key = `${dkey}-100`;
+  
+      if (scheduledCountLocal > 0 && completedCountLocal === scheduledCountLocal) {
+        // 全部完了なら祝福（重複は lastCelebrateKey で抑止）
+        if (lastCelebrateKey !== key) {
+          setLastCelebrateKey(key);
+          setShowCelebrate(true);
+          setTimeout(() => setShowCelebrate(false), 3000);
+        }
+      } else {
+        // full でない状態になったら、その日のキーをクリアしておく（再達成時に再表示させるため）
+        if (lastCelebrateKey === key) {
+          setLastCelebrateKey(null);
+        }
+      }
+    };
+  // ...existing code...
 
   const isDiagnosisDay = useMemo(() => {
     return isDiagnosisScheduledForDate(diagnosisFrequency, selectedDate);
@@ -751,21 +821,19 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const recordAmountForHabit = async (habitId: string) => {
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return;
-    const input = window.prompt(`達成量を入力してください（${habit.unit ?? ''}）`, '');
-    if (input === null) return;
-    const value = parseFloat(input.replace(',', '.'));
-    if (isNaN(value)) return alert('数値を入力してください');
-    const amounts = { ...(habit.completedAmounts || {}) };
-    amounts[selectedDateString] = value;
-    const updated: Habit = { ...habit, completedAmounts: amounts };
-    onUpdateHabit(updated);
+    const dkey = selectedDateString;
+    const current = (habit.completedAmounts || {})[dkey];
+    setAmountModalHabit(habit);
+    setAmountModalValue(current !== undefined ? String(current) : '');
+    setIsAmountModalOpen(true);
   };
 
+  // ...existing code...
   const toggleHabit = (habitId: string) => {
     const habitToToggle = habits.find(h => h.id === habitId);
     if (!habitToToggle) return;
     if (habitToToggle.type === 'amount') {
-      // amount 型は prompt で値を記録する
+      // amount 型はモーダルで値を記録する
       recordAmountForHabit(habitId);
       return;
     }
@@ -776,9 +844,13 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         ? habitToToggle.completedDates.filter(date => date !== selectedDateString)
         : [...habitToToggle.completedDates, selectedDateString],
     };
+    // optimistic に即時反映してチェックがすぐ付くようにする
+    setOptimistic(prev => ({ ...prev, [updatedHabit.id]: updatedHabit }));
     onUpdateHabit(updatedHabit);
+    // 更新後の想定状態で祝福判定（optimistic を考慮）
+    setTimeout(() => checkAndTriggerCelebrateWith(updatedHabit, selectedDateString), 0);
   };
-  
+
   // (↓ calculateStreak, handleDateSelect, formattedListDate, handleSelectHabitFromList は変更なし)
   const calculateStreak = (habit: Habit): number => {
     const startDate = new Date(habit.startDate);
@@ -860,28 +932,81 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // --- モーダル onSave を差し替えて create / update を切替える ---
   // CheckInModal の onSave -> handleSaveCheckin
   const handleSaveCheckin = (value: number, note?: string) => {
-  const rec = getCheckinForDate(selectedDate);
-  if (rec && onUpdateCheckin) {
-    onUpdateCheckin(rec.id, value, note);
-  } else if (!rec && onAddCheckin) {
-    const dateStr = selectedDate.toLocaleDateString('sv-SE');
-    onAddCheckin(value, note, dateStr);
-  }
-  setCheckedInToday(true);
-};
+    const rec = getCheckinForDate(selectedDate);
+    if (rec && onUpdateCheckin) {
+      onUpdateCheckin(rec.id, value, note);
+    } else if (!rec && onAddCheckin) {
+      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      onAddCheckin(value, note, dateStr);
+    }
+    setCheckedInToday(true);
+  };
 
-const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) => {
-  const rec = getCheckoutForDate(selectedDate);
-  if (rec && onUpdateCheckout) {
-    onUpdateCheckout(rec.id, gratitude, note, rating);
-  } else if (!rec && onAddCheckout) {
-    const dateStr = selectedDate.toLocaleDateString('sv-SE');
-    onAddCheckout(gratitude, note, rating, dateStr);
-  }
-  setCheckedOutToday(true);
-};
+  const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) => {
+    const rec = getCheckoutForDate(selectedDate);
+    if (rec && onUpdateCheckout) {
+      onUpdateCheckout(rec.id, gratitude, note, rating);
+    } else if (!rec && onAddCheckout) {
+      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      onAddCheckout(gratitude, note, rating, dateStr);
+    }
+    setCheckedOutToday(true);
+  };
 
+  const recordOrToggleForNonScheduled = async (habit: Habit) => {
+    const dkey = selectedDate.toLocaleDateString('sv-SE');
+    if (habit.type === 'amount') {
+      // amount はモーダルで入力
+      const current = (habit.completedAmounts || {})[dkey];
+      setAmountModalHabit(habit);
+      setAmountModalValue(current !== undefined ? String(current) : '');
+      setIsAmountModalOpen(true);
+      setIsNonScheduledOpen(false);
+      return;
+    }
+    const setDates = new Set(habit.completedDates || []);
+    if (setDates.has(dkey)) setDates.delete(dkey); else setDates.add(dkey);
+    const updated = { ...habit, completedDates: Array.from(setDates).sort() };
+    // optimistic 即時反映
+    setOptimistic(prev => ({ ...prev, [updated.id]: updated }));
+    onUpdateHabit(updated);
+    setIsNonScheduledOpen(false);
+    // 仮想更新後の状態で祝福判定
+    setTimeout(() => checkAndTriggerCelebrateWith(updated, dkey), 0);
+  };
 
+  const toggleSkipForDate = (habit: Habit) => {
+    const dkey = selectedDate.toLocaleDateString('sv-SE');
+    const skips = habit.skippedDates ?? [];
+    const exists = skips.includes(dkey);
+    const newSkips = exists ? skips.filter(s => s !== dkey) : [...skips, dkey];
+    onUpdateHabit({ ...habit, skippedDates: newSkips });
+  };
+
+  // モーダル
+  const saveAmountModal = () => {
+    if (!amountModalHabit) return;
+    const dkey = selectedDateString;
+    const parsed = amountModalValue.trim() === '' ? null : Number(amountModalValue.replace(',', '.'));
+    if (parsed !== null && isNaN(parsed)) { alert('数値を入力してください'); return; }
+    const newAmounts = { ...(amountModalHabit.completedAmounts || {}) };
+    if (parsed === null) delete newAmounts[dkey]; else newAmounts[dkey] = parsed;
+    const updated = { ...amountModalHabit, completedAmounts: newAmounts };
+    // optimistic 即時反映
+    setOptimistic(prev => ({ ...prev, [updated.id]: updated }));
+    onUpdateHabit(updated);
+    setIsAmountModalOpen(false);
+    setAmountModalHabit(null);
+    setAmountModalValue('');
+    // 数値記録後に祝福判定
+    setTimeout(() => checkAndTriggerCelebrateWith(updated, dkey), 0);
+  };
+
+  const cancelAmountModal = () => {
+    setIsAmountModalOpen(false);
+    setAmountModalHabit(null);
+    setAmountModalValue('');
+  };
   
   // --- JSX (変更なし) ---
   return (
@@ -946,9 +1071,31 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
             habits={habits}
             onSelectHabit={handleSelectHabitFromList}
         />
+        {/* 数量入力モーダル: system prompt の代替 */}
+        {isAmountModalOpen && amountModalHabit && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
+                  <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
+                </div>
+                <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
+                <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
+                <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
+                  <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
        <button
         onClick={() => setIsAddModalOpen(true)}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-110 z-30"
+        className="fixed bottom-20 right-6 md:bottom-24 md:right-8 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-110 z-30"
         aria-label="新しい習慣を追加"
       >
         <PlusIcon className="w-8 h-8"/>
@@ -1054,6 +1201,39 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
             </div>
         </div>
       )}
+
+      {/* 予定外タスク用モーダル */}
+      {isNonScheduledOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setIsNonScheduledOpen(false)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">予定外タスクをこの日で記録</h3>
+              <button onClick={() => setIsNonScheduledOpen(false)} className="text-gray-500 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-2 max-h-[60vh] overflow-auto pr-2">
+              {nonScheduledHabits.length === 0 ? (
+                <p className="text-gray-500 text-center py-6">この日は予定外の習慣はありません。</p>
+              ) : nonScheduledHabits.map(h => {
+                const isSkipped = (h.skippedDates || []).includes(selectedDateString);
+                return (
+                  <div key={h.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-gray-800">{h.name}</div>
+                      <div className="text-xs text-gray-500">{h.frequencyType === 'weekly' ? '週次' : h.frequencyType === 'monthly' ? '月次' : '毎日'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => recordOrToggleForNonScheduled(h)} className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm">記録</button>
+                      <button onClick={() => toggleSkipForDate(h)} className={`px-3 py-2 rounded-md text-sm ${isSkipped ? 'bg-yellow-100 text-yellow-800' : 'bg-white border border-gray-200'}`}>
+                        {isSkipped ? 'スキップ解除' : 'この日をスキップ'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
         <div className="flex items-center justify-between mb-4 px-2">
@@ -1098,8 +1278,69 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
             </div>
         </div>
 
-        {/* ★★★ ここからが修正点 ★★★ */}
-        <h3 className="text-xl font-bold text-gray-800 mt-6 mb-4 px-2">{formattedListDate}のリスト</h3>
+        <div className="flex items-center justify-between mt-6 mb-4 px-2">
+          <div className="flex items-baseline gap-3">
+            <h3 className="text-lg font-semibold text-gray-800">{formattedListDate}</h3>
+            {/* 達成率バッジ */}
+            <div className={`ml-3 inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${completionPercent === 100 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
+              <div className={`w-3 h-3 rounded-full ${completionPercent === 100 ? 'bg-white' : (completionPercent >= 75 ? 'bg-green-500' : completionPercent >= 40 ? 'bg-yellow-400' : 'bg-gray-400')}`} />
+              <span className="text-sm">{completionPercent}%</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+                onClick={() => setIsNonScheduledOpen(true)}
+                className="flex items-center gap-2 text-sm px-3 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50"
+                title="予定外の習慣を記録"
+            >
+              <ListBulletIcon className="w-4 h-4 text-gray-600" />
+              <span className="text-sm text-gray-700">予定外</span>
+            </button>
+          </div>
+        </div>
+        {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
+        {showCelebrate && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
+            <style>{`
+              @keyframes floatUp {
+                0% { transform: translateY(0) scale(1); opacity: 1; }
+                100% { transform: translateY(-140vh) scale(1.1); opacity: 0; }
+              }
+              .confetti {
+                position: absolute;
+                bottom: 10%;
+                font-size: 28px;
+                animation-name: floatUp;
+                animation-timing-function: cubic-bezier(.18,.9,.35,1);
+                animation-iteration-count: 1;
+              }
+            `}</style>
+            <div className="w-full max-w-3xl mx-auto px-4">
+              <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
+                <div className="text-center">
+                  <div className="text-5xl md:text-6xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
+                  <div className="mt-4 text-lg md:text-xl opacity-95">今日の予定を全て完了しました。よく頑張りました！</div>
+                </div>
+              </div>
+              {/* 下から上へ流れるキラキラ絵文字 */}
+              {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
+                <span
+                  key={i}
+                  className="confetti"
+                  style={{
+                    left: `${8 + (i * 11) % 84}%`,
+                    animationDuration: `${1800 + (i * 200)}ms`,
+                    animationDelay: `${200 + (i * 120)}ms`,
+                    transform: `translateY(0) rotate(${(i*30)%360}deg)`
+                  }}
+                >
+                  {emo}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
             {isDiagnosisDay && (
                 <div 
@@ -1141,6 +1382,7 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
                   const amountTarget = habit.target ?? 0;
                   const isAmountCompleted = amountTarget > 0 ? amountVal >= amountTarget : amountVal > 0;
                   const isCompleted = habitType === 'amount' ? isAmountCompleted : isBinaryCompleted;
+                  const isSkipped = (habit.skippedDates || []).includes(selectedDateString);
 
                   return (
                     <div 
@@ -1158,6 +1400,10 @@ const handleSaveCheckout = (gratitude?: string, note?: string, rating?: number) 
                         <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
                           {habit.name}
                         </span>
+                        {/* スキップは完了とは別表示 */}
+                        {isSkipped && (
+                          <div className="ml-2 text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">スキップ</div>
+                        )}
 
                         {habitType === 'amount' ? (
                           <div className="text-sm text-gray-700 font-semibold mr-3">
