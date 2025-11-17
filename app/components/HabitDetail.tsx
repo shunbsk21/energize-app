@@ -212,6 +212,9 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
         else if (isScheduled) dayClass = 'bg-gray-100';
         else dayClass = 'bg-gray-300 text-gray-500';
       }
+      // 選択日は actionModalDate（あれば）または今日を選択状態として表示
+      const selectedKey = actionModalDate ? dateKey(actionModalDate) : new Date().toLocaleDateString('sv-SE');
+      const isSelected = dateStr === selectedKey;
       if (isToday && ((habit.type === 'amount' ? !isAmountFull && isScheduled : !isBinaryCompleted && isScheduled))) {
         dayClass += ' ring-2 ring-indigo-500';
       }
@@ -221,10 +224,14 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
         <div
           key={day}
           onClick={() => handleDateClick(d)}
-          className={`w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer ${dayClass}`}
+          className="w-10 h-10 flex items-center justify-center text-sm cursor-pointer"
           title={isSkipped ? 'スキップ済み: クリックで解除' : 'クリックで記録 / スキップ'}
         >
-          {day}
+          <span
+            className={`w-8 h-8 rounded-full flex items-center justify-center ${dayClass} ${isSelected ? 'bg-indigo-600 text-white font-semibold scale-105 transform' : ''}`}
+          >
+            {day}
+          </span>
         </div>
       );
     }

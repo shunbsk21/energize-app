@@ -158,7 +158,7 @@ const DatePickerModal: React.FC<{
                 className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-100 relative"
                 onClick={() => onDateSelect(date)}
             >
-              <span className={`w-8 h-8 flex items-center justify-center rounded-full ${isSelected ? 'bg-indigo-600 text-white' : ''}`}>
+              <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
                 {day}
               </span>
               {/* エネルギー診断の記録がある日だけ青いドットを表示（他の達成率ドットは表示しない） */}

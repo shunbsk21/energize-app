@@ -201,10 +201,10 @@ const DatePickerModal: React.FC<{
           calendarDays.push(
             <div 
                 key={day} 
-                className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-100 relative"
+                className="w-10 h-10 flex items-center justify-center text-sm cursor-pointer hover:bg-indigo-100 relative"
                 onClick={() => onDateSelect(date)}
             >
-              <span className={`w-8 h-8 flex items-center justify-center rounded-full ${isSelected ? 'bg-indigo-600 text-white' : ''}`}>
+              <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
                 {day}
               </span>
               <div className="absolute bottom-1 flex items-center justify-center">
@@ -784,28 +784,52 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
 
   // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)
-  const addHabit = (e: React.FormEvent) => {
+  // フォーム submit ハンドラ: MainApp 側の onAddHabit(newHabitData) を呼び出す
+  const handleAddFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newHabitName.trim() === '') return;
-    const newHabit: Omit<Habit, 'id'> = {
+    if (!newHabitName || !newHabitName.trim()) {
+      console.warn('習慣名が必要です');
+      return;
+    }
+
+    const base: any = {
       name: newHabitName.trim(),
       type: newHabitType,
-      completedDates: [],
-      completedAmounts: newHabitType === 'amount' ? {} : undefined,
-      target: newHabitType === 'amount' ? (newHabitTarget ?? undefined) : undefined,
-      unit: newHabitType === 'amount' ? (newHabitUnit || undefined) : undefined,
-      startDate: newHabitStartDate,
-      frequencyType: newHabitFrequency.type,
-      frequencyValue: newHabitFrequency.value,
+      startDate: newHabitStartDate ?? new Date().toLocaleDateString('sv-SE'),
+      frequencyType: newHabitFrequency?.type ?? 'daily',
+      frequencyValue: Array.isArray(newHabitFrequency?.value) ? newHabitFrequency.value : (newHabitFrequency?.value ? [newHabitFrequency.value] : []),
+      skippedDates: [],
+      createdAt: new Date().toISOString(),
     };
-    onAddHabit(newHabit);
-    setNewHabitName('');
-    setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
-    setNewHabitFrequency({type: 'daily', value: []});
-    setNewHabitType('binary');
-    setNewHabitTarget(undefined);
-    setNewHabitUnit('');
-    setIsAddModalOpen(false);
+
+    if (newHabitType === 'amount') {
+      base.completedAmounts = {};
+      if (newHabitTarget !== undefined && newHabitTarget !== null && newHabitTarget !== '') {
+        const t = Number(newHabitTarget);
+        if (!Number.isNaN(t)) base.target = t;
+      }
+      if (newHabitUnit && String(newHabitUnit).trim() !== '') base.unit = String(newHabitUnit).trim();
+    } else {
+      base.completedDates = [];
+    }
+
+    try {
+      if (onAddHabit) {
+        await onAddHabit(base);
+      } else {
+        console.warn('onAddHabit prop is not provided');
+      }
+      // 成功時はフォームをクリアしてモーダルを閉じる（ローディング状態を触らない）
+      setNewHabitName('');
+      setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
+      setNewHabitFrequency({ type: 'daily', value: [] });
+      setNewHabitType('binary');
+      setNewHabitTarget(undefined);
+      setNewHabitUnit('');
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error('Failed to add habit (via onAddHabit):', err);
+    }
   };
   
   const deleteHabit = (habitId: string) => {
@@ -916,7 +940,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             return (
                 <div key={day.toISOString()} onClick={() => onDateClick(day)} className="cursor-pointer p-1 rounded-lg hover:bg-gray-50 select-none">
                     <span className={`text-xs ${isSelected ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>{dayName}</span>
-                    <div className={`mt-1 w-8 h-8 mx-auto flex items-center justify-center rounded-full font-semibold transition-colors ${isSelected ? 'bg-indigo-600 text-white shadow' : isToday ? 'text-indigo-600' : 'text-gray-700'}`}>
+                    <div className={`mt-1 mx-auto flex items-center justify-center font-semibold transition-colors ${isSelected ? 'w-9 h-9 bg-indigo-600 text-white rounded-[10px]' : 'w-8 h-8 text-gray-700 rounded-full ' + (isToday ? 'text-indigo-600' : '')}`}>
                         {dateNum}
                     </div>
                     <div className="h-2 flex items-center justify-center mt-1">
@@ -1105,7 +1129,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsAddModalOpen(false)}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-gray-800 mb-4">新しい習慣を追加</h2>
-                <form onSubmit={addHabit} className="space-y-4">
+                <form onSubmit={handleAddFormSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">習慣の名前</label>
                     <input

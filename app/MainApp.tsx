@@ -306,6 +306,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       console.error("習慣の追加に失敗しました:", error);
     }
   };
+  
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     if (!profile.id || !updatedHabit.id) return;
     try {
@@ -687,7 +688,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   energyHistory={energyHistory} 
                   habits={habits} 
                   setIsHelpOpen={setIsHelpOpen}
-                  checkins={checkins}                     // 追加
+                  checkins={checkins}
+                  checkouts={checkouts}
                 />;
       case 'group':
         return <Group 
