@@ -506,7 +506,8 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       return null;
     };
     const checkoutSeries = co.map(c => ({ date: c.date, v: extractNumeric(c) })).filter(x => x.v !== null);
-    const checkinSeries = ci.map(c => ({ date: c.date, v: Number(c.value ?? c.score ?? NaN) })).filter(x => !isNaN(x.v));
+    // checkins 型には value が存在するので value をそのまま使う（不要なプロパティ参照を排除）
+    const checkinSeries = ci.map(c => ({ date: c.date, v: Number(c.value) })).filter(x => !isNaN(x.v));
 
     const allDates = Array.from(new Set([...checkoutSeries.map(s=>s.date), ...checkinSeries.map(s=>s.date)])).sort((a,b)=> new Date(a).getTime() - new Date(b).getTime());
     if (allDates.length < 2) return <p className="text-gray-500 text-center py-6">グラフ表示に必要なデータが不足しています。</p>;
