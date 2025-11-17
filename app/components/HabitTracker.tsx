@@ -804,13 +804,17 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     if (newHabitType === 'amount') {
       base.completedAmounts = {};
-      if (newHabitTarget !== undefined && newHabitTarget !== null && newHabitTarget !== '') {
-        const t = Number(newHabitTarget);
-        if (!Number.isNaN(t)) base.target = t;
-      }
-      if (newHabitUnit && String(newHabitUnit).trim() !== '') base.unit = String(newHabitUnit).trim();
-    } else {
-      base.completedDates = [];
+        // newHabitTarget は number かもしれないため文字列比較は String() で安全化
+        if (newHabitTarget !== undefined && newHabitTarget !== null && String(newHabitTarget).trim() !== '') {
+          const t = Number(newHabitTarget);
+          if (!Number.isNaN(t)) base.target = t;
+        }
+        if (newHabitUnit !== undefined && newHabitUnit !== null && String(newHabitUnit).trim() !== '') {
+          base.unit = String(newHabitUnit).trim();
+        }
+      } else {
+        // binary 等のチェック系: completedDates は配列
+        base.completedDates = [];
     }
 
     try {
