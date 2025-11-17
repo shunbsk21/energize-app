@@ -454,7 +454,8 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             );
           }
 
-          const data = rated.map(c => ({ ...c, value: c._num }));
+          // 明示的に number にキャストして型を確定させる
+          const data = rated.map(c => ({ ...c, value: c._num as number }));
           const width = 600, height = 300, margin = { left: 40, right: 20, top: 10, bottom: 28 };
           const x = (i:number) => margin.left + i * (width - margin.left - margin.right) / Math.max(1, data.length - 1);
           const y = (v:number) => margin.top + (5 - v) * ((height - margin.top - margin.bottom) / 4);
