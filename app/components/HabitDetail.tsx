@@ -24,20 +24,163 @@ const EditIcon: React.FC<{className?: string}> = ({className}) => (
 
 const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
-const calculateLongestStreak = (dates: string[]): number => {
-  if (!dates || dates.length < 2) return dates ? dates.length : 0;
-  const sortedDates = [...new Set(dates)].map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+const normalizeKey = (d: string) => {
+  try {
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleDateString('sv-SE');
+  } catch {
+    return String(d);
+  }
+};
+
+const getDoneSetForHabit = (habit: Habit): Set<string> => {
+  // amount タイプ: completedAmounts の実値を正しく評価して日付キーを正規化して集める
+  if (habit.type === 'amount') {
+    const amtMap = habit.completedAmounts || {};
+    const target = habit.target ?? 0;
+    const keys: string[] = [];
+    Object.entries(amtMap).forEach(([rawKey, rawVal]) => {
+      const key = normalizeKey(rawKey);
+      const v = Number(rawVal as any);
+      if (Number.isNaN(v)) return;
+      if (target > 0 ? v >= target : v > 0) keys.push(key);
+    });
+    // 保険: completedDates にも値が入っている場合は正規化して追加
+    (habit.completedDates || []).forEach(d => keys.push(normalizeKey(d)));
+    return new Set(keys);
+  }
+  // binary タイプ
+  return new Set((habit.completedDates || []).map(normalizeKey));
+};
+
+const calculateLongestStreak = (habit: Habit): number => {
+  const doneSet = getDoneSetForHabit(habit);
+  const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+  if (!doneSet || doneSet.size === 0) return 0;
+
+  // safe parser: "YYYY-MM-DD" -> local Date, fallback to Date()
+  const parseKeyToDate = (k: string): Date | null => {
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
+    const m = String(k).match(ymd);
+    if (m) {
+      const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+      const dt = new Date(y, mo, d);
+      dt.setHours(0,0,0,0);
+      return dt;
+    }
+    const dt = new Date(k);
+    if (!Number.isNaN(dt.getTime())) { dt.setHours(0,0,0,0); return dt; }
+    return null;
+  };
+
+  // start: habit.startDate or earliest among done/skip (whichever is earlier)
+  let start = parseKeyToDate(habit.startDate) || new Date(habit.startDate);
+  start.setHours(0,0,0,0);
+
+  const allKeys = [...doneSet, ...Array.from(skipSet)];
+  const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
+  if (parsedDates.length > 0) {
+    const earliest = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+    if (earliest.getTime() < start.getTime()) start = earliest;
+  }
+
+  const end = new Date(); end.setHours(0,0,0,0);
+
+  const isScheduled = (date: Date) => {
+    if (date < start) return false;
+    switch (habit.frequencyType) {
+      case 'daily': return true;
+      case 'weekly': {
+        const fv = habit.frequencyValue || [];
+        const dow = date.getDay(); // 0-6
+        return fv.includes(dow) || fv.includes(dow + 1);
+      }
+      case 'monthly': {
+        const fv = habit.frequencyValue || [];
+        return fv.includes(date.getDate());
+      }
+      default: return false;
+    }
+  };
+
+  // scheduledDates ascending
+  const scheduledDates: Date[] = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (isScheduled(d)) scheduledDates.push(new Date(d));
+  }
+
+  // scan from newest -> oldest (currentStreak と同じ遡りロジックを利用)
   let longest = 0;
-  let current = 0;
-  for (let i = 0; i < sortedDates.length; i++) {
-    if (i === 0) current = 1;
-    else {
-      const diffDays = Math.round((sortedDates[i].getTime() - sortedDates[i - 1].getTime()) / (1000 * 3600 * 24));
-      if (diffDays === 1) current++;
-      else { longest = Math.max(longest, current); current = 1; }
+  let inRun = false;
+  let doneCountInRun = 0;
+
+  for (let i = scheduledDates.length - 1; i >= 0; i--) {
+    const d = scheduledDates[i];
+    const key = d.toLocaleDateString('sv-SE');
+    if (doneSet.has(key) || skipSet.has(key)) {
+      inRun = true;
+      if (doneSet.has(key)) doneCountInRun += 1;
+      continue;
+    }
+    // scheduled day but neither done nor skip => end current run
+    if (inRun) {
+      longest = Math.max(longest, doneCountInRun);
+      inRun = false;
+      doneCountInRun = 0;
     }
   }
-  return Math.max(longest, current);
+  if (inRun) longest = Math.max(longest, doneCountInRun);
+  return longest;
+};
+
+const calculateCurrentStreak = (habit: Habit): number => {
+  const doneSet = getDoneSetForHabit(habit);
+  if (!doneSet || doneSet.size === 0) return 0;
+
+  const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+  // start: habit.startDate か、done/skip の最も古い日（存在すれば）との早い方を起点にする
+  let start = new Date(habit.startDate);
+  start.setHours(0,0,0,0);
+  const earliestFromSetsCurr = (() => {
+    const keys: string[] = [...doneSet, ...Array.from(skipSet || [])];
+    if (keys.length === 0) return null;
+    const dates = keys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
+    return dates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+  })();
+  if (earliestFromSetsCurr && earliestFromSetsCurr.getTime() < start.getTime()) start = earliestFromSetsCurr;
+
+  const isScheduled = (date: Date) => {
+    if (date < start) return false;
+    switch (habit.frequencyType) {
+      case 'daily': return true;
+      case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());
+      case 'monthly': return (habit.frequencyValue || []).includes(date.getDate());
+      default: return false;
+    }
+  };
+
+  // 最新の done または skip が記録されているスケジュール日を探す
+  let cur = new Date(); cur.setHours(0,0,0,0);
+  let found = false;
+  while (cur >= start) {
+    if (!isScheduled(cur)) { cur.setDate(cur.getDate() - 1); continue; }
+    const key = cur.toLocaleDateString('sv-SE');
+    if (doneSet.has(key) || skipSet.has(key)) { found = true; break; }
+    cur.setDate(cur.getDate() - 1);
+  }
+  if (!found) return 0;
+
+  // 見つかった日を基点に遡る（done -> +1、skip -> 継続(カウントなし)、未記録 -> 終了）
+  let streak = 0;
+  while (cur >= start) {
+    if (!isScheduled(cur)) { cur.setDate(cur.getDate() - 1); continue; }
+    const key = cur.toLocaleDateString('sv-SE');
+    if (doneSet.has(key)) { streak++; cur.setDate(cur.getDate() - 1); continue; }
+    if (skipSet.has(key)) { cur.setDate(cur.getDate() - 1); continue; }
+    break;
+  }
+  return streak;
 };
 
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
@@ -57,29 +200,6 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     case 'monthly': return habit.frequencyValue.includes(targetDate.getDate());
     default: return false;
   }
-};
-
-const calculateCurrentStreak = (habit: Habit): number => {
-  const { completedDates, startDate } = habit;
-  if (!completedDates || completedDates.length === 0) return 0;
-  let streak = 0;
-  let currentDate = new Date();
-  currentDate.setHours(0,0,0,0);
-  const setDates = new Set(completedDates);
-  if (!isHabitScheduledForDate(habit, currentDate) || !setDates.has(currentDate.toLocaleDateString('sv-SE'))) {
-    currentDate.setDate(currentDate.getDate() - 1);
-  }
-  while (new Date(startDate) <= currentDate) {
-    if (!isHabitScheduledForDate(habit, currentDate)) {
-      currentDate.setDate(currentDate.getDate() - 1);
-      continue;
-    }
-    if (setDates.has(currentDate.toLocaleDateString('sv-SE'))) {
-      streak++;
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else break;
-  }
-  return streak;
 };
 
 const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onUpdate }) => {
@@ -122,7 +242,8 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
   };
 
   const currentStreak = useMemo(() => calculateCurrentStreak(habit), [habit]);
-  const longestStreak = useMemo(() => calculateLongestStreak(habit.completedDates || []), [habit.completedDates]);
+  // calculateLongestStreak expects the whole habit object
+  const longestStreak = useMemo(() => calculateLongestStreak(habit), [habit]);
 
   const frequencyText = useMemo(() => {
     switch(habit.frequencyType) {
@@ -228,9 +349,15 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
           title={isSkipped ? 'スキップ済み: クリックで解除' : 'クリックで記録 / スキップ'}
         >
           <span
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${dayClass} ${isSelected ? 'bg-indigo-600 text-white font-semibold scale-105 transform' : ''}`}
+            className={`relative w-8 h-8 rounded-full flex items-center justify-center ${dayClass} ${isSelected ? 'bg-indigo-600 text-white font-semibold scale-105 transform' : ''}`}
           >
             {day}
+            {/* スキップ時は丸の上に斜め線（右上→左下）を描画して視認性を高める */}
+            {isSkipped && (
+              <span className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <span style={{ position: 'absolute', width: '140%', height: '2px', backgroundColor: '#D97706', transform: 'rotate(-45deg)' }} />
+              </span>
+            )}
           </span>
         </div>
       );

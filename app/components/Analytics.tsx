@@ -75,23 +75,31 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
 
   const habitData = useMemo(() => {
     if (habits.length === 0) return [];
-    
-    const dateStrings = new Set<string>();
-    filteredHistory.forEach(r => dateStrings.add(r.date));
-    habits.forEach(h => h.completedDates.forEach(d => dateStrings.add(d)));
-    
-    const allDates = Array.from(dateStrings).map(d => new Date(d)).sort((a,b) => a.getTime() - b.getTime());
-    
-    // helper: 簡易スケジュール判定（frequencyType等に応じて対象日か判定）
-   const isHabitScheduledForDate = (habit: Habit, date: Date) => {
-      const ft = (habit.frequencyType || 'daily');
+
+    // normalize helper for date keys
+    const toKey = (d: Date | string) => {
+      const dt = d instanceof Date ? d : new Date(d);
+      dt.setHours(0,0,0,0);
+      return dt.toLocaleDateString('sv-SE');
+    };
+
+    // schedule checker (align exactly with HabitTracker: respect startDate + frequency)
+    const isHabitScheduledForDate = (habit: Habit, date: Date) => {
+      if (!habit?.startDate) return false;
+      const habitStart = new Date(habit.startDate);
+      habitStart.setHours(0,0,0,0);
+      const target = new Date(date);
+      target.setHours(0,0,0,0);
+      if (target < habitStart) return false;
+
+      const ft = habit.frequencyType ?? 'daily';
       if (ft === 'daily') return true;
-      const dnum = date.getDate();
-      const dow = date.getDay(); // 0 Sun - 6 Sat
+      const dow = target.getDay(); // 0-6
+      const dnum = target.getDate();
       const fv = habit.frequencyValue ?? [];
       if (ft === 'weekly' && Array.isArray(fv) && fv.length > 0) {
         // support both 0-6 and 1-7 representations
-        return fv.includes(dow) || fv.includes((dow + 1));
+        return fv.includes(dow) || fv.includes(dow + 1);
       }
       if (ft === 'monthly' && Array.isArray(fv) && fv.length > 0) {
         return fv.includes(dnum);
@@ -99,37 +107,61 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       return true;
     };
 
-    const isHabitCompletedOnDate = (habit: Habit, dateStr: string) => {
+    const isHabitCompletedOnDate = (habit: Habit, key: string) => {
       if (habit.type === 'amount') {
-        const val = (habit.completedAmounts || {})[dateStr] ?? 0;
+        const val = (habit.completedAmounts || {})[key] ?? 0;
         const target = habit.target ?? 0;
         return target > 0 ? val >= target : val > 0;
       }
-      return (habit.completedDates || []).includes(dateStr);
+      return (habit.completedDates || []).map(d => toKey(d)).includes(key);
     };
-    return allDates.map(date => {
-        const dateStr = date.toLocaleDateString('sv-SE');
-        // scheduled & not skipped
-        const scheduledHabits = habits.filter(h => {
-          const skipped = (h as any).skippedDates ?? [];
-          return isHabitScheduledForDate(h, date) && !skipped.includes(dateStr);
-        });
-        const completedCount = scheduledHabits.reduce((count, habit) =>
-            isHabitCompletedOnDate(habit, dateStr) ? count + 1 : count, 0);
-        const total = scheduledHabits.length;
-        return {
-            date,
-            rate: total > 0 ? (completedCount / total) * 100 : 0,
-            completed: completedCount,
-            total
-        };
-    }).filter(d => {
-        if (period === 'all') return true;
-        const now = new Date();
-        const cutoff = new Date(new Date().setDate(now.getDate() - period));
-        return d.date >= cutoff;
+
+    // determine date range
+    const end = new Date();
+    end.setHours(0,0,0,0);
+    let start: Date;
+    if (period === 'all') {
+      // earliest of habit.startDate / habit.completedDates / filteredHistory
+      const candidates: Date[] = [];
+      habits.forEach(h => { if (h.startDate) candidates.push(new Date(h.startDate)); });
+      habits.forEach(h => (h.completedDates || []).forEach(d => candidates.push(new Date(d))));
+      filteredHistory.forEach(r => candidates.push(new Date(r.date)));
+      const min = candidates.length ? candidates.reduce((a,b) => a.getTime() < b.getTime() ? a : b) : new Date(end);
+      start = new Date(min);
+    } else {
+      const tmp = new Date();
+      tmp.setDate(tmp.getDate() - (period as number));
+      start = tmp;
+    }
+    start.setHours(0,0,0,0);
+
+    // build allDates from start -> end inclusive
+    const allDates: Date[] = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      allDates.push(new Date(d));
+    }
+
+    // compute per-day aggregated rate using same rules as HabitTracker
+    const result = allDates.map(date => {
+      const key = toKey(date);
+      let scheduled = 0;
+      let completed = 0;
+      habits.forEach(h => {
+        const skipped = ((h as any).skippedDates || []).map((s:string) => toKey(s));
+        if (!isHabitScheduledForDate(h, date)) return;
+        if (skipped.includes(key)) return; // exclude skipped
+        scheduled++;
+        if (isHabitCompletedOnDate(h, key)) completed++;
+      });
+      return {
+        date,
+        rate: scheduled > 0 ? (completed / scheduled) * 100 : 0,
+        completed,
+        total: scheduled
+      };
     });
 
+    return result;
   }, [habits, period, filteredHistory]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<SVGRectElement, MouseEvent>, dataPoints: any[], contentFn: (d: any) => React.ReactNode) => {
