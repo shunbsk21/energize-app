@@ -78,7 +78,8 @@ const calculateLongestStreak = (habit: Habit): number => {
   let start = parseKeyToDate(habit.startDate) || new Date(habit.startDate);
   start.setHours(0,0,0,0);
 
-  const allKeys = [...doneSet, ...Array.from(skipSet)];
+  // ensure we have a string[] so parseKeyToDate accepts the items
+  const allKeys = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
   const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
   if (parsedDates.length > 0) {
     const earliest = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
