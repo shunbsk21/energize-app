@@ -144,7 +144,8 @@ const calculateCurrentStreak = (habit: Habit): number => {
   let start = new Date(habit.startDate);
   start.setHours(0,0,0,0);
   const earliestFromSetsCurr = (() => {
-    const keys: string[] = [...doneSet, ...Array.from(skipSet || [])];
+    // 明示的に string[] として扱う（Set の要素型が不確定に推論されるケースに対応）
+    const keys = [...Array.from(doneSet) as string[], ...Array.from(skipSet) as string[]] as string[];
     if (keys.length === 0) return null;
     const dates = keys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
     return dates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
