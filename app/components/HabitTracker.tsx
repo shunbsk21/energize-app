@@ -760,17 +760,20 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       }
     };
 
-    // amount/binary 共通で「その日が done（達成）か」を判定して Set を返す
+    // amount / binary 共通で「その日が done（達成）か」を返す Set を作る（キー正規化を厳密化）
     const getDoneSetForHabit = (habit: Habit): Set<string> => {
       if (habit.type === 'amount') {
         const amtMap = habit.completedAmounts || {};
         const target = habit.target ?? 0;
-        const keys: string[] = Object.keys(amtMap).map(k => normalizeKey(k)).filter(k => {
-          const raw = amtMap[k] ?? amtMap[new Date(k).toLocaleDateString('sv-SE')];
-          const v = Number(raw);
-          if (Number.isNaN(v)) return false;
-          return target > 0 ? v >= target : v > 0;
+        const keys: string[] = [];
+        Object.entries(amtMap).forEach(([rawKey, rawVal]) => {
+          const key = normalizeKey(rawKey);
+          const v = Number(rawVal as any);
+          if (Number.isNaN(v)) return;
+          if (target > 0 ? v >= target : v > 0) keys.push(key);
         });
+        // completedDates が併存している場合も取り込む（保険）
+        (habit.completedDates || []).forEach(d => keys.push(normalizeKey(d)));
         return new Set(keys);
       }
       return new Set((habit.completedDates || []).map(normalizeKey));
@@ -780,56 +783,56 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       const doneSet = getDoneSetForHabit(habit);
       if (!doneSet || doneSet.size === 0) return 0;
       const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+
       // start: habit.startDate か、done/skip の最も古い日（存在すれば）との早い方を起点にする
       let start = new Date(habit.startDate);
       start.setHours(0,0,0,0);
-      const earliestFromSets = (() => {
-        // 明示的に string[] に変換してから結合する
-        const doneKeys = Array.from(doneSet) as string[];
-        const skipKeys = Array.from(new Set(((habit as any).skippedDates || []).map(normalizeKey))) as string[];
-        const keys = [...doneKeys, ...skipKeys];
-        if (keys.length === 0) return null;
-        const dates = keys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
-        return dates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
-      })();
-      if (earliestFromSets && earliestFromSets.getTime() < start.getTime()) start = earliestFromSets;
+      const combinedKeys = [...(Array.from(doneSet) as string[]), ...(Array.from(skipSet) as string[])];
+      if (combinedKeys.length > 0) {
+        const parsed = combinedKeys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
+        const earliest = parsed.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+        if (earliest.getTime() < start.getTime()) start = earliest;
+      }
 
       const isScheduled = (date: Date) => {
         if (date < start) return false;
         switch (habit.frequencyType) {
           case 'daily': return true;
-          case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());
-          case 'monthly': return (habit.frequencyValue || []).includes(date.getDate());
+          case 'weekly': {
+            const fv = habit.frequencyValue || [];
+            const dow = date.getDay(); // 0-6
+            return fv.includes(dow) || fv.includes(dow + 1);
+          }
+          case 'monthly': {
+            const fv = habit.frequencyValue || [];
+            return fv.includes(date.getDate());
+          }
           default: return false;
         }
       };
 
-      // 最新の done/skip スケジュール日を探す
-      let cur = new Date();
-      cur.setHours(0,0,0,0);
-      let found = false;
-      while (cur >= start) {
-        if (!isScheduled(cur)) { cur.setDate(cur.getDate() - 1); continue; }
-        const key = cur.toLocaleDateString('sv-SE');
-        if (doneSet.has(key) || skipSet.has(key)) { found = true; break; }
-        cur.setDate(cur.getDate() - 1);
-      }
-      if (!found) return 0;
+      // 直近の「今日より前の予定日」を特定（最も近い予定日が未実施なら streak = 0）
+      const today = new Date(); today.setHours(0,0,0,0);
+      const prev = new Date(today);
+      prev.setDate(prev.getDate() - 1);
 
-      // 見つかった日を基点に遡る（done は +1、skip は継続だがカウントしない）
+      let lastScheduledBeforeToday: Date | null = null;
+      for (let d = new Date(prev); d >= start; d.setDate(d.getDate() - 1)) {
+        if (isScheduled(d)) { lastScheduledBeforeToday = new Date(d); break; }
+      }
+      if (!lastScheduledBeforeToday) return 0;
+
+      const lastKey = lastScheduledBeforeToday.toLocaleDateString('sv-SE');
+      // 直近予定日が未記録（done / skip どちらでもない） -> streak 0
+      if (!(doneSet.has(lastKey) || skipSet.has(lastKey))) return 0;
+
+      // 直近予定日を基点に遡る（done は +1、skip は継続だがカウントしない）
       let streak = 0;
-      while (cur >= start) {
-        if (!isScheduled(cur)) { cur.setDate(cur.getDate() - 1); continue; }
-        const key = cur.toLocaleDateString('sv-SE');
-        if (doneSet.has(key)) {
-          streak++;
-          cur.setDate(cur.getDate() - 1);
-          continue;
-        }
-        if (skipSet.has(key)) {
-          cur.setDate(cur.getDate() - 1);
-          continue;
-        }
+      for (let d = new Date(lastScheduledBeforeToday); d >= start; d.setDate(d.getDate() - 1)) {
+        if (!isScheduled(d)) continue;
+        const key = d.toLocaleDateString('sv-SE');
+        if (doneSet.has(key)) { streak++; continue; }
+        if (skipSet.has(key)) { continue; }
         break;
       }
       return streak;
