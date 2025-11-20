@@ -161,32 +161,26 @@ const calculateCurrentStreak = (habit: Habit): number => {
     }
   };
 
-  // 直近の「今日より前の予定日」を探す（昨日だけでなく直近の scheduled 日）
+  // 直近の予定日を「今日を含めて」探す（今日完了があればカウントする）
   const today = new Date();
   today.setHours(0,0,0,0);
-  const prev = new Date(today);
-  prev.setDate(prev.getDate() - 1);
-
-  let lastScheduledBeforeToday: Date | null = null;
-  while (prev >= start) {
-    if (isScheduled(prev)) { lastScheduledBeforeToday = new Date(prev); break; }
-    prev.setDate(prev.getDate() - 1);
+  let lastScheduledOnOrBeforeToday: Date | null = null;
+  for (let d = new Date(today); d >= start; d.setDate(d.getDate() - 1)) {
+    if (isScheduled(d)) { lastScheduledOnOrBeforeToday = new Date(d); break; }
   }
-  // 直近の予定日が存在しなければ streak は 0
-  if (!lastScheduledBeforeToday) return 0;
+  if (!lastScheduledOnOrBeforeToday) return 0;
 
-  const lastKey = lastScheduledBeforeToday.toLocaleDateString('sv-SE');
+  const lastKey = lastScheduledOnOrBeforeToday.toLocaleDateString('sv-SE');
   // 直近予定日が未記録（done でも skip でもない）なら current streak は 0
   if (!(doneSet.has(lastKey) || skipSet.has(lastKey))) return 0;
 
   // 直近予定日を起点に遡って連続日数を数える（skip は継続扱いだがカウントしない）
   let streak = 0;
-  let cur = new Date(lastScheduledBeforeToday);
-  while (cur >= start) {
-    if (!isScheduled(cur)) { cur.setDate(cur.getDate() - 1); continue; }
+  for (let cur = new Date(lastScheduledOnOrBeforeToday); cur >= start; cur.setDate(cur.getDate() - 1)) {
+    if (!isScheduled(cur)) continue;
     const key = cur.toLocaleDateString('sv-SE');
-    if (doneSet.has(key)) { streak++; cur.setDate(cur.getDate() - 1); continue; }
-    if (skipSet.has(key)) { cur.setDate(cur.getDate() - 1); continue; }
+    if (doneSet.has(key)) { streak++; continue; }
+    if (skipSet.has(key)) { continue; }
     break;
   }
   return streak;

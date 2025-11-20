@@ -811,24 +811,21 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         }
       };
 
-      // 直近の「今日より前の予定日」を特定（最も近い予定日が未実施なら streak = 0）
+      // 直近の予定日を「今日を含めて」探す（今日完了があればカウントする）
       const today = new Date(); today.setHours(0,0,0,0);
-      const prev = new Date(today);
-      prev.setDate(prev.getDate() - 1);
-
-      let lastScheduledBeforeToday: Date | null = null;
-      for (let d = new Date(prev); d >= start; d.setDate(d.getDate() - 1)) {
-        if (isScheduled(d)) { lastScheduledBeforeToday = new Date(d); break; }
+      let lastScheduledOnOrBeforeToday: Date | null = null;
+      for (let d = new Date(today); d >= start; d.setDate(d.getDate() - 1)) {
+        if (isScheduled(d)) { lastScheduledOnOrBeforeToday = new Date(d); break; }
       }
-      if (!lastScheduledBeforeToday) return 0;
+      if (!lastScheduledOnOrBeforeToday) return 0;
 
-      const lastKey = lastScheduledBeforeToday.toLocaleDateString('sv-SE');
+      const lastKey = lastScheduledOnOrBeforeToday.toLocaleDateString('sv-SE');
       // 直近予定日が未記録（done / skip どちらでもない） -> streak 0
       if (!(doneSet.has(lastKey) || skipSet.has(lastKey))) return 0;
 
       // 直近予定日を基点に遡る（done は +1、skip は継続だがカウントしない）
       let streak = 0;
-      for (let d = new Date(lastScheduledBeforeToday); d >= start; d.setDate(d.getDate() - 1)) {
+      for (let d = new Date(lastScheduledOnOrBeforeToday); d >= start; d.setDate(d.getDate() - 1)) {
         if (!isScheduled(d)) continue;
         const key = d.toLocaleDateString('sv-SE');
         if (doneSet.has(key)) { streak++; continue; }
