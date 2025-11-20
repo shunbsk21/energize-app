@@ -926,7 +926,10 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     let start = new Date(habit.startDate);
     start.setHours(0,0,0,0);
     const earliestFromSets = (() => {
-      const keys: string[] = [...doneSet, ...Array.from(new Set(((habit as any).skippedDates || []).map(normalizeKey)))];
+      // 明示的に string[] に変換してから結合する
+      const doneKeys = Array.from(doneSet) as string[];
+      const skipKeys = Array.from(new Set(((habit as any).skippedDates || []).map(normalizeKey))) as string[];
+      const keys = [...doneKeys, ...skipKeys];
       if (keys.length === 0) return null;
       const dates = keys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
       return dates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);

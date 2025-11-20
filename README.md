@@ -42,3 +42,9 @@ git add .
 git commit -m "xxxx"
 git push
 ```
+
+## localテストの対応
+```bash
+nvm use 20 
+npm run dev
+```
