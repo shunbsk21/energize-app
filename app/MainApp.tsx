@@ -672,12 +672,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !taskId) return;
     try {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      const updatePayload: any = { done, updatedAt: new Date().toISOString() };
-      if (done) updatePayload.completedAt = new Date().toISOString();
-      else updatePayload.completedAt = null;
+      // completedAt を追加する可能性があるため any にして型エラーを避ける
+      const updatePayload: any = { ...payload, updatedAt: new Date().toISOString() };
+      if (payload.done === true) updatePayload.completedAt = new Date().toISOString();
+      if (payload.done === false) updatePayload.completedAt = null;
       await updateDoc(taskRef, updatePayload);
-      // local state 更新
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, done, completedAt: updatePayload.completedAt } : t));
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload, updatedAt: updatePayload.updatedAt, completedAt: updatePayload.completedAt } : t));
     } catch (err) {
       console.error('handleToggleTask error', err);
       throw err;
