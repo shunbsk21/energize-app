@@ -656,7 +656,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (view === 'analytics') {
       return 'ここでは、診断結果の推移や習慣の達成率をグラフで確認できます。自分のエネルギー状態と行動の関連性を分析し、日々の改善に役立てましょう。';
     }
-    if (view === 'group') {
+    if (view === 'groups') {
         return '友達とグループを作成し、日々の習慣の進捗を共有できます。コメント機能で励まし合い、モチベーションを高めましょう。';
     }
     if (view === 'records') {
@@ -706,7 +706,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   checkins={checkins}
                   checkouts={checkouts}
                 />;
-      case 'group':
+       case 'groups':
         return <Group 
                   profile={profile} 
                   following={following}
@@ -832,7 +832,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               </button>
 
               <button
-                onClick={() => setView('group')}
+                onClick={() => setView('groups')}
                 className={`flex flex-col items-center text-xs w-1/5 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <GroupIcon className="w-6 h-6 mb-1" />
