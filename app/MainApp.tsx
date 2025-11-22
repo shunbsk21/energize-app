@@ -736,6 +736,9 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
+  // 型狭窄で比較エラーが出るのを避けるヘルパー
+  const isView = (v: View) => view === v;
+
   // --- JSX (変更なし) ---
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-28"> {/* pb-28: 下部タブ分の余白 */}
@@ -748,15 +751,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
                 <div className="flex items-center gap-3">
                   {/* アイコン + 下テキスト */}
-                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${view==='habits' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${isView('habits') ? 'text-indigo-600' : 'text-gray-500'}`}>
                     <HabitIcon className="w-6 h-6"/>
                     <span className="text-xs mt-1">習慣</span>
                   </button>
-                  <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-2 rounded-md ${view==='tasks' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                  <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-2 rounded-md ${isView('tasks') ? 'text-indigo-600' : 'text-gray-500'}`}>
                     <TaskIcon className="w-6 h-6"/>
                     <span className="text-xs mt-1">タスク</span>
                   </button>
-                  <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-2 rounded-md ${view==='notes' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                  <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-2 rounded-md ${isView('notes') ? 'text-indigo-600' : 'text-gray-500'}`}>
                     <NoteIcon className="w-6 h-6"/>
                     <span className="text-xs mt-1">メモ</span>
                   </button>
@@ -817,7 +820,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex justify-between items-center h-18 py-3">
               <button
                 onClick={() => setView('diagnosis')}
-                className={`flex flex-col items-center text-xs w-1/5 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${isView('diagnosis') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <DiagnosisIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">診断</span>
@@ -825,7 +828,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
               <button
                 onClick={() => setView('habits')}
-                className={`flex flex-col items-center text-xs w-1/5 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${isView('habits') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <HabitIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">習慣</span>
@@ -833,7 +836,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
               <button
                 onClick={() => setView('groups')}
-                className={`flex flex-col items-center text-xs w-1/5 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${isView('groups') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <GroupIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">グループ</span>
@@ -841,7 +844,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
               <button
                 onClick={() => setView('records')}
-                className={`flex flex-col items-center text-xs w-1/5 ${view === 'records' ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${isView('records') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <ListBulletIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">記録</span>
@@ -849,7 +852,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
               <button
                 onClick={() => setView('analytics')}
-                className={`flex flex-col items-center text-xs w-1/5 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${isView('analytics') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <AnalyticsIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">分析</span>
