@@ -1681,8 +1681,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             <div className="w-full max-w-3xl mx-auto px-4">
               <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
                 <div className="text-center">
-                  <div className="text-5xl md:text-6xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
-                  <div className="mt-4 text-lg md:text-xl opacity-95">今日の予定を全て完了しました。よく頑張りました！</div>
+                  <div className="text-2xl md:text-2xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
+                  <div className="mt-4 text-lg md:text-xl opacity-95">今日もよく頑張りましたね！</div>
                 </div>
               </div>
               {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
