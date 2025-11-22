@@ -8,7 +8,7 @@ import HabitDetail from './HabitDetail';
 // --- Propsの定義を変更 ---
 interface HabitTrackerProps {
   habits: Habit[];
-  energyHistory: EnergyRecord[]; // ★ 診断履歴を受け取る
+  energyHistory: EnergyRecord[];
   onAddHabit: (newHabit: Omit<Habit, 'id'>) => void;
   onUpdateHabit: (updatedHabit: Habit) => void;
   onDeleteHabit: (habitId: string) => void;
@@ -17,12 +17,33 @@ interface HabitTrackerProps {
   diagnosisFrequency: DiagnosisFrequency;
   checkins?: { id: string; date: string; value: number; note?: string; createdAt?: string }[];
   checkouts?: { id: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[];
-  // 保存ハンドラは同期/非同期どちらも許容し、rating は null を許容
   onAddCheckin?: (value: number, note?: string, dateStr?: string) => void | Promise<void>;
   onAddCheckout?: (gratitude?: string, note?: string, rating?: number | null, dateStr?: string) => void | Promise<void>;
   onUpdateCheckin?: (id: string, value: number, note?: string) => void | Promise<void>;
   onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number | null) => void | Promise<void>;
+
+  // tasks (外部から渡される)
+  tasks?: {
+    id: string;
+    title: string;
+    details?: string;
+    dueDate?: string; // 'YYYY-MM-DD'
+    priority?: 'low'|'medium'|'high';
+    done?: boolean;
+    completedAt?: string;
+  }[];
+  onAddTask?: (t: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => void | Promise<void>;
+
+  // 追加: タスクの完了トグルを親に伝える
+  onToggleTask?: (taskId: string, done: boolean) => Promise<void> | void;
+
+  // 追加: タスク更新 / 削除ハンドラ（あれば呼び出す）
+  onUpdateTask?: (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => Promise<void> | void;
+  onDeleteTask?: (taskId: string) => Promise<void> | void;
 }
+
+// 優先度ソート用
+const prioritySortValue = (p?: 'low'|'medium'|'high') => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
 
 // --- Icon Components Start (★ CheckCircleIcon を追加) ---
 
@@ -518,7 +539,12 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onAddCheckin,
   onAddCheckout,
   onUpdateCheckin,
-  onUpdateCheckout
+  onUpdateCheckout,
+  tasks = [],
+  onAddTask,
+  onToggleTask,
+  onUpdateTask,
+  onDeleteTask
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
@@ -542,6 +568,143 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(false);
   const [checkedOutToday, setCheckedOutToday] = useState(false);
+
+  // --- Task add modal state (新規) ---
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDetails, setTaskDetails] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState<string>(''); // ISO YYYY-MM-DD
+  const [taskPriority, setTaskPriority] = useState<'low'|'medium'|'high'>('medium');
+
+  // --- Floating multi-button 展開 state ---
+  const [fabOpen, setFabOpen] = useState(false);
+  const fabRef = useRef<HTMLDivElement | null>(null);
+
+  // --- localTasks: props から同期するローカルコピー（即時UI反映用） ---
+  const [localTasks, setLocalTasks] = useState<typeof tasks>(tasks);
+  useEffect(() => setLocalTasks(tasks), [tasks]);
+
+  // --- selected task for edit modal ---
+  const [selectedTask, setSelectedTask] = useState<null | {
+    id: string;
+    title: string;
+    details?: string;
+    dueDate?: string;
+    priority?: 'low'|'medium'|'high';
+    done?: boolean;
+  }>(null);
+
+  // edit modal fields
+  const [editTitle, setEditTitle] = useState('');
+  const [editDetails, setEditDetails] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState<'low'|'medium'|'high'>('medium');
+  const [editDone, setEditDone] = useState(false);
+
+  // 外部クリックで展開メニューを閉じる
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!fabOpen) return;
+      if (fabRef.current && !fabRef.current.contains(e.target as Node)) {
+        setFabOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [fabOpen]);
+  
+  // selectedDate をローカル日の ISO (YYYY-MM-DD) で使う（タイムゾーン差で日付がずれる問題を防ぐ）
+  const formatLocalISO = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const selectedDateISO = formatLocalISO(selectedDate);
+
+  useEffect(() => {
+    if (selectedTask) {
+      setEditTitle(selectedTask.title || '');
+      setEditDetails(selectedTask.details || '');
+      setEditDueDate(selectedTask.dueDate || '');
+      setEditPriority(selectedTask.priority || 'medium');
+      setEditDone(!!selectedTask.done);
+    }
+  }, [selectedTask]);
+  
+  // --- 当日の期日タスク（selectedDate が dueDate と一致するもの） ---
+  const dueTasks = useMemo(() => {
+    return (localTasks || [])
+      .filter(t => t.dueDate === selectedDateISO)
+      .sort((a, b) => {
+        const pa = prioritySortValue(a.priority);
+        const pb = prioritySortValue(b.priority);
+        if (pa !== pb) return pb - pa; // 高い優先度を前に
+        return (a.title || '').localeCompare(b.title || '');
+      });
+  }, [localTasks, selectedDateISO]);
+
+  // タスク追加 submit
+  const submitTask = async () => {
+    if (!taskTitle.trim()) return;
+    const payload = { title: taskTitle.trim(), details: taskDetails.trim() || undefined, dueDate: taskDueDate || selectedDateISO, priority: taskPriority };
+    try {
+      await onAddTask?.(payload);
+    } catch (err) {
+      console.error('onAddTask error', err);
+    }
+    // reset
+    setTaskTitle(''); setTaskDetails(''); setTaskDueDate(''); setTaskPriority('medium');
+    setIsTaskModalOpen(false);
+    setFabOpen(false);
+  };
+
+  // タスク完了トグル時にローカル更新して親へ通知
+  const handleToggleTaskLocal = async (taskId: string, nextDone: boolean) => {
+    setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, done: nextDone, completedAt: nextDone ? new Date().toISOString() : undefined } : t));
+    try {
+      await onToggleTask?.(taskId, nextDone);
+    } catch (err) {
+      console.error('onToggleTask error', err);
+    }
+  };
+
+  // タスク編集保存
+  const saveTaskEdits = async () => {
+    if (!selectedTask) return;
+    const payload = {
+      title: editTitle.trim() || selectedTask.title,
+      details: editDetails.trim() || undefined,
+      dueDate: editDueDate || undefined,
+      priority: editPriority,
+      done: editDone
+    };
+    // optimistic local update
+    setLocalTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, ...payload } : t));
+    try {
+      if (onUpdateTask) {
+        await onUpdateTask(selectedTask.id, payload);
+      } else {
+        console.warn('onUpdateTask prop not provided');
+      }
+    } catch (err) {
+      console.error('onUpdateTask error', err);
+    }
+    setSelectedTask(null);
+  };
+
+  const deleteTaskConfirm = async () => {
+    if (!selectedTask) return;
+    const id = selectedTask.id;
+    setLocalTasks(prev => prev.filter(t => t.id !== id));
+    try {
+      if (onDeleteTask) await onDeleteTask(id);
+      else console.warn('onDeleteTask prop not provided');
+    } catch (err) {
+      console.error('onDeleteTask error', err);
+    }
+    setSelectedTask(null);
+  };
 
   // (↓ getWeekStart, weekStart, スワイプ関連のロジックは変更なし)
   const getWeekStart = (date: Date) => {
@@ -1116,96 +1279,130 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // --- JSX (変更なし) ---
   return (
     <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
-              <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                  <ListBulletIcon className="w-6 h-6" />
-              </button>
-          </div>
-          {/* タイトルの下に表示されるボタン群（モバイルでは縦、デスクトップでは横） */}
-          <div className="w-full sm:w-auto flex justify-start sm:justify-end">
-            <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-              <button
-                onClick={() => setIsCheckInOpen(true)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-                aria-pressed={checkedInToday}
-              >
-                <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-800">チェックイン</span>
-                {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
-              </button>
-              <button
-                onClick={() => setIsCheckOutOpen(true)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-                aria-pressed={checkedOutToday}
-              >
-                <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
-                <span className="text-sm font-medium text-gray-800">チェックアウト</span>
-                {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
-              </button>
-            </div>
-            <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors ml-3 hidden sm:inline-flex">
-                <HelpIcon className="w-6 h-6" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
+            <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                <ListBulletIcon className="w-6 h-6" />
+            </button>
+        </div>
+        {/* タイトルの下に表示されるボタン群（モバイルでは縦、デスクトップでは横） */}
+        <div className="w-full sm:w-auto flex justify-start sm:justify-end">
+          <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+            <button
+              onClick={() => setIsCheckInOpen(true)}
+              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+              aria-pressed={checkedInToday}
+            >
+              <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
+              <span className="text-sm font-medium text-gray-800">チェックイン</span>
+              {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
+            </button>
+            <button
+              onClick={() => setIsCheckOutOpen(true)}
+              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+              aria-pressed={checkedOutToday}
+            >
+              <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
+              <span className="text-sm font-medium text-gray-800">チェックアウト</span>
+              {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
             </button>
           </div>
+          <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors ml-3 hidden sm:inline-flex">
+              <HelpIcon className="w-6 h-6" />
+          </button>
         </div>
+      </div>
 
-        <CheckInModal
-          isOpen={isCheckInOpen}
-          onClose={() => setIsCheckInOpen(false)}
-          onSave={(v,n) => { handleSaveCheckin(v,n); }}
-          initial={checkinDraft}
-        />
-        <CheckOutModal
-          isOpen={isCheckOutOpen}
-          onClose={() => setIsCheckOutOpen(false)}
-          onSave={(g,n,r) => { handleSaveCheckout(g,n,r); }}
-          initial={checkoutDraft}
-        />
-        <DatePickerModal 
-            isOpen={isDatePickerOpen}
-            onClose={() => setIsDatePickerOpen(false)}
-            onDateSelect={handleDateSelect}
-            initialDate={selectedDate}
-            habits={habits}
-        />
-        <HabitListModal 
-            isOpen={isListModalOpen}
-            onClose={() => setIsListModalOpen(false)}
-            habits={habits}
-            onSelectHabit={handleSelectHabitFromList}
-        />
-        {/* 数量入力モーダル: system prompt の代替 */}
-        {isAmountModalOpen && amountModalHabit && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
-                  <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
-                </div>
-                <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
+      <CheckInModal
+        isOpen={isCheckInOpen}
+        onClose={() => setIsCheckInOpen(false)}
+        onSave={(v,n) => { handleSaveCheckin(v,n); }}
+        initial={checkinDraft}
+      />
+      <CheckOutModal
+        isOpen={isCheckOutOpen}
+        onClose={() => setIsCheckOutOpen(false)}
+        onSave={(g,n,r) => { handleSaveCheckout(g,n,r); }}
+        initial={checkoutDraft}
+      />
+      <DatePickerModal 
+          isOpen={isDatePickerOpen}
+          onClose={() => setIsDatePickerOpen(false)}
+          onDateSelect={handleDateSelect}
+          initialDate={selectedDate}
+          habits={habits}
+      />
+      <HabitListModal 
+          isOpen={isListModalOpen}
+          onClose={() => setIsListModalOpen(false)}
+          habits={habits}
+          onSelectHabit={handleSelectHabitFromList}
+      />
+      {/* 数量入力モーダル: system prompt の代替 */}
+      {isAmountModalOpen && amountModalHabit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
+                <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
               </div>
-              <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
-                <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
-                <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
-                  <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
-                </div>
-              </form>
+              <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
+              <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
+              <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* FAB: + を押すと左・上に丸ボタンを展開 */}
+      <div ref={fabRef} className="fixed z-40 right-4 bottom-20 flex flex-col items-end" aria-hidden={!fabOpen}>
+        {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
+        {fabOpen && (
+          <div className="flex flex-col items-center space-y-3 mb-2">
+            <div className="flex flex-col items-center">
+              <button
+                onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
+                className="w-16 h-16 rounded-full bg-amber-100 shadow-md flex items-center justify-center text-amber-900 font-semibold text-sm"
+                aria-label="タスクを追加"
+                title="タスクを追加"
+              >
+                タスク
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center">
+              <button
+                onClick={() => { setIsAddModalOpen(true); setFabOpen(false); }}
+                className="w-16 h-16 rounded-full bg-indigo-100 shadow-md flex items-center justify-center text-indigo-700 font-semibold text-sm"
+                aria-label="習慣を追加"
+                title="習慣を追加"
+              >
+                習慣
+              </button>
             </div>
           </div>
         )}
-       <button
-        onClick={() => setIsAddModalOpen(true)}
-        className="fixed bottom-20 right-6 md:bottom-24 md:right-8 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-110 z-30"
-        aria-label="新しい習慣を追加"
-      >
-        <PlusIcon className="w-8 h-8"/>
-      </button>
 
+        {/* main FAB (always visible) - 少し小さくして右寄せ */}
+        <button
+          onClick={() => setFabOpen(v => !v)}
+          className={`mt-3 w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg bg-indigo-600 hover:bg-indigo-700 transition-colors`}
+          aria-label="追加メニュー"
+          title="追加メニュー"
+        >
+          <PlusIcon className="w-5 h-5" />
+        </button>
+      </div>
+      
+      {/* 習慣追加モーダル */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsAddModalOpen(false)}>
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -1307,6 +1504,32 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
       )}
 
+      {/* /* Task add modal */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsTaskModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">タスクを追加</h3>
+              <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-500">閉じる</button>
+            </div>
+            <div className="space-y-3">
+              <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+              <textarea value={taskDetails} onChange={e => setTaskDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
+              <div className="flex items-center gap-2">
+                <input type="date" value={taskDueDate} onChange={e => setTaskDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
+                <select value={taskPriority} onChange={e => setTaskPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
+                  <option value="low">低</option>
+                  <option value="medium">中</option>
+                  <option value="high">高</option>
+                </select>
+                <div className="flex-1" />
+                <button onClick={submitTask} className="px-4 py-2 bg-indigo-600 text-white rounded">追加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 予定外タスク用モーダル */}
       {isNonScheduledOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setIsNonScheduledOpen(false)}>
@@ -1335,6 +1558,40 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* タスク編集モーダル */}
+      {selectedTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedTask(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">タスクを編集</h3>
+              <button onClick={() => setSelectedTask(null)} className="text-gray-500">閉じる</button>
+            </div>
+
+            <div className="space-y-3">
+              <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+              <textarea value={editDetails} onChange={e => setEditDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
+              <div className="flex items-center gap-2">
+                <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
+                <select value={editPriority} onChange={e => setEditPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
+                  <option value="low">低</option>
+                  <option value="medium">中</option>
+                  <option value="high">高</option>
+                </select>
+                <label className="inline-flex items-center gap-2 ml-auto text-sm">
+                  <input type="checkbox" checked={editDone} onChange={e => setEditDone(e.target.checked)} />
+                  完了
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setSelectedTask(null)} className="px-3 py-2 rounded-md bg-gray-100">キャンセル</button>
+                <button onClick={deleteTaskConfirm} className="px-3 py-2 rounded-md bg-red-50 text-red-600">削除</button>
+                <button onClick={saveTaskEdits} className="px-4 py-2 rounded-md bg-indigo-600 text-white">保存</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1403,6 +1660,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             </button>
           </div>
         </div>
+
         {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
         {showCelebrate && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
@@ -1427,7 +1685,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                   <div className="mt-4 text-lg md:text-xl opacity-95">今日の予定を全て完了しました。よく頑張りました！</div>
                 </div>
               </div>
-              {/* 下から上へ流れるキラキラ絵文字 */}
               {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
                 <span
                   key={i}
@@ -1445,39 +1702,68 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             </div>
           </div>
         )}
+        {/* --- 診断カード（最上部） --- */}
+        <div className="mb-4">
+          {isDiagnosisDay && (
+            <div
+              onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
+              className={`flex items-center p-4 rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
+            >
+              {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
+              <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
+                エネルギーを診断する
+              </span>
+              {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
+            </div>
+          )}
+        </div>
 
-        <div className="space-y-3">
-            {isDiagnosisDay && (
-                <div 
-                    onClick={() => !isDiagnosisCompleted && setView('diagnosis')} // ★ 完了時はクリックしても遷移しない
-                    className={`flex items-center p-4 rounded-lg transition ${
-                        isDiagnosisCompleted
-                            ? 'bg-green-50 hover:bg-green-100 cursor-default' // 完了時のスタイル
-                            : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer' // 未完了時のスタイル
-                    }`}
+        {/* --- 本日のタスク（診断の下） --- */}
+        <div className="mb-4">
+          {dueTasks.length === 0 ? (
+            <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">本日のタスクはありません。</div>
+          ) : (
+            <div className="space-y-2">
+              {dueTasks.map(t => (
+                <div
+                  key={t.id}
+                  onClick={() => setSelectedTask(t)}
+                  className={`flex items-center gap-3 p-3 border shadow-sm ${t.done ? 'opacity-80' : ''} bg-amber-50 border-amber-100 rounded-md`}
                 >
-                    {isDiagnosisCompleted ? (
-                        <CheckCircleIcon className="w-6 h-6 text-green-600"/> // ★ 完了アイコン
-                    ) : (
-                        <DiagnosisIcon className="w-6 h-6 text-indigo-600"/> // 未完了アイコン
-                    )}
-                    
-                    <span className={`flex-grow mx-4 text-lg font-semibold ${
-                        isDiagnosisCompleted
-                            ? 'line-through text-gray-500' // 完了時のテキスト
-                            : 'text-indigo-800' // 未完了時のテキスト
-                    }`}>
-                      エネルギーを診断する
-                    </span>
+                  <input
+                    type="checkbox"
+                    checked={!!t.done}
+                    onChange={async (e) => {
+                      e.stopPropagation();
+                      const next = e.target.checked;
+                      await handleToggleTaskLocal(t.id, next);
+                    }}
+                    className="w-5 h-5 cursor-pointer"
+                    aria-label={`タスク完了: ${t.title}`}
+                    onClick={e => e.stopPropagation()}
+                  />
 
-                    {!isDiagnosisCompleted && (
-                        <ChevronRightIcon className="w-6 h-6 text-indigo-600"/> // ★ 未完了時のみ矢印
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-500' : 'text-gray-900'}`}>{t.title}</div>
+                    {t.details ? <div className="text-xs text-gray-600 truncate mt-1">{t.details}</div> : null}
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-3">
+                    {t.dueDate ? <div className="text-xs text-gray-500">{new Date(t.dueDate).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</div> : null}
+                    <div className={`text-xs px-2 py-0.5 rounded-full font-semibold ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                      {t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}
+                    </div>
+                    {/* Task badge to visually distinguish from habits */}
+                    <div className="ml-2 text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full font-medium">タスク</div>
+                  </div>
                 </div>
-            )}
-            {/* ★★★ 修正点ここまで ★★★ */}
+              ))}
+            </div>
+          )}
+        </div>
 
-
+        {/* 既存: 習慣リスト（タスクの下） */}
+        <div className="space-y-3">
             {sortedScheduledHabits.length > 0 ? (
                 sortedScheduledHabits.map(habit => {
                   // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
@@ -1526,9 +1812,11 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             )}
         </div>
       </div>
+      
       {selectedHabit && (
           <HabitDetail habit={selectedHabit} onClose={() => setSelectedHabit(null)} onDelete={deleteHabit} onUpdate={updateHabit} />
       )}
+
     </div>
   );
 };

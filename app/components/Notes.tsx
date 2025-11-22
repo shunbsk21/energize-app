@@ -194,82 +194,83 @@ const Notes: React.FC<{
   };
 
   return (
-    <div className="p-4">
-      {/* header: title left, actions right (compact) */}
-      <div className="flex items-start justify-between mb-3">
-        <h2 className="text-xl font-bold">メモ</h2>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md bg-gray-100 p-1">
-            <button onClick={() => { setViewArchived(false); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${!viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>Notes</button>
-            <button onClick={() => { setViewArchived(true); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>アーカイブ</button>
+    <div className="space-y-6">
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+        {/* header: title left, actions right (compact) */}
+        <div className="flex items-start justify-between mb-3">
+          <h2 className="text-xl font-bold">メモ</h2>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-md bg-gray-100 p-1">
+              <button onClick={() => { setViewArchived(false); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${!viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>Notes</button>
+              <button onClick={() => { setViewArchived(true); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>アーカイブ</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* search + tags */}
-      <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="検索（タイトル・本文）"
-          className="p-2 border border-gray-200 rounded-full w-full focus:outline-none focus:ring-1 focus:ring-indigo-200"
-        />
-        <div className="col-span-2 sm:col-span-2 flex gap-2 items-center overflow-x-auto">
-          <div className="text-sm text-gray-600 mr-2 whitespace-nowrap">タグ:</div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSelectedTag(null)} className={`px-2 py-1 text-sm rounded ${selectedTag ? 'bg-gray-100 text-gray-700' : 'bg-green-50 text-green-700 font-semibold'}`}>すべて</button>
-            {allTags.map(tag => (
-              <button key={tag} onClick={() => setSelectedTag(prev => prev === tag ? null : tag)} className={`px-2 py-1 text-sm rounded ${selectedTag === tag ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                #{tag}
-              </button>
-            ))}
+        {/* search + tags */}
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="検索（タイトル・本文）"
+            className="p-2 border border-gray-200 rounded-full w-full focus:outline-none focus:ring-1 focus:ring-indigo-200"
+          />
+          <div className="col-span-2 sm:col-span-2 flex gap-2 items-center overflow-x-auto">
+            <div className="text-sm text-gray-600 mr-2 whitespace-nowrap">タグ:</div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setSelectedTag(null)} className={`px-2 py-1 text-sm rounded ${selectedTag ? 'bg-gray-100 text-gray-700' : 'bg-green-50 text-green-700 font-semibold'}`}>すべて</button>
+              {allTags.map(tag => (
+                <button key={tag} onClick={() => setSelectedTag(prev => prev === tag ? null : tag)} className={`px-2 py-1 text-sm rounded ${selectedTag === tag ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  #{tag}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="space-y-3">
-        {visibleNotes.length === 0 ? (
-          <p className="text-gray-500">メモがありません。</p>
-        ) : (
-          visibleNotes.map(n => {
-            const isExpanded = expandedNoteId === n.id;
-            return (
-              <div key={n.id} className="relative w-full p-3 bg-white rounded shadow-sm hover:shadow-md">
-                {/* top row: title and menu */}
-                <div className="flex items-start justify-between">
-                  <div className={`flex-1 text-left ${n.archived ? 'text-gray-400' : 'text-gray-800'} font-medium`}>{n.title || '（無題）'}</div>
-                  <div className="ml-3">
-                    <button onClick={() => setActionMenuNote(n)} className="px-2 py-1 text-gray-500 hover:text-gray-700" aria-label="メニュー">⋯</button>
+        <div className="space-y-3">
+          {visibleNotes.length === 0 ? (
+            <p className="text-gray-500">メモがありません。</p>
+          ) : (
+            visibleNotes.map(n => {
+              const isExpanded = expandedNoteId === n.id;
+              return (
+                <div key={n.id} className="relative w-full p-3 bg-white rounded shadow-sm hover:shadow-md">
+                  {/* top row: title and menu */}
+                  <div className="flex items-start justify-between">
+                    <div className={`flex-1 text-left ${n.archived ? 'text-gray-400' : 'text-gray-800'} font-medium`}>{n.title || '（無題）'}</div>
+                    <div className="ml-3">
+                      <button onClick={() => setActionMenuNote(n)} className="px-2 py-1 text-gray-500 hover:text-gray-700" aria-label="メニュー">⋯</button>
+                    </div>
+                  </div>
+
+                  {/* tags */}
+                  <div className="mt-2">
+                    {n.tags.map(t => <span key={t} className="inline-block bg-gray-100 text-gray-700 px-2 py-0.5 rounded mr-1 text-xs">#{t}</span>)}
+                  </div>
+
+                  {/* body: preserve line breaks, clamp to 5 lines unless expanded */}
+                  <div className="mt-3 text-sm text-gray-700" style={ isExpanded ? { whiteSpace: 'pre-wrap' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical' as any, WebkitLineClamp: 5, overflow: 'hidden', whiteSpace: 'pre-wrap' } }>
+                    {n.body}
+                  </div>
+
+                  {/* bottom row: date left small, "詳細を見る" or "閉じる" right */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleString()}</div>
+                    <div>
+                      {!isExpanded ? (
+                        <button onClick={() => setExpandedNoteId(n.id)} className="text-sm text-indigo-600">詳細を見る</button>
+                      ) : (
+                        <button onClick={() => setExpandedNoteId(null)} className="text-sm text-gray-600">閉じる</button>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* tags */}
-                <div className="mt-2">
-                  {n.tags.map(t => <span key={t} className="inline-block bg-gray-100 text-gray-700 px-2 py-0.5 rounded mr-1 text-xs">#{t}</span>)}
-                </div>
-
-                {/* body: preserve line breaks, clamp to 5 lines unless expanded */}
-                <div className="mt-3 text-sm text-gray-700" style={ isExpanded ? { whiteSpace: 'pre-wrap' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical' as any, WebkitLineClamp: 5, overflow: 'hidden', whiteSpace: 'pre-wrap' } }>
-                  {n.body}
-                </div>
-
-                {/* bottom row: date left small, "詳細を見る" or "閉じる" right */}
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleString()}</div>
-                  <div>
-                    {!isExpanded ? (
-                      <button onClick={() => setExpandedNoteId(n.id)} className="text-sm text-indigo-600">詳細を見る</button>
-                    ) : (
-                      <button onClick={() => setExpandedNoteId(null)} className="text-sm text-gray-600">閉じる</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
-
       {/* Floating + ボタン: フル画面作成を開く */}
       <button
         onClick={() => {
@@ -290,13 +291,16 @@ const Notes: React.FC<{
           <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 mx-auto" onClick={e => e.stopPropagation()}>
             <div className="text-lg font-medium mb-2">{confirmAction.note.title || '（無題）'}</div>
             <div className="text-sm text-gray-600 mb-4">
-              {confirmAction.type === 'archive' && (confirmAction.note.archived ? 'アーカイブを解除しますか？' : 'このメモをアーカイブしますか？')}
+              {confirmAction.type === 'archive' && (confirmAction.note.archived ? 'アーカイブを解除しますか？' : '本当にアーカイブしますか？')}
               {confirmAction.type === 'delete' && 'このメモを削除しますか？（画面からは非表示になります）'}
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmAction(null)} className="px-3 py-2 bg-gray-100 rounded">キャンセル</button>
               {confirmAction.type === 'archive' && (
-                <button onClick={() => { confirmAction.note.archived ? unarchiveNote(confirmAction.note.id) : archiveNote(confirmAction.note.id); setConfirmAction(null); }} className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded">
+                <button
+                  onClick={() => { confirmAction.note.archived ? unarchiveNote(confirmAction.note.id) : archiveNote(confirmAction.note.id); setConfirmAction(null); }}
+                  className="px-3 py-2 bg-yellow-500 text-white rounded"
+                >
                   {confirmAction.note.archived ? 'アーカイブ解除' : 'アーカイブ'}
                 </button>
               )}
@@ -310,21 +314,40 @@ const Notes: React.FC<{
 
       {/* Action modal (centered) that shows Edit / Archive / Delete choices */}
       {actionMenuNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setActionMenuNote(null)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
-            <div className="text-lg font-medium mb-3">{actionMenuNote.title || '（無題）'}</div>
-            <div className="flex flex-col gap-2">
-              <button onClick={() => { openFullscreenEditor(actionMenuNote); }} className="w-full px-4 py-3 bg-white border rounded text-left">編集する</button>
-              <button onClick={() => { setConfirmAction({ type: 'archive', note: actionMenuNote }); setActionMenuNote(null); }} className="w-full px-4 py-3 bg-white border rounded text-left">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setActionMenuNote(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="text-lg font-medium mb-4">{actionMenuNote.title || '（無題）'}</div>
+            <div className="flex flex-col">
+              <button
+                onClick={() => { openFullscreenEditor(actionMenuNote); }}
+                className="w-full text-left px-4 py-3 rounded-lg border border-indigo-600 bg-indigo-600 hover:bg-indigo-700 text-white mb-2"
+              >
+                編集する
+              </button>
+              <button
+                onClick={() => { setConfirmAction({ type: 'archive', note: actionMenuNote }); setActionMenuNote(null); }}
+                className="w-full text-left px-4 py-3 rounded-lg border border-yellow-200 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 mb-2"
+              >
                 {actionMenuNote.archived ? 'アーカイブ解除' : 'アーカイブ'}
               </button>
-              <button onClick={() => { setConfirmAction({ type: 'delete', note: actionMenuNote }); setActionMenuNote(null); }} className="w-full px-4 py-3 bg-white border rounded text-left text-red-600">削除</button>
-              <button onClick={() => setActionMenuNote(null)} className="mt-3 w-full px-4 py-2 bg-gray-100 rounded">キャンセル</button>
+
+              <button
+                onClick={() => { setConfirmAction({ type: 'delete', note: actionMenuNote }); setActionMenuNote(null); }}
+                className="w-full text-left px-4 py-3 rounded-lg border border-red-100 bg-white hover:bg-red-50 text-red-600 mb-3"
+              >
+                削除
+              </button>
+
+              <button
+                onClick={() => setActionMenuNote(null)}
+                className="w-full px-4 py-2 rounded-lg bg-gray-50 text-gray-700 border border-gray-100 hover:bg-gray-100"
+              >
+                キャンセル
+              </button>
             </div>
           </div>
         </div>
       )}
-
       {/* Fullscreen editor for "編集する" (LINE風のフルスクリーン編集) */}
       {isFullscreenEditOpen && editingNote && (
         <div className="fixed inset-0 bg-white z-50 flex flex-col">

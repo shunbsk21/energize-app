@@ -105,6 +105,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [followers, setFollowers] = useState<Friend[]>([]);
   
   const [groups, setGroups] = useState<GroupType[]>([]);
+  const [tasks, setTasks] = useState<{ id: string; title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }[]>([]);
   
   // ★ コメントの state を削除
   // const [comments, setComments] = useState<Comment[]>([]);
@@ -255,6 +256,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         setFollowing(updatedFollowing);
         setFollowers(updatedFollowers);
         setGroups(loadedGroups);
+
+        // --- tasks の読み込み (users/{uid}/tasks) ---
+        try {
+          const tasksRef = collection(baseRef, 'tasks');
+          const tasksSnap = await getDocs(tasksRef);
+          const loadedTasks = tasksSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+          setTasks(loadedTasks);
+        } catch (err) {
+          console.warn('tasks読み込みエラー', err);
+        }
 
       } catch (error) {
         console.error("データの読み込みに失敗しました:", error);
@@ -644,7 +655,64 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
+  // タスク追加ハンドラ（HabitTracker から呼ばれる）
+  const handleAddTask = async (payload: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => {
+    if (!profile.id) return;
+    try {
+      const ref = collection(db, 'users', profile.id, 'tasks');
+      const docRef = await addDoc(ref, { ...payload, done: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      setTasks(prev => [{ id: docRef.id, ...payload, done: false }, ...prev]);
+    } catch (err) {
+      console.error('handleAddTask error', err);
+    }
+  };
 
+  // タスクの完了状態を切り替えるハンドラ（HabitTracker から呼ばれる）
+  const handleToggleTask = async (taskId: string, done: boolean) => {
+    if (!profile.id || !taskId) return;
+    try {
+      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
+      const updatePayload: any = { done, updatedAt: new Date().toISOString() };
+      if (done) updatePayload.completedAt = new Date().toISOString();
+      else updatePayload.completedAt = null;
+      await updateDoc(taskRef, updatePayload);
+      // local state 更新
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, done, completedAt: updatePayload.completedAt } : t));
+    } catch (err) {
+      console.error('handleToggleTask error', err);
+      throw err;
+    }
+  };
+
+  // タスク更新ハンドラ（タイトル/詳細/期日/優先度/完了の更新）
+  const handleUpdateTask = async (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => {
+    if (!profile.id || !taskId) return;
+    try {
+      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
+      const updatePayload = { ...payload, updatedAt: new Date().toISOString() };
+      if (payload.done === true) updatePayload.completedAt = new Date().toISOString();
+      if (payload.done === false) updatePayload.completedAt = null;
+      await updateDoc(taskRef, updatePayload);
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload, updatedAt: updatePayload.updatedAt, completedAt: updatePayload.completedAt } : t));
+    } catch (err) {
+      console.error('handleUpdateTask error', err);
+      throw err;
+    }
+  };
+
+  // タスク削除ハンドラ
+  const handleDeleteTask = async (taskId: string) => {
+    if (!profile.id || !taskId) return;
+    try {
+      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
+      await deleteDoc(taskRef);
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    } catch (err) {
+      console.error('handleDeleteTask error', err);
+      throw err;
+    }
+  };
+  
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
     if (view === 'diagnosis') {
@@ -697,6 +765,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   checkouts={checkouts}
                   onUpdateCheckin={handleUpdateCheckin}
                   onUpdateCheckout={handleUpdateCheckout}
+                  tasks={tasks}
+                  onAddTask={handleAddTask}
+                  onToggleTask={handleToggleTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={handleDeleteTask}
                 />;
       case 'analytics':
         return <Analytics 
@@ -744,7 +817,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const isUnderHabits = useMemo(() => ['diagnosis','habits','groups','records','analytics'].includes(view), [view]);
 
   const mainContainerClass = isView('notes')
-    ? 'max-w-5xl mx-auto p-2 sm:p-4 lg:p-6'
+    ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
+    // ? 'max-w-5xl mx-auto p-2 sm:p-4 lg:p-6'
     : 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8';
 
   // --- JSX (変更なし) ---
