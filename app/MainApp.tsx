@@ -688,7 +688,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !taskId) return;
     try {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      const updatePayload = { ...payload, updatedAt: new Date().toISOString() };
+      // completedAt を追加する可能性があるため any にして型エラーを避ける
+      const updatePayload: any = { ...payload, updatedAt: new Date().toISOString() };
       if (payload.done === true) updatePayload.completedAt = new Date().toISOString();
       if (payload.done === false) updatePayload.completedAt = null;
       await updateDoc(taskRef, updatePayload);
