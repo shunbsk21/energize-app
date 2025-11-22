@@ -179,7 +179,7 @@ const Tasks: React.FC = () => {
 
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
-  const [dueDate, setDueDate] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<TaskItem['priority']>(defaultPriority);
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -221,7 +221,7 @@ const Tasks: React.FC = () => {
     if (t) {
       setTitle(t.title);
       setDetails(t.details || '');
-      setDueDate(t.dueDate || '');
+      setDueDate(t.dueDate || undefined);
       setPriority(t.priority || defaultPriority);
       setIsCreateOpen(true);
     }
@@ -293,7 +293,8 @@ const Tasks: React.FC = () => {
     }
     setIsCreateOpen(false);
     setEditingId(null);
-    setTitle(''); setDetails(''); setDueDate(''); setPriority(defaultPriority);
+    setTitle(''); setDetails('');
+    setDueDate(undefined); setPriority(defaultPriority);
   };
 
   return (
@@ -367,7 +368,7 @@ const Tasks: React.FC = () => {
       </div>
 
       {/* Floating + button */}
-      <button onClick={() => { setEditingId(null); setTitle(''); setDetails(''); setDueDate(''); setPriority(defaultPriority); setIsCreateOpen(true); }} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
+      <button onClick={() => { setEditingId(null); setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsCreateOpen(true); }} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
 
