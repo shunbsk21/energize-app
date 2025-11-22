@@ -739,6 +739,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // 型狭窄で比較エラーが出るのを避けるヘルパー
   const isView = (v: View) => view === v;
 
+  // 「診断, 習慣, グループ, 記録, 分析」をまとめて
+  // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
+  const isUnderHabits = useMemo(() => ['diagnosis','habits','groups','records','analytics'].includes(view), [view]);
+
   const mainContainerClass = isView('notes')
     ? 'max-w-5xl mx-auto p-2 sm:p-4 lg:p-6'
     : 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8';
@@ -755,7 +759,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
                 <div className="flex items-center gap-3">
                   {/* アイコン + 下テキスト */}
-                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${isView('habits') ? 'text-indigo-600' : 'text-gray-500'}`}>
+                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${isUnderHabits ? 'text-indigo-600' : 'text-gray-500'}`}>
                     <HabitIcon className="w-6 h-6"/>
                     <span className="text-xs mt-1">習慣</span>
                   </button>
@@ -820,7 +824,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       </main>
 
       {/* 下部固定タブバー */}
-      {view === 'habits' && (
+      {isUnderHabits && (
         <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white/90 border-t border-gray-100 safe-bottom">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-18 py-3">
