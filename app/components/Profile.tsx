@@ -217,56 +217,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
          </div>
         
-         {/* ★★★「友達リスト」を「フォロー中」に変更 ★★★ */}
-         <div className="mt-6 pt-4 border-t w-full">
-             <div className="flex justify-between items-center mb-2">
-                 <h3 className="text-md font-bold text-gray-700">フォロー中</h3>
-                 <button onClick={() => setIsAddFriendOpen(true)} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold p-2 rounded-md hover:bg-indigo-50">
-                     <UserPlusIcon className="w-4 h-4" />
-                     追加
-                 </button>
-             </div>
-             <div className="space-y-2 max-h-24 overflow-y-auto">
-                 {following.length > 0 ? following.map(friend => (
-                     <div key={friend.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                          <img
-                             src={friend.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='}
-                             alt={friend.displayName}
-                             className="w-8 h-8 rounded-full object-cover bg-gray-200"
-                         />
-                         <span className="text-gray-800">{friend.displayName}</span>
-                     </div>
-                 )) : <p className="text-gray-500 text-sm text-center py-2">まだ誰もフォローしていません。</p>}
-             </div>
-         </div>
-        
-         {/* ★★★ フォロワー（友達候補）リストを追加 ★★★ */}
-         <div className="mt-4 pt-4 border-t w-full">
-             <div className="flex justify-between items-center mb-2">
-                 <h3 className="text-md font-bold text-gray-700">フォロワー（友達候補）</h3>
-             </div>
-             <div className="space-y-2 max-h-24 overflow-y-auto">
-                 {friendCandidates.length > 0 ? friendCandidates.map(follower => (
-                     <div key={follower.id} className="flex items-center justify-between gap-3 p-2 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <img
-                             src={follower.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='}
-                             alt={follower.displayName}
-                             className="w-8 h-8 rounded-full object-cover bg-gray-200"
-                         />
-                         <span className="text-gray-800">{follower.displayName}</span>
-                        </div>
-                        <button 
-                            onClick={() => onFollowUser(follower.id)}
-                            className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-md hover:bg-indigo-200"
-                        >
-                          追加
-                        </button>
-                     </div>
-                 )) : <p className="text-gray-500 text-sm text-center py-2">友達候補はまだいません。</p>}
-             </div>
-         </div>
-        
          <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
              <button type="button" onClick={onLogout} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 font-semibold">
                  <LogoutIcon className="w-5 h-5" />

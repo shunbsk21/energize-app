@@ -292,6 +292,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
     return outputArray;
   }
+
   // --- inside MainApp component (ユーザー profile が利用できる箇所に追加) ---
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -799,7 +800,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
                 />;
       case 'records':
-        return <Records checkouts={checkouts} />
+        return (
+          <Records
+            checkins={checkins}
+            checkouts={checkouts}
+            /* ...既存の props... */
+          />
+        );
       case 'tasks':
         return <Tasks /* 必要な props を渡す（例: tasks, onAddTask 等） */ />
       case 'notes':

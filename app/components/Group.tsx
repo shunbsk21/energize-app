@@ -923,6 +923,10 @@ const Group: React.FC<GroupProps> = ({
 }) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null);
+    // ページ内遷移用：フォロー中の友達一覧をモーダルではなくページで表示する
+    const [isFriendsPage, setIsFriendsPage] = useState(false);
+    // 友達候補（候補リストはモーダルで表示）
+    const [isCandidatesOpen, setIsCandidatesOpen] = useState(false);
 
     const handleCreateGroup = (name: string, members: string[]) => {
         const newGroupData: Omit<GroupType, 'id'> = {
@@ -953,9 +957,105 @@ const Group: React.FC<GroupProps> = ({
                 />;
     }
 
+    // --- フォロー中の友達ページ（モーダルではなくページ遷移で表示） ---
+    if (isFriendsPage) {
+        const followingIds = new Set(following.map(f => f.id));
+        const candidates = followers.filter(f => !followingIds.has(f.id));
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setIsFriendsPage(false)} className="p-2 rounded-full hover:bg-gray-100">
+                        <ChevronLeftIcon className="w-6 h-6 text-gray-600"/>
+                    </button>
+                    <h2 className="text-2xl font-bold text-gray-800">フォロー中の友達</h2>
+                    <div className="flex-1" />
+                    <button onClick={() => setIsCandidatesOpen(true)} className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-200 rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                        {/* リストアイコン */}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        友達候補
+                    </button>
+                </div>
+
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold">フォロー中の友達 ({following.length})</h3>
+                    </div>
+                    <div className="space-y-2">
+                        {following.length === 0 ? (
+                            <div className="text-sm text-gray-500">フォロー中の友達がいません。</div>
+                        ) : (
+                            following.map(f => (
+                                <div key={f.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
+                                    <img src={f.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={f.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                    <div className="flex-1">
+                                        <div className="font-medium text-gray-800">{f.displayName}</div>
+                                        {/* ID は個人情報のため表示しない */}
+                                    </div>
+                                    <div className="text-sm text-gray-600">{/* 追加情報があれば */}</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* 友達候補のモーダル */}
+                {isCandidatesOpen && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[70]" onClick={() => setIsCandidatesOpen(false)}>
+                        <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-4" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-bold">友達候補 ({candidates.length})</h3>
+                                <button onClick={() => setIsCandidatesOpen(false)} className="text-gray-500">閉じる</button>
+                            </div>
+                            <div className="space-y-2 max-h-72 overflow-y-auto">
+                                {candidates.length === 0 ? (
+                                    <p className="text-sm text-gray-500">候補が見つかりません。</p>
+                                ) : (
+                                    candidates.map(c => (
+                                        <div key={c.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-50">
+                                            <img src={c.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-800">{c.displayName}</div>
+                                                <div className="text-xs text-gray-500">{c.id}</div>
+                                            </div>
+                                            <button onClick={() => onFollowUser(c.id)} className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm">フォロー</button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-fade-in">
-             <div className="flex justify-between items-center">
+            {/* フォロー中の友達プレビュー（クリックでページ遷移） */}
+            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold text-gray-800">フォロー中の友達</h3>
+                    <button onClick={() => setIsFriendsPage(true)} className="text-sm text-gray-500 hover:text-indigo-600">一覧</button>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                        {following.slice(0, 8).map(f => (
+                            <img key={f.id}
+                                 src={f.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
+                                 alt={f.displayName}
+                                 className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
+                        ))}
+                        {following.length > 8 && (
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-600 ring-2 ring-white">+{following.length - 8}</div>
+                        )}
+                    </div>
+                    <div className="text-sm text-gray-600">{following.length} 人</div>
+                    <div className="flex-1" />
+                    <button onClick={() => setIsFriendsPage(true)} className="px-3 py-1 bg-white border border-gray-200 rounded-md text-sm text-gray-700 hover:bg-gray-50">表示</button>
+                </div>
+            </div>
+
+            <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800">グループ</h2>
                     <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">

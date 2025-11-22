@@ -1,5 +1,5 @@
 // ...existing code...
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 
 export interface CheckoutRecord {
   id: string;
@@ -40,11 +40,36 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
   const [perPage, setPerPage] = useState<number>(20);
   const [page, setPage] = useState<number>(1);
 
-  // 入力データのばらつきに備えて正規化する（note / text の両対応、date を YYYY-MM-DD に）
+  // 入力データのばらつきに備えて正規化する（note / text の両対応、いろんなネストや型に対応）
   const normalizedCheckins = useMemo(() => {
     return (checkins || []).map((c: any) => {
-      const note = c.note ?? c.text ?? (c.data && (c.data.note ?? c.data.text)) ?? undefined;
-      const date = c.date ?? (typeof c.createdAt === 'string' ? c.createdAt.slice(0, 10) : undefined);
+      // note を取り出すために考えられるパスを列挙し、文字列に変換して trim する
+      const rawNote =
+        c?.note ??
+        c?.text ??
+        c?.data?.note ??
+        c?.data?.text ??
+        c?.payload?.note ??
+        c?.payload?.text ??
+        '';
+
+      const note = rawNote == null ? '' : (typeof rawNote === 'string' ? rawNote : String(rawNote));
+
+      // date の正規化: 明示的 date があればそのまま、なければ createdAt の先頭 10 文字（YYYY-MM-DD）を採る
+      let date = c?.date;
+      if (!date && c?.createdAt) {
+        if (typeof c.createdAt === 'string') {
+          date = c.createdAt.slice(0, 10);
+        } else if (c.createdAt?.toDate) {
+          // Firestore Timestamp の可能性
+          try {
+            const dt = c.createdAt.toDate();
+            date = dt.toISOString().slice(0, 10);
+          } catch (e) {
+            date = undefined;
+          }
+        }
+      }
       return { ...c, note, date };
     });
   }, [checkins]);
@@ -63,39 +88,50 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
   // filtered + sorted (date desc)
   const filtered = useMemo(() => {
-    const s = (source || []).slice().sort((a, b) => {
+    // sort by date desc
+    const sorted = (source || []).slice().sort((a, b) => {
       const ta = new Date(parseDateValue(a)).getTime();
       const tb = new Date(parseDateValue(b)).getTime();
       return tb - ta;
     });
-    // checkout のタイプフィルタを適用（まずレコード単位で絞る）
-    let preFiltered = s;
+
+    // checkout のタイプフィルタ（checkout のみ）
+    let preFiltered = sorted;
     if (view === 'checkout' && checkoutFilter !== 'all') {
       if (checkoutFilter === 'gratitude') {
-        preFiltered = s.filter((r: any) => !!(r.gratitude && String(r.gratitude).trim()));
+        preFiltered = sorted.filter((r: any) => !!(r.gratitude && String(r.gratitude).trim()));
       } else if (checkoutFilter === 'note') {
-        preFiltered = s.filter((r: any) => !!(r.note && String(r.note).trim()));
+        preFiltered = sorted.filter((r: any) => !!(r.note && String(r.note).trim()));
       }
     }
 
-    // search が空なら preFiltered をそのまま返す（ここが以前のバグ：s を返していた）
-    if (!search || search.trim() === '') return preFiltered;
+    // 検索フィルタ
+    let afterSearch: any[] = preFiltered;
+    if (search && search.trim() !== '') {
+      const q = search.trim().toLowerCase();
+      afterSearch = preFiltered.filter(r => {
+        if (view === 'checkout') {
+          const co = r as CheckoutRecord;
+          const fields = [
+            (co.gratitude ?? '').toLowerCase(),
+            (co.note ?? '').toLowerCase(),
+          ].join(' ');
+          return fields.includes(q);
+        } else {
+          const ci = r as CheckinRecord;
+          return ((ci.note ?? ci.text ?? '').toLowerCase()).includes(q);
+        }
+      });
+    }
+    // チェックイン表示時は本文が空のレコードを一覧から除外する
+    if (view === 'checkin') {
+      return afterSearch.filter((r: any) => {
+        const content = String(r.note ?? r.text ?? '').trim();
+        return content.length > 0;
+      });
+    }
 
-    const q = search.trim().toLowerCase();
-    return preFiltered.filter(r => {
-      if (view === 'checkout') {
-        const co = r as CheckoutRecord;
-        // 検索は表示されるテキスト領域（感謝/日記）を対象にする
-        const fields = [
-          (co.gratitude ?? '').toLowerCase(),
-          (co.note ?? '').toLowerCase(),
-        ].join(' ');
-        return fields.includes(q);
-      } else {
-        const ci = r as CheckinRecord;
-        return ((ci.note ?? ci.text ?? '').toLowerCase()).includes(q);
-      }
-    });
+    return afterSearch;
   }, [source, search, view, checkoutFilter]);
 
   const total = filtered.length;
@@ -220,14 +256,18 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                     </>
                   ) : (
                     <>
-                      {((r.note ?? r.text) && (r.note ?? r.text).trim()) ? (
-                        <div className="mt-3 flex items-start gap-3 min-w-0">
-                          <span className="inline-block text-xs font-semibold px-2 py-1 bg-green-100 text-green-700 rounded-full flex-shrink-0">チェックイン</span>
-                          <div className="text-sm text-gray-700 leading-relaxed break-words min-w-0">{r.note ?? r.text}</div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-400 mt-2">記録がありません。</div>
-                      )}
+                      {(() => {
+                        const content = String(r.note ?? r.text ?? '').trim();
+                        if (content.length === 0) {
+                          // チェックインでは本文がない場合は何も表示しない（レコード自体は filtered で除外済み）
+                          return null;
+                        }
+                        return (
+                          <div className="mt-3">
+                            <div className="text-sm text-gray-700 leading-relaxed break-words min-w-0">{content}</div>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
