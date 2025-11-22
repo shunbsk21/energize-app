@@ -495,6 +495,24 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                 </div>
             ) : (
                 <div className="bg-white p-8 rounded-xl shadow-md text-center">
+                    {/* 選択中の日付表示 + カレンダーボタン（診断結果がなくても常に表示） */}
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                        <div className="text-sm text-gray-600">
+                            選択日:
+                            <span className="ml-2 font-medium text-gray-800">
+                                {selectedDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsDatePickerOpen(true)}
+                            aria-label="カレンダーで日付を選択"
+                            className="inline-flex items-center justify-center p-2 w-9 h-9 bg-white border border-gray-200 rounded-md shadow-sm hover:bg-gray-50"
+                        >
+                            <CalendarIcon className="w-4 h-4 text-gray-600" />
+                        </button>
+                    </div>
+
                     <p className="text-lg font-semibold text-gray-800 mb-4 max-w-xl mx-auto leading-relaxed">
                         診断結果はありません。<br/>ぜひ診断してみてください！
                     </p>
@@ -547,15 +565,35 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                             .map(r => {
                                 const dateLabel = new Date(r.date + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
                                 return (
-                                    <button
+                                    <div
                                         key={r.date}
+                                        role="button"
+                                        tabIndex={0}
                                         onClick={() => setSelectedDate(new Date(r.date + 'T00:00:00'))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                setSelectedDate(new Date(r.date + 'T00:00:00'));
+                                            }
+                                        }}
                                         className="w-full text-left p-3 bg-white border border-gray-100 rounded-2xl hover:shadow-md transition flex items-center gap-4"
                                         aria-label={`過去診断 ${dateLabel}`}
                                     >
-                                        {/* 日付（幅を小さめにする） */}
-                                        <div className="w-[120px] flex-shrink-0">
+                                        {/* 日付（幅を小さめにする） + カレンダーボタン */}
+                                        <div className="w-[120px] flex-shrink-0 flex items-center gap-2">
                                             <div className="text-sm font-medium text-gray-800 truncate">{dateLabel}</div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedDate(new Date(r.date + 'T00:00:00'));
+                                                    setIsDatePickerOpen(true);
+                                                }}
+                                                aria-label={`カレンダーで ${dateLabel} を開く`}
+                                                className="p-2 rounded-md hover:bg-gray-100 inline-flex items-center justify-center"
+                                            >
+                                                <CalendarIcon className="w-4 h-4 text-gray-600" />
+                                            </button>
                                         </div>
 
                                         {/* スコア群（ラベルは上部ヘッダ、数値のみ） */}
@@ -576,7 +614,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                                 );
                                             })}
                                         </div>
-                                    </button>
+                                    </div>
                                 );
                             })
                     )}

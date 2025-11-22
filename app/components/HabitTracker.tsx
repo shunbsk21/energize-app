@@ -947,50 +947,65 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       if (!doneSet || doneSet.size === 0) return 0;
       const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
 
-      // start: habit.startDate か、done/skip の最も古い日（存在すれば）との早い方を起点にする
-      let start = new Date(habit.startDate);
-      start.setHours(0,0,0,0);
-      const combinedKeys = [...(Array.from(doneSet) as string[]), ...(Array.from(skipSet) as string[])];
-      if (combinedKeys.length > 0) {
-        const parsed = combinedKeys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
-        const earliest = parsed.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
-        if (earliest.getTime() < start.getTime()) start = earliest;
+      // safe parser for keys like "YYYY-MM-DD" or Date strings
+      const parseKeyToDate = (k: string): Date | null => {
+        const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
+        const m = String(k).match(ymd);
+        if (m) {
+          const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+          const dt = new Date(y, mo, d); dt.setHours(0,0,0,0); return dt;
+        }
+        const dt = new Date(k);
+        if (!Number.isNaN(dt.getTime())) { dt.setHours(0,0,0,0); return dt; }
+        return null;
+      };
+
+      // determine start = min(habit.startDate, earliest recorded done/skip) if available
+      const allKeys = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
+      const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
+      let startFromHabit = parseKeyToDate(habit.startDate) || null;
+      if (startFromHabit) startFromHabit.setHours(0,0,0,0);
+      let earliestRecorded: Date | null = null;
+      if (parsedDates.length > 0) {
+        earliestRecorded = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+        earliestRecorded.setHours(0,0,0,0);
+      }
+      let start: Date;
+      if (startFromHabit && earliestRecorded) {
+        start = (earliestRecorded.getTime() < startFromHabit.getTime()) ? earliestRecorded : startFromHabit;
+      } else if (startFromHabit) {
+        start = startFromHabit;
+      } else if (earliestRecorded) {
+        start = earliestRecorded;
+      } else {
+        start = new Date(); start.setHours(0,0,0,0);
       }
 
       const isScheduled = (date: Date) => {
         if (date < start) return false;
         switch (habit.frequencyType) {
           case 'daily': return true;
-          case 'weekly': {
-            const fv = habit.frequencyValue || [];
-            const dow = date.getDay(); // 0-6
-            return fv.includes(dow) || fv.includes(dow + 1);
-          }
-          case 'monthly': {
-            const fv = habit.frequencyValue || [];
-            return fv.includes(date.getDate());
-          }
+          case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());
+          case 'monthly': return (habit.frequencyValue || []).includes(date.getDate());
           default: return false;
         }
       };
 
-      // 直近の予定日を「今日を含めて」探す（今日完了があればカウントする）
+      // find latest scheduled date on or before today that has a record (done or skip)
       const today = new Date(); today.setHours(0,0,0,0);
-      let lastScheduledOnOrBeforeToday: Date | null = null;
+      let lastRecordedScheduled: Date | null = null;
       for (let d = new Date(today); d >= start; d.setDate(d.getDate() - 1)) {
-        if (isScheduled(d)) { lastScheduledOnOrBeforeToday = new Date(d); break; }
-      }
-      if (!lastScheduledOnOrBeforeToday) return 0;
-
-      const lastKey = lastScheduledOnOrBeforeToday.toLocaleDateString('sv-SE');
-      // 直近予定日が未記録（done / skip どちらでもない） -> streak 0
-      if (!(doneSet.has(lastKey) || skipSet.has(lastKey))) return 0;
-
-      // 直近予定日を基点に遡る（done は +1、skip は継続だがカウントしない）
-      let streak = 0;
-      for (let d = new Date(lastScheduledOnOrBeforeToday); d >= start; d.setDate(d.getDate() - 1)) {
         if (!isScheduled(d)) continue;
-        const key = d.toLocaleDateString('sv-SE');
+        const k = d.toLocaleDateString('sv-SE');
+        if (doneSet.has(k) || skipSet.has(k)) { lastRecordedScheduled = new Date(d); break; }
+      }
+      if (!lastRecordedScheduled) return 0;
+
+      // count streak backwards from that recorded scheduled date (done -> +1, skip -> continue)
+      let streak = 0;
+      for (let cur = new Date(lastRecordedScheduled); cur >= start; cur.setDate(cur.getDate() - 1)) {
+        if (!isScheduled(cur)) continue;
+        const key = cur.toLocaleDateString('sv-SE');
         if (doneSet.has(key)) { streak++; continue; }
         if (skipSet.has(key)) { continue; }
         break;

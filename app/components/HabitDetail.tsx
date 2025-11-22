@@ -74,16 +74,26 @@ const calculateLongestStreak = (habit: Habit): number => {
     return null;
   };
 
-  // start: habit.startDate or earliest among done/skip (whichever is earlier)
-  let start = parseKeyToDate(habit.startDate) || new Date(habit.startDate);
-  start.setHours(0,0,0,0);
-
-  // ensure we have a string[] so parseKeyToDate accepts the items
+  // start: habit.startDate と done/skip の最古日のうち、より過去側（min）を起点にする
   const allKeys = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
   const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
+  let startFromHabit = parseKeyToDate(habit.startDate) || null;
+  if (startFromHabit) startFromHabit.setHours(0,0,0,0);
+  let earliestRecorded: Date | null = null;
   if (parsedDates.length > 0) {
-    const earliest = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
-    if (earliest.getTime() < start.getTime()) start = earliest;
+    earliestRecorded = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+    earliestRecorded.setHours(0,0,0,0);
+  }
+  let start: Date;
+  if (startFromHabit && earliestRecorded) {
+    start = (earliestRecorded.getTime() < startFromHabit.getTime()) ? earliestRecorded : startFromHabit;
+  } else if (startFromHabit) {
+    start = startFromHabit;
+  } else if (earliestRecorded) {
+    start = earliestRecorded;
+  } else {
+    start = new Date();
+    start.setHours(0,0,0,0);
   }
 
   const end = new Date(); end.setHours(0,0,0,0);
@@ -95,7 +105,7 @@ const calculateLongestStreak = (habit: Habit): number => {
       case 'weekly': {
         const fv = habit.frequencyValue || [];
         const dow = date.getDay(); // 0-6
-        return fv.includes(dow) || fv.includes(dow + 1);
+        return fv.includes(dow);
       }
       case 'monthly': {
         const fv = habit.frequencyValue || [];
@@ -118,6 +128,7 @@ const calculateLongestStreak = (habit: Habit): number => {
 
   for (let i = scheduledDates.length - 1; i >= 0; i--) {
     const d = scheduledDates[i];
+    // 日付キーを定義（done/skip は normalizeKey 相当の "sv-SE" フォーマットで保持している）
     const key = d.toLocaleDateString('sv-SE');
     if (doneSet.has(key) || skipSet.has(key)) {
       inRun = true;
@@ -140,16 +151,41 @@ const calculateCurrentStreak = (habit: Habit): number => {
   if (!doneSet || doneSet.size === 0) return 0;
 
   const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
-  // start: habit.startDate か、done/skip の最も古い日（存在すれば）との早い方を起点にする
-  let start = new Date(habit.startDate);
-  start.setHours(0,0,0,0);
-  const earliestFromSetsCurr = (() => {
-    const keys = [...Array.from(doneSet) as string[], ...Array.from(skipSet) as string[]] as string[];
-    if (keys.length === 0) return null;
-    const dates = keys.map(k => { const dt = new Date(k); dt.setHours(0,0,0,0); return dt; });
-    return dates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
-  })();
-  if (earliestFromSetsCurr && earliestFromSetsCurr.getTime() < start.getTime()) start = earliestFromSetsCurr;
+  // start: habit.startDate (正規化) か、done/skip の最古日、最終的に今日より前の最小日を起点にする
+  const parseKeyToDate = (k: string): Date | null => {
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
+    const m = String(k).match(ymd);
+    if (m) {
+      const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+      const dt = new Date(y, mo, d);
+      dt.setHours(0,0,0,0);
+      return dt;
+    }
+    const dt = new Date(k);
+    if (!Number.isNaN(dt.getTime())) { dt.setHours(0,0,0,0); return dt; }
+    return null;
+  };
+  const allKeysCurr = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
+  const parsedCurr = allKeysCurr.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
+  // start: habit.startDate と done/skip の最古日のうち、より過去側（min）を起点にする
+  let startFromHabit = parseKeyToDate(habit.startDate) || null;
+  if (startFromHabit) startFromHabit.setHours(0,0,0,0);
+  let earliestRecordedCurr: Date | null = null;
+  if (parsedCurr.length > 0) {
+    earliestRecordedCurr = parsedCurr.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
+    earliestRecordedCurr.setHours(0,0,0,0);
+  }
+  let start: Date;
+  if (startFromHabit && earliestRecordedCurr) {
+    start = (earliestRecordedCurr.getTime() < startFromHabit.getTime()) ? earliestRecordedCurr : startFromHabit;
+  } else if (startFromHabit) {
+    start = startFromHabit;
+  } else if (earliestRecordedCurr) {
+    start = earliestRecordedCurr;
+  } else {
+    start = new Date();
+    start.setHours(0,0,0,0);
+  }
 
   const isScheduled = (date: Date) => {
     if (date < start) return false;
@@ -161,22 +197,19 @@ const calculateCurrentStreak = (habit: Habit): number => {
     }
   };
 
-  // 直近の予定日を「今日を含めて」探す（今日完了があればカウントする）
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  let lastScheduledOnOrBeforeToday: Date | null = null;
+  // 直近で「実際に記録（done or skip）されている予定日」を探す（今日が未実施でも直近の完了日から遡る）
+  const today = new Date(); today.setHours(0,0,0,0);
+  let lastRecordedScheduled: Date | null = null;
   for (let d = new Date(today); d >= start; d.setDate(d.getDate() - 1)) {
-    if (isScheduled(d)) { lastScheduledOnOrBeforeToday = new Date(d); break; }
+    if (!isScheduled(d)) continue;
+    const k = d.toLocaleDateString('sv-SE');
+    if (doneSet.has(k) || skipSet.has(k)) { lastRecordedScheduled = new Date(d); break; }
   }
-  if (!lastScheduledOnOrBeforeToday) return 0;
+  if (!lastRecordedScheduled) return 0;
 
-  const lastKey = lastScheduledOnOrBeforeToday.toLocaleDateString('sv-SE');
-  // 直近予定日が未記録（done でも skip でもない）なら current streak は 0
-  if (!(doneSet.has(lastKey) || skipSet.has(lastKey))) return 0;
-
-  // 直近予定日を起点に遡って連続日数を数える（skip は継続扱いだがカウントしない）
+  // lastRecordedScheduled を基点に遡る（done は +1、skip は継続だがカウントしない）
   let streak = 0;
-  for (let cur = new Date(lastScheduledOnOrBeforeToday); cur >= start; cur.setDate(cur.getDate() - 1)) {
+  for (let cur = new Date(lastRecordedScheduled); cur >= start; cur.setDate(cur.getDate() - 1)) {
     if (!isScheduled(cur)) continue;
     const key = cur.toLocaleDateString('sv-SE');
     if (doneSet.has(key)) { streak++; continue; }
@@ -234,7 +267,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
     });
   }, [habit, isEditing]);
 
-  const completedDatesSet = useMemo(() => new Set(habit.completedDates || []), [habit.completedDates]);
+  const completedDatesSet = useMemo(() => new Set((habit.completedDates || []).map(normalizeKey)), [habit.completedDates]);
 
   const changeMonth = (amount: number) => {
     setDisplayDate(prev => {
@@ -249,14 +282,14 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
   const longestStreak = useMemo(() => calculateLongestStreak(habit), [habit]);
 
   const frequencyText = useMemo(() => {
-    switch(habit.frequencyType) {
+    switch (habit.frequencyType) {
       case 'daily': return '毎日';
       case 'weekly':
-        if(!habit.frequencyValue || habit.frequencyValue.length === 0) return '週次（曜日未設定）';
-        return `毎週${habit.frequencyValue.map(d => WEEK_DAYS[d]).join('、')}曜日`;
+        if (!habit.frequencyValue || habit.frequencyValue.length === 0) return '毎週：曜日未設定';
+        return `毎週：${habit.frequencyValue.map(d => WEEK_DAYS[d]).join('、')}`;
       case 'monthly':
-        if(!habit.frequencyValue || habit.frequencyValue.length === 0) return '月次（日付未設定）';
-        return `毎月${habit.frequencyValue.join('、')}日`;
+        if (!habit.frequencyValue || habit.frequencyValue.length === 0) return '月次：日付未設定';
+        return `月次：${habit.frequencyValue.join(',')}`;
       default: return '頻度未設定';
     }
   }, [habit.frequencyType, habit.frequencyValue]);
@@ -453,19 +486,31 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedHabit: Habit = {
+    // undefined を送らないために条件付きでフィールドを追加/削除する
+    const base: any = {
       ...habit,
       name: formData.name,
       startDate: formData.startDate,
       frequencyType: formData.frequencyType,
       frequencyValue: formData.frequencyValue,
       type: formData.type,
-      target: formData.type === 'amount' ? formData.target : undefined,
-      unit: formData.type === 'amount' ? formData.unit : undefined,
-      completedDates: habit.completedDates ?? [],
-      completedAmounts: formData.type === 'amount' ? (habit.completedAmounts ?? {}) : undefined,
-      skippedDates: formData.skippedDates ?? (habit.skippedDates ?? [])
+      skippedDates: formData.skippedDates ?? (habit.skippedDates ?? []),
+      // completedDates は常に配列として保持（binary タイプで使う）
+      completedDates: habit.completedDates ?? []
     };
+
+    if (formData.type === 'amount') {
+      base.target = formData.target ?? 0;
+      base.unit = formData.unit ?? '';
+      base.completedAmounts = habit.completedAmounts ?? {};
+    } else {
+      // binary タイプなら amount 関連フィールドは削除して undefined を送らない
+      delete base.target;
+      delete base.unit;
+      delete base.completedAmounts;
+    }
+
+    const updatedHabit: Habit = base;
     onUpdate(updatedHabit);
     setIsEditing(false);
   };
