@@ -31,24 +31,29 @@ const defaultPriority: TaskItem['priority'] = 'medium';
 const priorityLabel = (p?: string) => (p === 'high' ? '高' : p === 'medium' ? '中' : p === 'low' ? '低' : '未設定');
 const prioritySortValue = (p?: TaskItem['priority']) => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
 
+const toLocalISO = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+};
+
 const formatMMDD = (iso?: string) => {
   if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${mm}/${dd}`;
-  } catch {
-    return iso;
+  // iso が YYYY-MM-DD 形式と仮定してパース（new Date(iso) のタイムゾーン落差を回避）
+  const parts = iso.split('-');
+  if (parts.length >= 3) {
+    return `${parts[1]}/${parts[2]}`;
   }
+  return iso;
 };
 
 // --- Simple CalendarPicker (no external deps) ---
 const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => void }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const [openUpwards, setOpenUpwards] = useState(false);
-  const [viewDate, setViewDate] = useState(() => (value ? new Date(value) : new Date()));
+  // value (YYYY-MM-DD) をローカル日付として扱う（new Date('YYYY-MM-DD') の UTC問題を回避）
+  const [viewDate, setViewDate] = useState(() => (value ? new Date(`${value}T00:00:00`) : new Date()));
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -75,10 +80,12 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
 
   const selectDay = (d: number) => {
     const sel = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
-    const iso = sel.toISOString().slice(0, 10);
+    const iso = toLocalISO(sel); // ローカル ISO を返す
     onChange(iso);
     setOpen(false);
   };
+
+  const todayIso = toLocalISO(new Date());
 
   return (
     <div className="relative inline-block" ref={wrapperRef}>
@@ -112,13 +119,15 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
             {Array.from({ length: startDay }).map((_, i) => <div key={`pad-${i}`} />)}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
-              const iso = new Date(viewDate.getFullYear(), viewDate.getMonth(), day).toISOString().slice(0,10);
+              const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+              const iso = toLocalISO(cellDate);
               const isSelected = value === iso;
+              const isToday = iso === todayIso;
               return (
                 <button
                   key={day}
                   onClick={() => selectDay(day)}
-                  className={`w-8 h-8 flex items-center justify-center rounded ${isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100' }`}
+                  className={`w-8 h-8 flex items-center justify-center rounded ${isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100' } ${isToday && !isSelected ? 'ring-2 ring-indigo-200' : ''}`}
                 >
                   {day}
                 </button>
@@ -196,16 +205,35 @@ const Tasks: React.FC = () => {
     const unsub = onSnapshot(q, snap => {
       const list: TaskItem[] = snap.docs.map(d => {
         const data = d.data() as any;
+        // dueDate が Firestore Timestamp（toDate がある）や ISO 文字列で入るケースに対応して
+        // 常にローカル日付文字列 (YYYY-MM-DD) を生成する
+        let dueDateStr: string | undefined = undefined;
+        if (data.dueDate) {
+          if (typeof data.dueDate === 'string') {
+            // もし "YYYY-MM-DD" ならそのまま、ISO の場合は Date を経由してローカル日付に変換
+            if (/^\d{4}-\d{2}-\d{2}$/.test(data.dueDate)) dueDateStr = data.dueDate;
+            else {
+              try { dueDateStr = toLocalISO(new Date(data.dueDate)); } catch { dueDateStr = undefined; }
+            }
+          } else if (typeof data.dueDate.toDate === 'function') {
+            try { dueDateStr = toLocalISO(data.dueDate.toDate()); } catch { dueDateStr = undefined; }
+          }
+        }
+
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (typeof data.createdAt === 'string' ? data.createdAt : undefined);
+        const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (typeof data.updatedAt === 'string' ? data.updatedAt : undefined);
+        const completedAt = data.completedAt?.toDate ? data.completedAt.toDate().toISOString() : (typeof data.completedAt === 'string' ? data.completedAt : undefined);
+
         return {
           id: d.id,
           title: data.title ?? '',
           details: data.details ?? '',
-          dueDate: data.dueDate ?? undefined,
+          dueDate: dueDateStr,
           priority: data.priority ?? undefined,
           done: !!data.done,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ?? undefined),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ?? undefined),
-          completedAt: data.completedAt?.toDate ? data.completedAt.toDate().toISOString() : (data.completedAt ?? undefined),
+          createdAt,
+          updatedAt,
+          completedAt,
         };
       });
       setTasks(list);

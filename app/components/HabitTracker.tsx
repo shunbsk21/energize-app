@@ -1366,28 +1366,28 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       <div ref={fabRef} className="fixed z-40 right-4 bottom-20 flex flex-col items-end" aria-hidden={!fabOpen}>
         {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
         {fabOpen && (
-          <div className="flex flex-col items-center space-y-3 mb-2">
-            <div className="flex flex-col items-center">
-              <button
-                onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
-                className="w-16 h-16 rounded-full bg-amber-100 shadow-md flex items-center justify-center text-amber-900 font-semibold text-sm"
-                aria-label="タスクを追加"
-                title="タスクを追加"
-              >
-                タスク
-              </button>
-            </div>
+          <div className="flex flex-col items-end space-y-3 mb-2">
+            {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
+            <button
+              onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+              aria-label="タスクを追加"
+              title="タスクを追加"
+            >
+              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">✎</span>
+              <span className="text-sm font-medium text-gray-800">タスクを追加</span>
+            </button>
 
-            <div className="flex flex-col items-center">
-              <button
-                onClick={() => { setIsAddModalOpen(true); setFabOpen(false); }}
-                className="w-16 h-16 rounded-full bg-indigo-100 shadow-md flex items-center justify-center text-indigo-700 font-semibold text-sm"
-                aria-label="習慣を追加"
-                title="習慣を追加"
-              >
-                習慣
-              </button>
-            </div>
+            {/* 習慣ボタン：全体のトーンに合わせたデザイン */}
+            <button
+              onClick={() => { setIsAddModalOpen(true); setFabOpen(false); }}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+              aria-label="習慣を追加"
+              title="習慣を追加"
+            >
+              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-50 text-indigo-600 font-semibold">＋</span>
+              <span className="text-sm font-medium text-gray-800">習慣を追加</span>
+            </button>
           </div>
         )}
 
@@ -1401,7 +1401,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
           <PlusIcon className="w-5 h-5" />
         </button>
       </div>
-      
+
       {/* 習慣追加モーダル */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsAddModalOpen(false)}>
@@ -1707,7 +1707,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
           {isDiagnosisDay && (
             <div
               onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
-              className={`flex items-center p-4 rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
+              className={`flex items-center p-4 shadow-sm rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
             >
               {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
               <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
@@ -1763,7 +1763,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
 
         {/* 既存: 習慣リスト（タスクの下） */}
-        <div className="space-y-3">
+        <div className="space-y-2">
             {sortedScheduledHabits.length > 0 ? (
                 sortedScheduledHabits.map(habit => {
                   // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
@@ -1777,7 +1777,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                     <div 
                         key={habit.id} 
                         onClick={() => setSelectedHabit(habit)}
-                        className={`flex items-center p-3 rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
+                        className={`flex items-center p-3 shadow-sm rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
                     >
                         <input
                           type="checkbox"
