@@ -1,5 +1,7 @@
 // ...existing code...
 import React, { useEffect, useMemo, useState } from 'react';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../lib/firebase'; // <- adjust path if necessary
 
 interface NoteItem {
   id: string;
@@ -12,25 +14,15 @@ interface NoteItem {
   deleted?: boolean; // logical delete
 }
 
-const STORAGE_KEY = 'energize_notes_v1';
-
 const defaultNow = () => new Date().toISOString();
 
-const parseNotesFromStorage = (): NoteItem[] => {
+// Helper: get current uid (you may also pass uid as prop)
+const getCurrentUid = () => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as NoteItem[];
-    return Array.isArray(parsed) ? parsed : [];
+    return auth?.currentUser?.uid ?? null;
   } catch {
-    return [];
+    return null;
   }
-};
-
-const saveNotesToStorage = (notes: NoteItem[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-  } catch {}
 };
 
 const Notes: React.FC<{
@@ -38,19 +30,53 @@ const Notes: React.FC<{
   onAddNote?: (n: Omit<NoteItem, 'id'|'createdAt'|'updatedAt'>) => void;
   onUpdateNote?: (n: NoteItem) => void;
 }> = ({ notes: initialNotes, onAddNote, onUpdateNote }) => {
-  const [notes, setNotes] = useState<NoteItem[]>(() => {
-    if (initialNotes && initialNotes.length) return initialNotes;
-    if (typeof window !== 'undefined') return parseNotesFromStorage();
-    return [];
-  });
+  // Firestore-driven: start empty and rely on snapshot listener (if uid present)
+  const [notes, setNotes] = useState<NoteItem[]>(initialNotes && initialNotes.length ? initialNotes : []);
 
-  const [query, setQuery] = useState('');
+  // Subscribe to Firestore notes; require authenticated uid
+  useEffect(() => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      // no subscription if not configured / not logged in
+      return;
+    }
+    const q = query(collection(db, 'users', uid, 'notes'), orderBy('updatedAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      const list: NoteItem[] = snap.docs.map(d => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          title: data.title ?? undefined,
+          body: data.body || '',
+          tags: data.tags || [],
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ?? defaultNow()),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ?? undefined),
+          archived: !!data.archived,
+          deleted: !!data.deleted,
+        };
+      });
+      setNotes(list);
+    }, err => {
+      console.error('Notes snapshot error:', err);
+    });
+    return () => unsub();
+  }, []);
+
+  const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [viewArchived, setViewArchived] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeNote, setActiveNote] = useState<NoteItem | null>(null);
 
-  useEffect(() => { saveNotesToStorage(notes); }, [notes]);
+  // UI states
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  // actionMenuNote: when set, show centered action modal with Edit / Archive / Delete
+  const [actionMenuNote, setActionMenuNote] = useState<NoteItem | null>(null);
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [editingIsNew, setEditingIsNew] = useState(false);
+  const [isFullscreenEditOpen, setIsFullscreenEditOpen] = useState(false);
+
+  const [confirmAction, setConfirmAction] = useState<{ type: 'archive'|'delete', note: NoteItem } | null>(null);
 
   // derived tag list from all non-deleted notes
   const allTags = useMemo(() => {
@@ -67,83 +93,129 @@ const Notes: React.FC<{
       .filter(n => !n.deleted)
       .filter(n => (viewArchived ? !!n.archived : !n.archived))
       .filter(n => {
-        if (!query.trim() && !selectedTag) return true;
-        const tq = query.trim().toLowerCase();
+        if (!search.trim() && !selectedTag) return true;
+        const tq = search.trim().toLowerCase();
         const inText = (!tq) || ((n.title || '').toLowerCase().includes(tq) || n.body.toLowerCase().includes(tq));
         const inTag = !selectedTag || (n.tags || []).includes(selectedTag);
         return inText && inTag;
       })
       .sort((a,b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
-  }, [notes, query, selectedTag, viewArchived]);
+  }, [notes, search, selectedTag, viewArchived]);
 
   // helpers
-  const createNote = (title?: string, body: string, tags: string[]) => {
-    const n: NoteItem = { id: String(Date.now()), title: title || undefined, body, tags, createdAt: defaultNow(), updatedAt: defaultNow(), archived: false, deleted: false };
-    setNotes(prev => { const next = [n, ...prev]; saveNotesToStorage(next); return next; });
-    onAddNote?.({ title: n.title, body: n.body, tags: n.tags, archived: n.archived, deleted: n.deleted });
-    setIsCreateOpen(false);
-    setActiveNote(n);
+  const createNote = async (title: string | undefined, body: string, tags: string[]) => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      console.error('createNote: no firestore or not logged in');
+      return;
+    }
+    const payload = { title: title || null, body, tags, archived: false, deleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    try {
+      const ref = await addDoc(collection(db, 'users', uid, 'notes'), payload);
+      // snapshot will sync and setNotes
+      const createdNote: NoteItem = { id: ref.id, title: title || undefined, body, tags, createdAt: defaultNow(), updatedAt: defaultNow(), archived: false, deleted: false };
+      setIsCreateOpen(false);
+      setEditingNote(createdNote);
+      setIsFullscreenEditOpen(true);
+      onAddNote?.({ title: createdNote.title, body: createdNote.body, tags: createdNote.tags, archived: false, deleted: false });
+    } catch (err) {
+      console.error('createNote error:', err);
+    }
   };
 
-  const updateNote = (updated: NoteItem) => {
+  // updateNote: allow caller to avoid setting activeNote (fullscreen saves should not open small detail modal)
+  const updateNote = async (updated: NoteItem, opts?: { setActive?: boolean }) => {
     updated.updatedAt = defaultNow();
-    setNotes(prev => {
-      const next = prev.map(p => p.id === updated.id ? updated : p);
-      saveNotesToStorage(next);
-      return next;
-    });
-    onUpdateNote?.(updated);
-    setActiveNote(updated);
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      console.error('updateNote: no firestore or not logged in');
+      return;
+    }
+    try {
+      const ref = doc(db, 'users', uid, 'notes', updated.id);
+      await updateDoc(ref, { title: updated.title ?? null, body: updated.body, tags: updated.tags || [], archived: !!updated.archived, deleted: !!updated.deleted, updatedAt: serverTimestamp() });
+      onUpdateNote?.(updated);
+      if (opts?.setActive !== false) setActiveNote(updated);
+    } catch (err) {
+      console.error('updateNote error:', err);
+    }
+  };
+  
+  const archiveNote = async (id: string) => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      console.error('archiveNote: no firestore or not logged in');
+      return;
+    }
+    try {
+      const ref = doc(db, 'users', uid, 'notes', id);
+      await updateDoc(ref, { archived: true, updatedAt: serverTimestamp() });
+      setConfirmAction(null);
+    } catch (err) {
+      console.error('archiveNote error:', err);
+    }
   };
 
-  const archiveNote = (id: string) => {
-    setNotes(prev => {
-      const next = prev.map(n => n.id === id ? {...n, archived: true, updatedAt: defaultNow()} : n);
-      saveNotesToStorage(next);
-      return next;
-    });
-    if (activeNote && activeNote.id === id) setActiveNote(prev => prev ? {...prev, archived: true} : prev);
+  const unarchiveNote = async (id: string) => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      console.error('unarchiveNote: no firestore or not logged in');
+      return;
+    }
+    try {
+      const ref = doc(db, 'users', uid, 'notes', id);
+      await updateDoc(ref, { archived: false, updatedAt: serverTimestamp() });
+      setConfirmAction(null);
+    } catch (err) {
+      console.error('unarchiveNote error:', err);
+    }
   };
 
-  const unarchiveNote = (id: string) => {
-    setNotes(prev => {
-      const next = prev.map(n => n.id === id ? {...n, archived: false, updatedAt: defaultNow()} : n);
-      saveNotesToStorage(next);
-      return next;
-    });
-    if (activeNote && activeNote.id === id) setActiveNote(prev => prev ? {...prev, archived: false} : prev);
+  const logicalDeleteNote = async (id: string) => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      console.error('logicalDeleteNote: no firestore or not logged in');
+      return;
+    }
+    try {
+      const ref = doc(db, 'users', uid, 'notes', id);
+      await updateDoc(ref, { deleted: true, updatedAt: serverTimestamp() });
+      setConfirmAction(null);
+    } catch (err) {
+      console.error('logicalDeleteNote error:', err);
+    }
   };
 
-  const logicalDeleteNote = (id: string) => {
-    setNotes(prev => {
-      const next = prev.map(n => n.id === id ? {...n, deleted: true, updatedAt: defaultNow()} : n);
-      saveNotesToStorage(next);
-      return next;
-    });
-    if (activeNote && activeNote.id === id) setActiveNote(null);
-  };
+  // UI helpers
+  const openFullscreenEditor = (note: NoteItem) => { setEditingNote(note); setIsFullscreenEditOpen(true); setActionMenuNote(null); };
 
-  // UI components for modals and tag parsing
   const parseTagsInput = (s: string) => {
     return s.split(',').map(t => t.trim()).filter(Boolean).map(t => t.replace(/\s+/g,'-').toLowerCase());
   };
 
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between mb-4 gap-3">
+      {/* header: title left, actions right (compact) */}
+      <div className="flex items-start justify-between mb-3">
         <h2 className="text-xl font-bold">メモ</h2>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-md bg-gray-100 p-1">
-            <button onClick={() => { setViewArchived(false); setSelectedTag(null); setQuery(''); }} className={`px-3 py-1 text-sm rounded ${!viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>Notes</button>
-            <button onClick={() => { setViewArchived(true); setSelectedTag(null); setQuery(''); }} className={`px-3 py-1 text-sm rounded ${viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>アーカイブ</button>
+            <button onClick={() => { setViewArchived(false); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${!viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>Notes</button>
+            <button onClick={() => { setViewArchived(true); setSelectedTag(null); setSearch(''); }} className={`px-3 py-1 text-sm rounded ${viewArchived ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}>アーカイブ</button>
           </div>
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="検索（タイトル・本文）" className="p-2 border rounded w-full" />
-        <div className="col-span-2 sm:col-span-2 flex gap-2 items-center">
-          <div className="text-sm text-gray-600 mr-2">タグ:</div>
+      {/* search + tags */}
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="検索（タイトル・本文）"
+          className="p-2 border border-gray-200 rounded-full w-full focus:outline-none focus:ring-1 focus:ring-indigo-200"
+        />
+        <div className="col-span-2 sm:col-span-2 flex gap-2 items-center overflow-x-auto">
+          <div className="text-sm text-gray-600 mr-2 whitespace-nowrap">タグ:</div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setSelectedTag(null)} className={`px-2 py-1 text-sm rounded ${selectedTag ? 'bg-gray-100 text-gray-700' : 'bg-green-50 text-green-700 font-semibold'}`}>すべて</button>
             {allTags.map(tag => (
@@ -159,73 +231,161 @@ const Notes: React.FC<{
         {visibleNotes.length === 0 ? (
           <p className="text-gray-500">メモがありません。</p>
         ) : (
-          visibleNotes.map(n => (
-            <button key={n.id} onClick={() => setActiveNote(n)} className="w-full text-left p-3 bg-white rounded shadow-sm hover:shadow-md flex flex-col">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className={`font-medium ${n.archived ? 'text-gray-400' : 'text-gray-800'}`}>{n.title || '（無題）'}</div>
-                  <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</div>
+          visibleNotes.map(n => {
+            const isExpanded = expandedNoteId === n.id;
+            return (
+              <div key={n.id} className="relative w-full p-3 bg-white rounded shadow-sm hover:shadow-md">
+                {/* top row: title and menu */}
+                <div className="flex items-start justify-between">
+                  <div className={`flex-1 text-left ${n.archived ? 'text-gray-400' : 'text-gray-800'} font-medium`}>{n.title || '（無題）'}</div>
+                  <div className="ml-3">
+                    <button onClick={() => setActionMenuNote(n)} className="px-2 py-1 text-gray-500 hover:text-gray-700" aria-label="メニュー">⋯</button>
+                  </div>
                 </div>
-                <div className="ml-3 text-sm">
-                  {n.tags.map(t => <span key={t} className="inline-block bg-gray-100 text-gray-700 px-2 py-0.5 rounded ml-1">#{t}</span>)}
+
+                {/* tags */}
+                <div className="mt-2">
+                  {n.tags.map(t => <span key={t} className="inline-block bg-gray-100 text-gray-700 px-2 py-0.5 rounded mr-1 text-xs">#{t}</span>)}
+                </div>
+
+                {/* body: preserve line breaks, clamp to 5 lines unless expanded */}
+                <div className="mt-3 text-sm text-gray-700" style={ isExpanded ? { whiteSpace: 'pre-wrap' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical' as any, WebkitLineClamp: 5, overflow: 'hidden', whiteSpace: 'pre-wrap' } }>
+                  {n.body}
+                </div>
+
+                {/* bottom row: date left small, "詳細を見る" or "閉じる" right */}
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleString()}</div>
+                  <div>
+                    {!isExpanded ? (
+                      <button onClick={() => setExpandedNoteId(n.id)} className="text-sm text-indigo-600">詳細を見る</button>
+                    ) : (
+                      <button onClick={() => setExpandedNoteId(null)} className="text-sm text-gray-600">閉じる</button>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="mt-2 text-sm text-gray-600 line-clamp-3">{n.body}</div>
-            </button>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* Floating + button */}
-      <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
+      {/* Floating + ボタン: フル画面作成を開く */}
+      <button
+        onClick={() => {
+          const draft: NoteItem = { id: '', title: undefined, body: '', tags: [], createdAt: defaultNow(), updatedAt: defaultNow(), archived: false, deleted: false };
+          setEditingNote(draft);
+          setEditingIsNew(true);
+          setIsFullscreenEditOpen(true);
+          setActionMenuNote(null);
+        }}
+        className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700"
+      >
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
+      
+      {/* Confirm modal (centered) for menu actions: archive / delete */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 sm:px-6 lg:px-8" onClick={() => setConfirmAction(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 mx-auto" onClick={e => e.stopPropagation()}>
+            <div className="text-lg font-medium mb-2">{confirmAction.note.title || '（無題）'}</div>
+            <div className="text-sm text-gray-600 mb-4">
+              {confirmAction.type === 'archive' && (confirmAction.note.archived ? 'アーカイブを解除しますか？' : 'このメモをアーカイブしますか？')}
+              {confirmAction.type === 'delete' && 'このメモを削除しますか？（画面からは非表示になります）'}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmAction(null)} className="px-3 py-2 bg-gray-100 rounded">キャンセル</button>
+              {confirmAction.type === 'archive' && (
+                <button onClick={() => { confirmAction.note.archived ? unarchiveNote(confirmAction.note.id) : archiveNote(confirmAction.note.id); setConfirmAction(null); }} className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded">
+                  {confirmAction.note.archived ? 'アーカイブ解除' : 'アーカイブ'}
+                </button>
+              )}
+              {confirmAction.type === 'delete' && (
+                <button onClick={() => { logicalDeleteNote(confirmAction.note.id); setConfirmAction(null); }} className="px-3 py-2 bg-red-50 text-red-600 rounded">削除</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Create Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setIsCreateOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-3">新しいメモ</h3>
-            <NoteEditor
-              initial={{ title: '', body: '', tags: [] }}
-              onCancel={() => setIsCreateOpen(false)}
-              onSave={(t,b,ts) => createNote(t,b,ts)}
+      {/* Action modal (centered) that shows Edit / Archive / Delete choices */}
+      {actionMenuNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setActionMenuNote(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="text-lg font-medium mb-3">{actionMenuNote.title || '（無題）'}</div>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => { openFullscreenEditor(actionMenuNote); }} className="w-full px-4 py-3 bg-white border rounded text-left">編集する</button>
+              <button onClick={() => { setConfirmAction({ type: 'archive', note: actionMenuNote }); setActionMenuNote(null); }} className="w-full px-4 py-3 bg-white border rounded text-left">
+                {actionMenuNote.archived ? 'アーカイブ解除' : 'アーカイブ'}
+              </button>
+              <button onClick={() => { setConfirmAction({ type: 'delete', note: actionMenuNote }); setActionMenuNote(null); }} className="w-full px-4 py-3 bg-white border rounded text-left text-red-600">削除</button>
+              <button onClick={() => setActionMenuNote(null)} className="mt-3 w-full px-4 py-2 bg-gray-100 rounded">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen editor for "編集する" (LINE風のフルスクリーン編集) */}
+      {isFullscreenEditOpen && editingNote && (
+        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+          {/* header: close | title | save */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <button
+              onClick={() => { setEditingNote(null); setIsFullscreenEditOpen(false); }}
+              className="text-gray-600 px-2 py-1"
+            >
+              閉じる
+            </button>
+            <div className="font-semibold">メモを編集</div>
+            <button
+              onClick={() => {
+                // save current editing draft stored in local state below via form submit
+                const el = document.getElementById(`fs-editor-form-${editingNote.id}`) as HTMLFormElement | null;
+                if (el) el.requestSubmit();
+              }}
+              className="text-white bg-indigo-600 px-4 py-2 rounded"
+            >
+              保存する
+            </button>
+          </div>
+
+          {/* body: inline form so header save can trigger submit */}
+          <div className="p-4 overflow-auto flex-1">
+            <FullscreenEditorForm
+              key={editingNote.id || 'new'}
+              note={editingNote}
+              onCancel={() => { setEditingNote(null); setIsFullscreenEditOpen(false); setEditingIsNew(false); }}
+              onSave={async (title, body, tags) => {
+                // 新規 or 更新 を切り分け
+                const uid = getCurrentUid();
+                if (editingIsNew) {
+                  if (!db || !uid) { console.error('create: not logged in / db missing'); return; }
+                  try {
+                    const payload = { title: title || null, body, tags, archived: false, deleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+                    const ref = await addDoc(collection(db, 'users', uid, 'notes'), payload);
+                    // Firestore snapshot will sync the created note; just close editor
+                    setEditingIsNew(false);
+                    setIsFullscreenEditOpen(false);
+                    setEditingNote(null);
+                    onAddNote?.({ title: title || undefined, body, tags, archived: false, deleted: false });
+                  } catch (err) {
+                    console.error('create-from-fullscreen error:', err);
+                  }
+                } else {
+                  if (!editingNote) return;
+                  const updated: NoteItem = { ...editingNote, title: title || undefined, body, tags, updatedAt: defaultNow() };
+                  await updateNote(updated, { setActive: false });
+                  setIsFullscreenEditOpen(false);
+                  setEditingNote(null);
+                }
+              }}
               parseTagsInput={parseTagsInput}
             />
           </div>
         </div>
       )}
 
-      {/* Detail / Edit Modal */}
-      {activeNote && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setActiveNote(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{activeNote.title || '（無題）'}</h3>
-              <div className="text-sm text-gray-500">{new Date(activeNote.createdAt).toLocaleString()}</div>
-            </div>
-
-            <NoteEditor
-              initial={activeNote}
-              onCancel={() => setActiveNote(null)}
-              onSave={(title, body, tags) => updateNote({...activeNote, title: title || undefined, body, tags})}
-              parseTagsInput={parseTagsInput}
-            />
-
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex gap-2">
-                {!activeNote.archived ? (
-                  <button onClick={() => archiveNote(activeNote.id)} className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded">アーカイブ</button>
-                ) : (
-                  <button onClick={() => unarchiveNote(activeNote.id)} className="px-3 py-2 bg-green-100 text-green-700 rounded">アーカイブ解除</button>
-                )}
-                <button onClick={() => logicalDeleteNote(activeNote.id)} className="px-3 py-2 bg-red-50 text-red-600 rounded">削除</button>
-              </div>
-              <button onClick={() => setActiveNote(null)} className="px-4 py-2 bg-gray-100 rounded">閉じる</button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 };
@@ -249,15 +409,48 @@ const NoteEditor: React.FC<{
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, parseTagsInput(tagsInput)); }} className="space-y-3">
-      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border rounded" />
-      <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" rows={8} className="w-full p-2 border rounded" />
-      <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="タグ（カンマ区切り）" className="w-full p-2 border rounded" />
+      {/* タイトル → タグ → 詳細 の順 */}
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+      <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="タグ（カンマ区切り）" className="w-full p-2 border border-gray-200 rounded" />
+      <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" rows={10} className="w-full p-2 border border-gray-200 rounded whitespace-pre-wrap" />
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-500">タグは半角カンマで区切ってください</div>
         <div className="flex gap-2">
           <button type="button" onClick={onCancel} className="px-3 py-2 bg-gray-100 rounded">キャンセル</button>
           <button type="submit" className="px-3 py-2 bg-indigo-600 text-white rounded">保存</button>
         </div>
+      </div>
+    </form>
+  );
+};
+
+// Fullscreen editor form (inline so header Save can trigger submit)
+const FullscreenEditorForm: React.FC<{
+  note: NoteItem;
+  onCancel: () => void;
+  onSave: (title: string|undefined, body: string, tags: string[]) => void;
+  parseTagsInput: (s: string) => string[];
+}> = ({ note, onCancel, onSave, parseTagsInput }) => {
+  const [title, setTitle] = useState(note.title ?? '');
+  const [tagsInput, setTagsInput] = useState((note.tags || []).join(', '));
+  const [body, setBody] = useState(note.body ?? '');
+
+  useEffect(() => {
+    setTitle(note.title ?? '');
+    setTagsInput((note.tags || []).join(', '));
+    setBody(note.body ?? '');
+  }, [note]);
+
+  return (
+    <form id={`fs-editor-form-${note.id}`} onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, parseTagsInput(tagsInput)); }} className="flex flex-col h-full">
+      <div className="mb-3">
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-3 border border-gray-200 rounded" />
+      </div>
+      <div className="mb-3">
+        <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="タグ（カンマ区切り）" className="w-full p-3 border border-gray-200 rounded" />
+      </div>
+      <div className="flex-1">
+        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" className="w-full p-3 border border-gray-200 rounded h-full min-h-[300px] resize-none whitespace-pre-wrap" />
       </div>
     </form>
   );
