@@ -77,7 +77,7 @@ const Notes: React.FC<{
   }, [notes, query, selectedTag, viewArchived]);
 
   // helpers
-  const createNote = (title: string, body: string, tags: string[]) => {
+  const createNote = (title?: string, body: string, tags: string[]) => {
     const n: NoteItem = { id: String(Date.now()), title: title || undefined, body, tags, createdAt: defaultNow(), updatedAt: defaultNow(), archived: false, deleted: false };
     setNotes(prev => { const next = [n, ...prev]; saveNotesToStorage(next); return next; });
     onAddNote?.({ title: n.title, body: n.body, tags: n.tags, archived: n.archived, deleted: n.deleted });
