@@ -76,20 +76,36 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
   const habitData = useMemo(() => {
     if (habits.length === 0) return [];
 
-    // normalize helper for date keys
-    const toKey = (d: Date | string) => {
-      const dt = d instanceof Date ? d : new Date(d);
-      dt.setHours(0,0,0,0);
-      return dt.toLocaleDateString('sv-SE');
+    // normalize helper for date keys (safe for "YYYY-MM-DD" and other ISO/local strings)
+    const normalizeKey = (d: string | Date) => {
+      if (d instanceof Date) {
+        const dt = new Date(d);
+        dt.setHours(0, 0, 0, 0);
+        return dt.toLocaleDateString('sv-SE');
+      }
+      const s = String(d);
+      const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
+      const m = s.match(ymd);
+      if (m) {
+        const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        dt.setHours(0, 0, 0, 0);
+        return dt.toLocaleDateString('sv-SE');
+      }
+      const dt2 = new Date(s);
+      if (!Number.isNaN(dt2.getTime())) {
+        dt2.setHours(0, 0, 0, 0);
+        return dt2.toLocaleDateString('sv-SE');
+      }
+      return s;
     };
 
-    // schedule checker (align exactly with HabitTracker: respect startDate + frequency)
-    const isHabitScheduledForDate = (habit: Habit, date: Date) => {
+    // isScheduled aligned with HabitTracker
+    const isHabitScheduledForDateLocal = (habit: Habit, date: Date) => {
       if (!habit?.startDate) return false;
       const habitStart = new Date(habit.startDate);
-      habitStart.setHours(0,0,0,0);
+      habitStart.setHours(0, 0, 0, 0);
       const target = new Date(date);
-      target.setHours(0,0,0,0);
+      target.setHours(0, 0, 0, 0);
       if (target < habitStart) return false;
 
       const ft = habit.frequencyType ?? 'daily';
@@ -97,45 +113,53 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       const dow = target.getDay(); // 0-6
       const dnum = target.getDate();
       const fv = habit.frequencyValue ?? [];
-      if (ft === 'weekly' && Array.isArray(fv) && fv.length > 0) {
-        // support both 0-6 and 1-7 representations
-        return fv.includes(dow) || fv.includes(dow + 1);
+      switch (ft) {
+        case 'weekly':
+          // match HabitTracker: use exact day-of-week inclusion
+          return Array.isArray(fv) && fv.includes(dow);
+        case 'monthly':
+          return Array.isArray(fv) && fv.includes(dnum);
+        default:
+          return false;
       }
-      if (ft === 'monthly' && Array.isArray(fv) && fv.length > 0) {
-        return fv.includes(dnum);
-      }
-      return true;
     };
 
-    const isHabitCompletedOnDate = (habit: Habit, key: string) => {
+    // build doneSet for habit (amount & binary unified, normalized keys)
+    const getDoneSetForHabitLocal = (habit: Habit): Set<string> => {
       if (habit.type === 'amount') {
-        const val = (habit.completedAmounts || {})[key] ?? 0;
+        const amtMap = habit.completedAmounts || {};
         const target = habit.target ?? 0;
-        return target > 0 ? val >= target : val > 0;
+        const keys: string[] = [];
+        Object.entries(amtMap).forEach(([rk, rv]) => {
+          const k = normalizeKey(rk);
+          const v = Number(rv as any);
+          if (Number.isNaN(v)) return;
+          if (target > 0 ? v >= target : v > 0) keys.push(k);
+        });
+        (habit.completedDates || []).forEach(d => keys.push(normalizeKey(d)));
+        return new Set(keys);
       }
-      return (habit.completedDates || []).map(d => toKey(d)).includes(key);
+      return new Set((habit.completedDates || []).map(d => normalizeKey(d)));
     };
 
-    // determine date range
+    // determine date range (start..end)
     const end = new Date();
-    end.setHours(0,0,0,0);
+    end.setHours(0, 0, 0, 0);
     let start: Date;
     if (period === 'all') {
-      // earliest of habit.startDate / habit.completedDates / filteredHistory
       const candidates: Date[] = [];
       habits.forEach(h => { if (h.startDate) candidates.push(new Date(h.startDate)); });
       habits.forEach(h => (h.completedDates || []).forEach(d => candidates.push(new Date(d))));
       filteredHistory.forEach(r => candidates.push(new Date(r.date)));
-      const min = candidates.length ? candidates.reduce((a,b) => a.getTime() < b.getTime() ? a : b) : new Date(end);
+      const min = candidates.length ? candidates.reduce((a, b) => a.getTime() < b.getTime() ? a : b) : new Date(end);
       start = new Date(min);
     } else {
       const tmp = new Date();
       tmp.setDate(tmp.getDate() - (period as number));
       start = tmp;
     }
-    start.setHours(0,0,0,0);
+    start.setHours(0, 0, 0, 0);
 
-    // build allDates from start -> end inclusive
     const allDates: Date[] = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       allDates.push(new Date(d));
@@ -143,15 +167,17 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
 
     // compute per-day aggregated rate using same rules as HabitTracker
     const result = allDates.map(date => {
-      const key = toKey(date);
+      const key = normalizeKey(date);
       let scheduled = 0;
       let completed = 0;
       habits.forEach(h => {
-        const skipped = ((h as any).skippedDates || []).map((s:string) => toKey(s));
-        if (!isHabitScheduledForDate(h, date)) return;
-        if (skipped.includes(key)) return; // exclude skipped
+        // Align exactly with HabitTracker main logic:
+        // - scheduled: habit is scheduled for date (do NOT exclude skipped here)
+        // - completed: determined from done set (skipped does NOT count as completed)
+        if (!isHabitScheduledForDateLocal(h, date)) return;
         scheduled++;
-        if (isHabitCompletedOnDate(h, key)) completed++;
+        const doneSet = getDoneSetForHabitLocal(h);
+        if (doneSet.has(key)) completed++;
       });
       return {
         date,
@@ -244,7 +270,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             <path d={path} fill="none" stroke="#4F46E5" strokeWidth="2" />
 
             {/* points */}
-            {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill="#4F46E5" />)}
+            {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={5} fill="#4F46E5" />)}
 
             {/* interaction rect for tooltip */}
             <rect
@@ -425,10 +451,10 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                       </g>
                     )
                   })}
-                  <path d={path} fill="none" stroke="#4F46E5" strokeWidth="2" />
+                  <path d={path} fill="none" stroke="#10B981" strokeWidth="2" />
                   {points.map((p,i) => (
                     <g key={i}>
-                      <circle cx={p.x} cy={p.y} r={5} fill="#4F46E5" />
+                      <circle cx={p.x} cy={p.y} r={5} fill="#10B981" />
                     </g>
                   ))}
                   {data.map((d,i) => (
@@ -438,15 +464,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                     </text>
                   ))}
                 </svg>
-
-                {/* 凡例: 1-5 の意味を表示 */}
-                <div className="mt-3 text-sm text-gray-600 flex flex-wrap gap-3">
-                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />1: とても低い</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />2: 低い</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />3: 普通</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />4: 高い</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />5: とても高い</div>
-                </div>
               </div>
             );
           })()
@@ -506,8 +523,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                     </g>
                   )
                 })}
-                <path d={path} fill="none" stroke="#10B981" strokeWidth="2" />
-                {points.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={5} fill="#10B981" />)}
+                <path d={path} fill="none" stroke="#4F46E5" strokeWidth="2" />
+                {points.map((p,i) => (
+                  <g key={i}>
+                    <circle cx={p.x} cy={p.y} r={5} fill="#4F46E5" />
+                  </g>
+                ))}
                 {data.map((d,i) => (
                   (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
                   <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">
@@ -515,7 +536,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                   </text>
                 ))}
               </svg>
-              <div className="mt-3 text-sm text-gray-600">チェックアウト: 1(低)〜5(高)</div>
             </div>
           );
         })()}
@@ -601,11 +621,11 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             </text>
           )))}
 
-          {pathCo && <path d={pathCo} fill="none" stroke="#10B981" strokeWidth="2" />}
-          {checkoutPoints.map((p,i) => p.y !== null && <circle key={'co'+i} cx={p.x} cy={p.y} r={5} fill="#10B981" />)}
+          {pathCo && <path d={pathCo} fill="none" stroke="#4F46E5" strokeWidth="2" />}
+          {checkoutPoints.map((p,i) => p.y !== null && <circle key={'co'+i} cx={p.x} cy={p.y} r={5} fill="#4F46E5" />)}
 
-          {pathCi && <path d={pathCi} fill="none" stroke="#4F46E5" strokeWidth="2" />}
-          {checkinPoints.map((p,i) => p.y !== null && <circle key={'ci'+i} cx={p.x} cy={p.y} r={5} fill="#4F46E5" />)}
+          {pathCi && <path d={pathCi} fill="none" stroke="#10B981" strokeWidth="2" />}
+          {checkinPoints.map((p,i) => p.y !== null && <circle key={'ci'+i} cx={p.x} cy={p.y} r={5} fill="#10B981" />)}
 
           <rect
             x={margin.left} y={margin.top}
@@ -628,7 +648,10 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             {tooltip.content}
           </div>
         )}
-        <div className="mt-3 text-sm text-gray-600">チェックイン(紫) / チェックアウト(緑)</div>
+        <div className="mt-3 text-sm flex gap-3 items-center">
+          <span className="text-green-600 font-semibold">チェックイン</span>
+          <span className="text-indigo-600 font-semibold">チェックアウト</span>
+        </div>
       </div>
     );
   };
@@ -672,16 +695,16 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             <h3 className="text-lg font-semibold whitespace-nowrap">チェックイン / チェックアウト</h3>
           </div>
           <div className="mb-4">
-            <div className="inline-flex items-center rounded-md bg-gray-100 p-1 gap-1 flex-wrap max-w-full">
+            <div className="flex items-center gap-2 p-1 bg-gray-200/70 rounded-lg">
               <button
                 onClick={() => setCheckChartMode('checkin')}
-                className={`px-3 py-1 rounded text-sm ${checkChartMode === 'checkin' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}
+                className={`px-3 py-1 rounded text-sm ${checkChartMode === 'checkin' ? 'bg-white shadow-sm text-green-600' : 'text-gray-600'}`}
               >
                 チェックイン
               </button>
               <button
                 onClick={() => setCheckChartMode('checkout')}
-                className={`px-3 py-1 rounded text-sm ${checkChartMode === 'checkout' ? 'bg-white shadow-sm text-green-600' : 'text-gray-600'}`}
+                className={`px-3 py-1 rounded text-sm ${checkChartMode === 'checkout' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-600'}`}
               >
                 チェックアウト
               </button>

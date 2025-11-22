@@ -25,6 +25,8 @@ import Analytics from './components/Analytics';
 import Group from './components/Group';
 import Records from './components/Records';
 import ProfileModal from './components/Profile';
+import Tasks from './components/Tasks';
+import Notes from './components/Notes';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
 
@@ -64,6 +66,19 @@ const UserIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
+);
+
+const TaskIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/>
+    <rect x="3" y="4" width="18" height="16" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const NoteIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M7 7h10M7 11h10" strokeLinecap="round" strokeLinejoin="round"/>
+    <rect x="4" y="3" width="16" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
 );
 
 // --- Icon Components End ---
@@ -712,6 +727,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                 />;
       case 'records':
         return <Records checkouts={checkouts} />
+      case 'tasks':
+        return <Tasks /* 必要な props を渡す（例: tasks, onAddTask 等） */ />
+      case 'notes':
+        return <Notes /* 必要な props を渡す（例: notes, onAddNote 等） */ />
       default:
         return null;
     }
@@ -723,19 +742,35 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       <header className="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">
-                 <div className="flex items-center">
-                    <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
-                 </div>
+                <div className="flex items-center">
+                  <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
+                </div>
 
-                 <div className="flex items-center">
-                     <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
-                        {profile.imageUrl ? (
-                            <img src={profile.imageUrl} alt={profile.displayName} className="w-full h-full object-cover" />
-                        ) : (
-                            <UserIcon className="w-6 h-6"/>
-                        )}
-                     </button>
-                 </div>
+                <div className="flex items-center gap-3">
+                  {/* アイコン + 下テキスト */}
+                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${view==='habits' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                    <HabitIcon className="w-6 h-6"/>
+                    <span className="text-xs mt-1">習慣</span>
+                  </button>
+                  <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-2 rounded-md ${view==='tasks' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                    <TaskIcon className="w-6 h-6"/>
+                    <span className="text-xs mt-1">タスク</span>
+                  </button>
+                  <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-2 rounded-md ${view==='notes' ? 'text-indigo-600' : 'text-gray-500'}`}>
+                    <NoteIcon className="w-6 h-6"/>
+                    <span className="text-xs mt-1">メモ</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center">
+                  <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
+                    {profile.imageUrl ? (
+                        <img src={profile.imageUrl} alt={profile.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                        <UserIcon className="w-6 h-6"/>
+                    )}
+                  </button>
+                </div>
             </div>
         </div>
       </header>
@@ -776,52 +811,53 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       </main>
 
       {/* 下部固定タブバー */}
-      <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white/90 border-t border-gray-100 safe-bottom">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-18 py-3">
-            <button
-              onClick={() => setView('diagnosis')}
-              className={`flex flex-col items-center text-xs w-1/5 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
-            >
-              <DiagnosisIcon className="w-6 h-6 mb-1" />
-              <span className="text-sm">診断</span>
-            </button>
+      {view === 'habits' && (
+        <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white/90 border-t border-gray-100 safe-bottom">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-18 py-3">
+              <button
+                onClick={() => setView('diagnosis')}
+                className={`flex flex-col items-center text-xs w-1/5 ${view === 'diagnosis' ? 'text-indigo-600' : 'text-gray-500'}`}
+              >
+                <DiagnosisIcon className="w-6 h-6 mb-1" />
+                <span className="text-sm">診断</span>
+              </button>
 
-            <button
-              onClick={() => setView('habits')}
-              className={`flex flex-col items-center text-xs w-1/5 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
-            >
-              <HabitIcon className="w-6 h-6 mb-1" />
-              <span className="text-sm">習慣</span>
-            </button>
+              <button
+                onClick={() => setView('habits')}
+                className={`flex flex-col items-center text-xs w-1/5 ${view === 'habits' ? 'text-indigo-600' : 'text-gray-500'}`}
+              >
+                <HabitIcon className="w-6 h-6 mb-1" />
+                <span className="text-sm">習慣</span>
+              </button>
 
-            <button
-              onClick={() => setView('group')}
-              className={`flex flex-col items-center text-xs w-1/5 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
-            >
-              <GroupIcon className="w-6 h-6 mb-1" />
-              <span className="text-sm">グループ</span>
-            </button>
+              <button
+                onClick={() => setView('group')}
+                className={`flex flex-col items-center text-xs w-1/5 ${view === 'group' ? 'text-indigo-600' : 'text-gray-500'}`}
+              >
+                <GroupIcon className="w-6 h-6 mb-1" />
+                <span className="text-sm">グループ</span>
+              </button>
 
-            <button
-              onClick={() => setView('records')}
-              className={`flex flex-col items-center text-xs w-1/5 ${view === 'records' ? 'text-indigo-600' : 'text-gray-500'}`}
-            >
-              <ListBulletIcon className="w-6 h-6 mb-1" />
-              <span className="text-sm">記録</span>
-            </button>
+              <button
+                onClick={() => setView('records')}
+                className={`flex flex-col items-center text-xs w-1/5 ${view === 'records' ? 'text-indigo-600' : 'text-gray-500'}`}
+              >
+                <ListBulletIcon className="w-6 h-6 mb-1" />
+                <span className="text-sm">記録</span>
+              </button>
 
-            <button
-              onClick={() => setView('analytics')}
-              className={`flex flex-col items-center text-xs w-1/5 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
-            >
-              <AnalyticsIcon className="w-6 h-6 mb-1" />
-              <span className="text-sm">分析</span>
-            </button>
+              <button
+                onClick={() => setView('analytics')}
+                className={`flex flex-col items-center text-xs w-1/5 ${view === 'analytics' ? 'text-indigo-600' : 'text-gray-500'}`}
+              >
+                <AnalyticsIcon className="w-6 h-6 mb-1" />
+                <span className="text-sm">分析</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </nav>
-
+        </nav>
+      )}
       {/* 既存のフッターは簡素化 */}
       <div className="hidden sm:block">
         <footer className="text-center py-6 text-gray-500 text-sm">
