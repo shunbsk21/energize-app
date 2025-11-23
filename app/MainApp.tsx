@@ -843,7 +843,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   setView={setView}
                 />;
       case 'personality':
-        return <PersonalityDiagnosis setIsHelpOpen={setIsHelpOpen} />;
+        return <PersonalityDiagnosis setIsHelpOpen={setIsHelpOpen}/>;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 
@@ -926,7 +926,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 「診断, 習慣, グループ, 記録, 分析」をまとめて
   // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
-  const isUnderHabits = useMemo(() => ['diagnosis','habits','groups','records','analytics'].includes(view), [view]);
+  const isUnderHabits = useMemo(() => ['diagnosis','personality','habits','groups','records','analytics'].includes(view), [view]);
+
+  // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
+  const showDiagnosisTabs = view === 'diagnosis' || view === 'personality';
 
   const mainContainerClass = isView('notes')
     ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
@@ -989,6 +992,38 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       </header>
 
+      {/* 上部固定タブ（診断カテゴリ一覧） - アイコン＋ラベルで横に並ぶタブ */}
+      {showDiagnosisTabs && (
+        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {[
+                { key: 'diagnosis', label: 'エネルギー診断', icon: <DiagnosisIcon className="w-5 h-5" /> },
+                { key: 'personality', label: 'パーソナリティ診断', icon: <UserIcon className="w-5 h-5" /> },
+                // 将来的に診断が増えたらここに追加
+              ].map(tab => {
+                const active = isView(tab.key as View);
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setView(tab.key as View)}
+                    aria-pressed={active}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                      active ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${active ? 'bg-white/20' : 'bg-gray-100'}`}>
+                      {tab.icon}
+                    </span>
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* /* ===========================
       グローバルメニュー（ヘッダーとは別の場所に固定表示）
       - モバイル: 画面左から全高で被せる
@@ -1035,6 +1070,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600">
                 <DiagnosisIcon className="w-5 h-5 text-indigo-500" /> 診断
               </button>
+              <div className="ml-6 mt-2 flex flex-col gap-1">
+                <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">エネルギー診断</button>
+                <button onClick={() => { setView('personality'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">パーソナリティ診断</button>
+              </div>
               <button onClick={() => { setView('habits'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 mt-2">
                 <HabitIcon className="w-5 h-5 text-emerald-500" /> 習慣
               </button>

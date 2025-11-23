@@ -408,22 +408,6 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   if (step === 'start' || step === 'results') {
     return (
         <div className="space-y-6">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setView('diagnosis')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${isView('diagnosis') ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
-                >
-                  エネルギー診断
-                </button>
-                <button
-                  onClick={() => setView('personality')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${isView('personality') ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
-                >
-                  パーソナリティ診断
-                </button>
-              </div>
-            </div>
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     {/* メインタイトル: 小さめに調整（モバイル優先） */}
