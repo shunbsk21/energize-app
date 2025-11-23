@@ -1,7 +1,7 @@
 // ...existing code...
 "use client";
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { View } from "../types";
+import { View, DiagnosisFrequency, FrequencyType } from "../types";
 import {
   PERSONALITY_QUESTIONS,
   PERSONALITY_RATING_OPTIONS,
