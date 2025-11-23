@@ -135,6 +135,9 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // add learnings state
   const [learnings, setLearnings] = useState<LearningItem[]>([]);
 
+  // Admin判定
+  const isAdmin = Boolean(profile && profile.id === ADMIN_ID);
+
   // メニュー外クリック / ESC で閉じる（モバイル左側オーバーレイ対応）
   useEffect(() => {
     const onDocDown = (e: MouseEvent) => {
@@ -858,6 +861,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   onUpdateTask={handleUpdateTask}
                   onDeleteTask={handleDeleteTask}
                   onAddLearning={handleCreateLearning}
+                  isAdmin={isAdmin}
                 />;
       case 'analytics':
         return <Analytics 

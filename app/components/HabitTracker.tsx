@@ -42,6 +42,8 @@ interface HabitTrackerProps {
   onDeleteTask?: (taskId: string) => Promise<void> | void;
   // 追加: 学習コンテンツ
   onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
+  // 新: 管理者フラグ（ADMIN 以外では学習追加ボタンを非表示にする）
+  isAdmin?: boolean;
 }
 
 // 優先度ソート用
@@ -555,7 +557,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onToggleTask,
   onUpdateTask,
   onDeleteTask,
-  onAddLearning
+  onAddLearning,
+  isAdmin = false
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
@@ -1394,26 +1397,28 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         {fabOpen && (
           <div className="flex flex-col items-end space-y-3 mb-2">
 
-            {/* 学習ボタン：クリックでタイトルを入力して onAddLearning を呼ぶ */}
-            <button
-              onClick={() => {
-                // タイトル入力は Learnings のフルスクリーン編集側で行うため、ここでは view 切替とイベント送出のみ
-                setFabOpen(false);
-                setView('learnings');
-                // 少し待ってからイベント送出（Learnings がマウントされるタイミングに合わせる）
-                setTimeout(() => {
-                  try { window.dispatchEvent(new CustomEvent('open-learning-editor')); } catch { /* noop */ }
-                }, 60);
-              }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
-              title="学習を追加"
-            >
-              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
-                <ScholarIconSmall className="w-5 h-5" />
-              </span>
-              <span className="text-sm font-medium text-gray-800">学習を追加</span>
-            </button>
-
+            {/* 学習ボタン（ADMIN のみ表示） */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  // タイトル入力は Learnings のフルスクリーン編集側で行うため、ここでは view 切替とイベント送出のみ
+                  setFabOpen(false);
+                  setView('learnings');
+                  // 少し待ってからイベント送出（Learnings がマウントされるタイミングに合わせる）
+                  setTimeout(() => {
+                    try { window.dispatchEvent(new CustomEvent('open-learning-editor')); } catch { /* noop */ }
+                  }, 60);
+                }}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+                title="学習を追加"
+              >
+                <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
+                  <ScholarIconSmall className="w-5 h-5" />
+                </span>
+                <span className="text-sm font-medium text-gray-800">学習を追加</span>
+              </button>
+            )}
+            
             {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
             <button
               onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
