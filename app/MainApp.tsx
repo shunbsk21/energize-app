@@ -31,6 +31,7 @@ import Notes from './components/Notes';
 import Learnings from './components/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
+import PersonalityDiagnosis from './components/PersonalityDiagnosis';
 
 // --- Icon Components Start (コード変更なし) ---
 
@@ -837,8 +838,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   setIsHelpOpen={setIsHelpOpen} 
                   diagnosisFrequency={diagnosisFrequency} 
                   setDiagnosisFrequency={handleDiagnosisFrequencyChange}
-                  habits={habits} 
+                  habits={habits}
+                  isView={isView}
+                  setView={setView}
                 />;
+      case 'personality':
+        return <PersonalityDiagnosis setIsHelpOpen={setIsHelpOpen} />;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 

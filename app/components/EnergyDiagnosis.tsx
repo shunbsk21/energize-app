@@ -2,8 +2,17 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit } from '../types'; 
-import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT } from '../constants';
+import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View } from '../types'; 
+import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT, ENERGY_PERSONALITIES } from '../constants';
+
+const THRESHOLD = 15;
+const getTypeKey = (scores: EnergyScores) => {
+  const p = scores.physical >= THRESHOLD ? "High" : "Low";
+  const m = scores.mental >= THRESHOLD ? "High" : "Low";
+  const e = scores.emotional >= THRESHOLD ? "High" : "Low";
+  const i = scores.intellectual >= THRESHOLD ? "High" : "Low";
+  return `P_${p}_M_${m}_E_${e}_I_${i}`;
+};
 
 // ★★★ Propsの定義を変更 ★★★
 interface EnergyDiagnosisProps {
@@ -15,6 +24,10 @@ interface EnergyDiagnosisProps {
   // MainApp.tsx が渡す関数の型 (Firestore保存関数) に合わせる
   setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
   habits: Habit[];
+  // ページ切替用コールバック (親から渡す)
+  setView: (v: View) => void;
+  // 現在のビューかどうか判定するヘルパー (親から渡す)
+  isView: (v: View) => boolean;
 }
 
 type QuizStep = EnergyCategory | 'start' | 'results';
@@ -248,7 +261,7 @@ const FrequencyEditor: React.FC<{
 };
 
 
-const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, setIsHelpOpen, diagnosisFrequency, setDiagnosisFrequency, habits }) => {
+const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, setIsHelpOpen, diagnosisFrequency, setDiagnosisFrequency, habits, setView, isView }) => {
   const [step, setStep] = useState<QuizStep>('start');
   const [answers, setAnswers] = useState<{ [key: string]: number }>({});
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -333,6 +346,32 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     }, { category: 'physical' as EnergyCategory, score: Infinity });
   }, [displayedRecord]);
 
+  // パーソナリティ診断の算出（表示用）
+  const personalityResult = useMemo(() => {
+    if (!displayedRecord) return null;
+    const scores: EnergyScores = {
+      physical: (displayedRecord as any).physical ?? 0,
+      mental: (displayedRecord as any).mental ?? 0,
+      emotional: (displayedRecord as any).emotional ?? 0,
+      intellectual: (displayedRecord as any).intellectual ?? 0,
+    };
+    const key = getTypeKey(scores);
+    const data = (ENERGY_PERSONALITIES as any)[key];
+    const keys = Object.keys(ENERGY_PERSONALITIES);
+    const index = keys.indexOf(key) + 1; // 1-based
+    if (!data || index <= 0) return null;
+
+    // 日本語名のみを取り出してファイル名化
+    // 例: "覚醒した勇者 (The Awakened Hero)" -> "覚醒した勇者"
+    const rawName = String(data.name || '').split('(')[0].trim();
+    // 空白はアンダースコアに、ファイル名に使えない文字は除去
+    const sanitized = rawName
+      .replace(/\s+/g, '_')
+      .replace(/[^\p{L}\p{N}_]/gu, ''); // Unicode対応で文字（日本語含む）と数字を許可
+    const imageSrc = `images/energy_personalities/${index}_${sanitized}.png`;
+    return { key, data, imageSrc };
+  }, [displayedRecord]);
+
   const currentQuestions = (step !== 'start' && step !== 'results') ? QUESTIONS[step as EnergyCategory] : [];
   const isCurrentStepAnswered = currentQuestions.every(q => answers[q.id] !== undefined);
 
@@ -369,6 +408,22 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   if (step === 'start' || step === 'results') {
     return (
         <div className="space-y-6">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setView('diagnosis')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${isView('diagnosis') ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+                >
+                  エネルギー診断
+                </button>
+                <button
+                  onClick={() => setView('personality')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${isView('personality') ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+                >
+                  パーソナリティ診断
+                </button>
+              </div>
+            </div>
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     {/* メインタイトル: 小さめに調整（モバイル優先） */}
@@ -469,6 +524,39 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                             <p className="font-bold">🚨 最も注意が必要なエネルギー:</p>
                             <p>{ENERGY_CATEGORIES[lowestEnergy.category].name}が枯渇気味です。休息や気分転換を優先しましょう。</p>
                         </div>
+
+                        {/* パーソナリティ診断結果（画像 + テキスト） */}
+                        {personalityResult && (
+                          <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+                            {personalityResult.imageSrc ? (
+                              <img
+                                src={personalityResult.imageSrc}
+                                alt={personalityResult.data.name}
+                                className="w-full h-44 md:h-56 object-cover block"
+                              />
+                            ) : (
+                              <div className="w-full h-44 md:h-56 bg-gray-100 flex items-center justify-center text-gray-400">画像なし</div>
+                            )}
+                            <div className="p-4">
+                              <div className="text-xs text-gray-500 mb-1">診断タイプ</div>
+                              <div className="text-lg font-semibold text-gray-800">{personalityResult.data.name}</div>
+                              <div className="text-sm text-gray-600 mt-2">{personalityResult.data.description}</div>
+                              {personalityResult.data.advice?.habits?.length > 0 && (
+                                <div className="mt-4">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">おすすめの習慣</div>
+                                  <ul className="space-y-2">
+                                    {personalityResult.data.advice.habits.map((h: string, i: number) => (
+                                      <li key={i} className="flex items-start gap-2">
+                                        <span className="mt-1 w-2 h-2 rounded-full bg-indigo-600 flex-shrink-0" />
+                                        <span className="text-sm text-gray-700">{h}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                     </div>
 
                     <div className="bg-white p-6 rounded-xl shadow-md">
