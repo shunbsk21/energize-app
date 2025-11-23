@@ -1027,7 +1027,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               <button onClick={() => { setView('notes'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
                 <NoteIcon className="w-5 h-5 text-gray-600" /> メモ
               </button>
-              <button onClick={() => { setView('learnings'); setIsMenuOpen(false); setTimeout(() => window.dispatchEvent(new CustomEvent('open-learning-editor')), 80); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
+              <button onClick={() => { setView('learnings'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
                 <ScholarIcon className="w-5 h-5 text-gray-600" /> 学習
               </button>
             </div>
@@ -1072,7 +1072,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                 <button onClick={() => { setView('notes'); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100">
                   <NoteIcon className="w-5 h-5 text-gray-600" /> メモ
                 </button>
-                <button onClick={() => { setView('learnings'); setIsMenuOpen(false); setTimeout(() => window.dispatchEvent(new CustomEvent('open-learning-editor')), 80); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100">
+                <button onClick={() => { setView('learnings'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
                   <ScholarIcon className="w-5 h-5 text-gray-600" /> 学習
                 </button>
               </div>
