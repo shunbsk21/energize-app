@@ -1,5 +1,43 @@
-// ...existing code...
 import React, { useMemo, useState, useEffect } from 'react';
+
+// アイコンマップ（value / rating に応じた簡易アイコン）
+const ICON_MAP: Record<number, string> = {
+  5: '⚡️',
+  4: '😊',
+  3: '😐',
+  2: '😴',
+  1: '🥀',
+};
+
+const pickIcon = (v: any) => {
+  const n = Number(v);
+  if (!Number.isNaN(n) && ICON_MAP[n]) return ICON_MAP[n];
+  // 数値でない・範囲外は既定のアイコン（中立）
+  return '✨';
+};
+
+// 小さなアイコン付きタグ（白背景 + シャドウ）
+const ValueTag: React.FC<{ value: string | number | undefined | null }> = ({ value }) => {
+  if (value == null) return null;
+  const icon = pickIcon(value);
+  return (
+    <span className="inline-flex items-center gap-2 bg-white rounded-full px-2 py-1 border border-gray-100">
+      <span className="w-5 h-5 flex items-center justify-center text-sm">{icon}</span>
+      <span className="text-xs font-medium text-gray-800">{String(value)}</span>
+    </span>
+  );
+};
+
+const RatingTag: React.FC<{ value: string | number | undefined | null }> = ({ value }) => {
+  if (value == null) return null;
+  const icon = pickIcon(value);
+  return (
+    <span className="inline-flex items-center gap-2 bg-white rounded-full px-2 py-1 border border-gray-100">
+      <span className="w-5 h-5 flex items-center justify-center text-sm">{icon}</span>
+      <span className="text-xs font-medium text-gray-800">{String(value)}</span>
+    </span>
+  );
+};
 
 export interface CheckoutRecord {
   id: string;
@@ -201,8 +239,21 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
               {paged.map((r: any) => (
                 <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-start justify-between">
-                    {/* 日付は控えめに表示 */}
-                    <div className="text-xs text-gray-500">{formatDate(parseDateValue(r))}</div>
+                    {/* 日付 + 値/レーティングをアイコン付きで表示 */}
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-gray-500">{formatDate(parseDateValue(r))}</div>
+
+                      {/* checkin の value 表示（画像アイコン + 白背景タグ） */}
+                      {view === 'checkin' && (
+                        <ValueTag value={r.value ?? r.amount ?? r.score} />
+                      )}
+
+                      {/* checkout の rating 表示（画像アイコン + 白背景タグ） */}
+                      {view === 'checkout' && (
+                        <RatingTag value={r.rating ?? r.raiting} />
+                      )}
+
+                    </div>
                     <div className="text-xs text-gray-400">{/* createdAt 等があればここに */}</div>
                   </div>
 
