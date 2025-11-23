@@ -944,7 +944,26 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                       </svg>
                     </button>
                   </div>
-                  <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
+
+                  {/* タイトル + ビュータグ */}
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
+
+                    <div className="flex items-center gap-2">
+                      {isUnderHabits && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">習慣</span>
+                      )}
+                      {isView('tasks') && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">タスク</span>
+                      )}
+                      {isView('notes') && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">メモ</span>
+                      )}
+                      {isView('learnings') && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">学習</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* 右: プロフィール */}
