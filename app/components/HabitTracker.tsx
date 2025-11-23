@@ -151,39 +151,65 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
 };
 
 const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'partial' | 'full' => {
-      const dateStr = date.toLocaleDateString('sv-SE');
-      // scheduled and not skipped
-      const scheduledHabits = habits.filter(h => {
-        if (!isHabitScheduledForDate(h, date)) return false;
-        const skipped = ((h as any).skippedDates || []).map((s:string) => {
-          const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-        });
-        return !skipped.includes(dateStr);
+  const dateStr = date.toLocaleDateString('sv-SE');
+  // scheduled and not skipped
+  const scheduledHabits = habits.filter(h => {
+    if (!isHabitScheduledForDate(h, date)) return false;
+    const skipped = ((h as any).skippedDates || []).map((s:string) => {
+      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+    });
+    return !skipped.includes(dateStr);
+  });
+
+  if (scheduledHabits.length === 0) return 'none';
+
+  const completedCount = scheduledHabits.reduce((acc, h) => {
+    const type = (h.type ?? 'binary');
+    if (type === 'amount') {
+      const amountMap = h.completedAmounts || {};
+      const val = amountMap[dateStr] ?? 0;
+      const target = h.target ?? 0;
+      const satisfied = target > 0 ? val >= target : val > 0;
+      return acc + (satisfied ? 1 : 0);
+    } else {
+      const doneKeys = (h.completedDates || []).map(d => {
+        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
       });
+      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
+    }
+  }, 0);
 
-      if (scheduledHabits.length === 0) return 'none';
-
-      const completedCount = scheduledHabits.reduce((acc, h) => {
-        const type = (h.type ?? 'binary');
-        if (type === 'amount') {
-          const amountMap = h.completedAmounts || {};
-          const val = amountMap[dateStr] ?? 0;
-          const target = h.target ?? 0;
-          const satisfied = target > 0 ? val >= target : val > 0;
-          return acc + (satisfied ? 1 : 0);
-        } else {
-          const doneKeys = (h.completedDates || []).map(d => {
-            const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-          });
-          return acc + (doneKeys.includes(dateStr) ? 1 : 0);
-        }
-      }, 0);
-
-      if (completedCount === 0) return 'none';
-      if (completedCount === scheduledHabits.length) return 'full';
-      return 'partial';
+  if (completedCount === 0) return 'none';
+  if (completedCount === scheduledHabits.length) return 'full';
+  return 'partial';
 };
 
+// 日ごとの完了率を計算（0..100）
+const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
+  const dateStr = date.toLocaleDateString('sv-SE');
+  const scheduled = habitsList.filter(h => {
+    if (!isHabitScheduledForDate(h, date)) return false;
+    const skipped = ((h as any).skippedDates || []).map((s:string) => {
+      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+    });
+    return !skipped.includes(dateStr);
+  });
+  if (scheduled.length === 0) return 0;
+  const completedCount = scheduled.reduce((acc, h) => {
+    if ((h.type ?? 'binary') === 'amount') {
+      const val = ((h.completedAmounts || {})[dateStr] ?? 0);
+      const target = h.target ?? 0;
+      const ok = target > 0 ? val >= target : val > 0;
+      return acc + (ok ? 1 : 0);
+    } else {
+      const doneKeys = (h.completedDates || []).map(d => {
+        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+      });
+      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
+    }
+  }, 0);
+  return Math.round((completedCount / scheduled.length) * 100);
+};
 
 const isDiagnosisScheduledForDate = (frequency: DiagnosisFrequency, date: Date): boolean => {
     const targetDate = new Date(date);
@@ -1379,598 +1405,631 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   
   // --- JSX (変更なし) ---
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
-            <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+    <>
+       <div className="space-y-6 pb-24"> {/* 下部固定バー + 下部タブ分の余白を確保 */}
+          {/* ヘッダー行：左にタイトル+リスト、右にカレンダー+今日 を同列表示（幅不足で折り返さないように spacer を利用） */}
+          <div className="flex items-center w-full gap-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
+              <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
                 <ListBulletIcon className="w-6 h-6" />
-            </button>
-        </div>
-        {/* タイトルの下に表示されるボタン群（モバイルでは縦、デスクトップでは横） */}
-        <div className="w-full sm:w-auto flex justify-start sm:justify-end">
-          <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-            <button
-              onClick={() => setIsCheckInOpen(true)}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-              aria-pressed={checkedInToday}
-            >
-              <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
-              <span className="text-sm font-medium text-gray-800">チェックイン</span>
-              {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
-            </button>
-            <button
-              onClick={() => setIsCheckOutOpen(true)}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-              aria-pressed={checkedOutToday}
-            >
-              <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
-              <span className="text-sm font-medium text-gray-800">チェックアウト</span>
-              {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
-            </button>
-          </div>
-          <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors ml-3 hidden sm:inline-flex">
-              <HelpIcon className="w-6 h-6" />
-          </button>
-        </div>
-      </div>
-
-      <CheckInModal
-        isOpen={isCheckInOpen}
-        onClose={() => setIsCheckInOpen(false)}
-        onSave={(v,n) => { handleSaveCheckin(v,n); }}
-        initial={checkinDraft}
-      />
-      <CheckOutModal
-        isOpen={isCheckOutOpen}
-        onClose={() => setIsCheckOutOpen(false)}
-        onSave={(g,n,r) => { handleSaveCheckout(g,n,r); }}
-        initial={checkoutDraft}
-      />
-      <DatePickerModal 
-          isOpen={isDatePickerOpen}
-          onClose={() => setIsDatePickerOpen(false)}
-          onDateSelect={handleDateSelect}
-          initialDate={selectedDate}
-          habits={habits}
-      />
-      <HabitListModal 
-          isOpen={isListModalOpen}
-          onClose={() => setIsListModalOpen(false)}
-          habits={habits}
-          onSelectHabit={handleSelectHabitFromList}
-      />
-      {/* 数量入力モーダル: system prompt の代替 */}
-      {isAmountModalOpen && amountModalHabit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
-                <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
-              </div>
-              <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
-              <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
-              <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      
-      {/* FAB: + を押すと左・上に丸ボタンを展開 */}
-      <div ref={fabRef} className="fixed z-40 right-4 bottom-20 flex flex-col items-end" aria-hidden={!fabOpen}>
-        {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
-        {fabOpen && (
-          <div className="flex flex-col items-end space-y-3 mb-2">
-
-            {/* 学習ボタン（ADMIN のみ表示） */}
-            {isAdmin && (
-              <button
-                onClick={() => {
-                  // タイトル入力は Learnings のフルスクリーン編集側で行うため、ここでは view 切替とイベント送出のみ
-                  setFabOpen(false);
-                  setView('learnings');
-                  // 少し待ってからイベント送出（Learnings がマウントされるタイミングに合わせる）
-                  setTimeout(() => {
-                    try { window.dispatchEvent(new CustomEvent('open-learning-editor')); } catch { /* noop */ }
-                  }, 60);
-                }}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
-                title="学習を追加"
-              >
-                <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
-                  <ScholarIconSmall className="w-5 h-5" />
-                </span>
-                <span className="text-sm font-medium text-gray-800">学習を追加</span>
               </button>
+            </div>
+
+            {/* spacer を挟んで右端に配置。右側は折り返さない（flex-shrink-0） */}
+            <div className="flex-1" />
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setIsDatePickerOpen(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md"
+                  aria-label="日付を選択"
+                  title="日付を選択"
+                >
+                  <CalendarIcon className="w-5 h-5 text-indigo-600" />
+                </button>
+                <button
+                  onClick={() => handleDateSelect(new Date())}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md"
+                  title="今日に移動"
+                  aria-label="今日に移動"
+                >
+                  <span className="text-sm text-gray-800">今日</span>
+                </button>
+              </div>
+            </div>
+
+            {/* チェックイン／チェックアウト等（ヘッダーの下に配置） */}
+            <div className="flex items-center justify-end mt-2">
+              <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+                <button
+                  onClick={() => setIsCheckInOpen(true)}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+                  aria-pressed={checkedInToday}
+                >
+                  <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
+                  <span className="text-sm font-medium text-gray-800">チェックイン</span>
+                  {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
+                </button>
+                <button
+                  onClick={() => setIsCheckOutOpen(true)}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
+                  aria-pressed={checkedOutToday}
+                >
+                  <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
+                  <span className="text-sm font-medium text-gray-800">チェックアウト</span>
+                  {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
+                </button>
+              </div>
+            </div>
+
+            <CheckInModal
+              isOpen={isCheckInOpen}
+              onClose={() => setIsCheckInOpen(false)}
+              onSave={(v,n) => { handleSaveCheckin(v,n); }}
+              initial={checkinDraft}
+            />
+            <CheckOutModal
+              isOpen={isCheckOutOpen}
+              onClose={() => setIsCheckOutOpen(false)}
+              onSave={(g,n,r) => { handleSaveCheckout(g,n,r); }}
+              initial={checkoutDraft}
+            />
+            <DatePickerModal 
+                isOpen={isDatePickerOpen}
+                onClose={() => setIsDatePickerOpen(false)}
+                onDateSelect={handleDateSelect}
+                initialDate={selectedDate}
+                habits={habits}
+            />
+            <HabitListModal 
+                isOpen={isListModalOpen}
+                onClose={() => setIsListModalOpen(false)}
+                habits={habits}
+                onSelectHabit={handleSelectHabitFromList}
+            />
+        
+            {/* 数量入力モーダル: system prompt の代替 */}
+            {isAmountModalOpen && amountModalHabit && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
+                      <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
+                    </div>
+                    <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
+                    <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
+                    <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
+                      <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+            
+            {/* FAB: + を押すと左・上に丸ボタンを展開 */}
+            <div ref={fabRef} className="fixed z-40 right-4 bottom-28 flex flex-col items-end" aria-hidden={!fabOpen}>
+              {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
+              {fabOpen && (
+                <div className="flex flex-col items-end space-y-3 mb-6">
+
+                  {/* 学習ボタン（ADMIN のみ表示） */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        // タイトル入力は Learnings のフルスクリーン編集側で行うため、ここでは view 切替とイベント送出のみ
+                        setFabOpen(false);
+                        setView('learnings');
+                        // 少し待ってからイベント送出（Learnings がマウントされるタイミングに合わせる）
+                        setTimeout(() => {
+                          try { window.dispatchEvent(new CustomEvent('open-learning-editor')); } catch { /* noop */ }
+                        }, 60);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+                      title="学習を追加"
+                    >
+                      <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
+                        <ScholarIconSmall className="w-5 h-5" />
+                      </span>
+                      <span className="text-sm font-medium text-gray-800">学習を追加</span>
+                    </button>
+                  )}
+
+                  {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
+                  <button
+                    onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+                    aria-label="タスクを追加"
+                    title="タスクを追加"
+                  >
+                    <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">✎</span>
+                    <span className="text-sm font-medium text-gray-800">タスクを追加</span>
+                  </button>
+
+                  {/* 習慣ボタン：全体のトーンに合わせたデザイン */}
+                  <button
+                    onClick={() => { setIsAddModalOpen(true); setFabOpen(false); }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+                    aria-label="習慣を追加"
+                    title="習慣を追加"
+                  >
+                    <span className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-50 text-indigo-600 font-semibold">＋</span>
+                    <span className="text-sm font-medium text-gray-800">習慣を追加</span>
+                  </button>
+
+                </div>
+              )}
+            </div>
+
+            {/* 習慣追加モーダル */}
+            {isAddModalOpen && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsAddModalOpen(false)}>
+                  <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">新しい習慣を追加</h2>
+                      <form onSubmit={handleAddFormSubmit} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">習慣の名前</label>
+                          <input
+                            type="text"
+                            value={newHabitName}
+                            onChange={e => setNewHabitName(e.target.value)}
+                            placeholder="例: 10分間瞑想する"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
+                          <textarea
+                            ref={newHabitDetailsRef}
+                            value={newHabitDetails}
+                            onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+                            onChange={e => setNewHabitDetails(e.target.value)}
+                            placeholder="例: 朝の10分で深呼吸しながら行う"
+                            rows={3}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900 resize-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">開始日</label>
+                          <input
+                            type="date"
+                            value={newHabitStartDate}
+                            onChange={e => setNewHabitStartDate(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
+                          <select 
+                            value={newHabitFrequency.type} 
+                            onChange={e => setNewHabitFrequency({type: e.target.value as FrequencyType, value: []})}
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                          >
+                            <option value="daily">毎日</option>
+                            <option value="weekly">週次</option>
+                            <option value="monthly">月次</option>
+                          </select>
+                        </div>
+                        {newHabitFrequency.type === 'weekly' && (
+                          <div className="flex justify-center gap-1">
+                            {WEEK_DAYS.map((day, index) => (
+                              <button type="button" key={index}
+                                onClick={() => {
+                                  const newValue = newHabitFrequency.value.includes(index)
+                                    ? newHabitFrequency.value.filter(d => d !== index)
+                                    : [...newHabitFrequency.value, index];
+                                  setNewHabitFrequency(prev => ({...prev, value: newValue.sort()}));
+                                }}
+                                className={`w-10 h-10 rounded-full font-semibold transition-colors ${newHabitFrequency.value.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                              >{day}</button>
+                            ))}
+                          </div>
+                        )}
+                        {newHabitFrequency.type === 'monthly' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
+                              <input
+                                  type="text"
+                                  placeholder="例: 1, 15"
+                                  defaultValue={newHabitFrequency.value.join(', ')}
+                                  onChange={e => {
+                                      const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
+                                      setNewHabitFrequency(prev => ({...prev, value: value.sort((a,b) => a-b)}))
+                                  }}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
+                              />
+                          </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
+                            <div className="flex items-center gap-3">
+                              <label className="flex items-center gap-2">
+                                <input type="radio" name="habitType" value="binary" checked={newHabitType==='binary'} onChange={() => setNewHabitType('binary')} />
+                                <span className="text-sm">1回でも実施</span>
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input type="radio" name="habitType" value="amount" checked={newHabitType==='amount'} onChange={() => setNewHabitType('amount')} />
+                                <span className="text-sm">規定量の実施</span>
+                              </label>
+                            </div>
+                        </div>
+                        {newHabitType === 'amount' && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">目標値</label>
+                              <input type="number" value={newHabitTarget ?? ''} onChange={e => setNewHabitTarget(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">単位</label>
+                              <input type="text" value={newHabitUnit} onChange={e => setNewHabitUnit(e.target.value)} placeholder="例: km, 分, 回" className="w-full p-3 border border-gray-300 rounded-lg" />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">キャンセル</button>
+                          <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow">追加</button>
+                        </div>
+                      </form>
+                  </div>
+              </div>
             )}
 
-            {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
-            <button
-              onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
-              aria-label="タスクを追加"
-              title="タスクを追加"
-            >
-              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">✎</span>
-              <span className="text-sm font-medium text-gray-800">タスクを追加</span>
-            </button>
-
-            {/* 習慣ボタン：全体のトーンに合わせたデザイン */}
-            <button
-              onClick={() => { setIsAddModalOpen(true); setFabOpen(false); }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
-              aria-label="習慣を追加"
-              title="習慣を追加"
-            >
-              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-50 text-indigo-600 font-semibold">＋</span>
-              <span className="text-sm font-medium text-gray-800">習慣を追加</span>
-            </button>
-
-          </div>
-        )}
-
-        {/* main FAB (always visible) - 少し小さくして右寄せ */}
-        <button
-          onClick={() => setFabOpen(v => !v)}
-          className={`mt-3 w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg bg-indigo-600 hover:bg-indigo-700 transition-colors`}
-          aria-label="追加メニュー"
-          title="追加メニュー"
-        >
-          <PlusIcon className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* 習慣追加モーダル */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsAddModalOpen(false)}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-gray-800 mb-4">新しい習慣を追加</h2>
-                <form onSubmit={handleAddFormSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">習慣の名前</label>
-                    <input
-                      type="text"
-                      value={newHabitName}
-                      onChange={e => setNewHabitName(e.target.value)}
-                      placeholder="例: 10分間瞑想する"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
-                    />
+            {/* /* Task add modal */}
+            {isTaskModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsTaskModalOpen(false)}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">タスクを追加</h3>
+                    <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-500">閉じる</button>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
-                    <textarea
-                      ref={newHabitDetailsRef}
-                      value={newHabitDetails}
-                      onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-                      onChange={e => setNewHabitDetails(e.target.value)}
-                      placeholder="例: 朝の10分で深呼吸しながら行う"
-                      rows={3}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900 resize-none"
-                    />
-                  </div>
-
-                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">開始日</label>
-                    <input
-                      type="date"
-                      value={newHabitStartDate}
-                      onChange={e => setNewHabitStartDate(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
-                    <select 
-                      value={newHabitFrequency.type} 
-                      onChange={e => setNewHabitFrequency({type: e.target.value as FrequencyType, value: []})}
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                    >
-                      <option value="daily">毎日</option>
-                      <option value="weekly">週次</option>
-                      <option value="monthly">月次</option>
-                    </select>
-                  </div>
-                  {newHabitFrequency.type === 'weekly' && (
-                    <div className="flex justify-center gap-1">
-                      {WEEK_DAYS.map((day, index) => (
-                        <button type="button" key={index}
-                          onClick={() => {
-                            const newValue = newHabitFrequency.value.includes(index)
-                              ? newHabitFrequency.value.filter(d => d !== index)
-                              : [...newHabitFrequency.value, index];
-                            setNewHabitFrequency(prev => ({...prev, value: newValue.sort()}));
-                          }}
-                          className={`w-10 h-10 rounded-full font-semibold transition-colors ${newHabitFrequency.value.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                        >{day}</button>
-                      ))}
+                  <div className="space-y-3">
+                    <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+                    <textarea value={taskDetails} onChange={e => setTaskDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
+                    <div className="flex items-center gap-2">
+                      <input type="date" value={taskDueDate} onChange={e => setTaskDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
+                      <select value={taskPriority} onChange={e => setTaskPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
+                        <option value="low">低</option>
+                        <option value="medium">中</option>
+                        <option value="high">高</option>
+                      </select>
+                      <div className="flex-1" />
+                      <button onClick={submitTask} className="px-4 py-2 bg-indigo-600 text-white rounded">追加</button>
                     </div>
-                  )}
-                  {newHabitFrequency.type === 'monthly' && (
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 予定外タスク用モーダル */}
+            {isNonScheduledOpen && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setIsNonScheduledOpen(false)}>
+                <div className="bg-white rounded-xl w-full max-w-md p-4" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold">予定外タスクをこの日で記録</h3>
+                    <button onClick={() => setIsNonScheduledOpen(false)} className="text-gray-500 text-2xl leading-none">&times;</button>
+                  </div>
+                  <div className="space-y-2 max-h-[60vh] overflow-auto pr-2">
+                    {nonScheduledHabits.length === 0 ? (
+                      <p className="text-gray-500 text-center py-6">この日は予定外の習慣はありません。</p>
+                    ) : nonScheduledHabits.map(h => {
+                      const isSkipped = (h.skippedDates || []).includes(selectedDateString);
+                      return (
+                        <div key={h.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <div className="font-medium text-gray-800">{h.name}</div>
+                            <div className="text-xs text-gray-500">{h.frequencyType === 'weekly' ? '週次' : h.frequencyType === 'monthly' ? '月次' : '毎日'}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => recordOrToggleForNonScheduled(h)} className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm">記録</button>
+                            <button onClick={() => toggleSkipForDate(h)} className={`px-3 py-2 rounded-md text-sm ${isSkipped ? 'bg-yellow-100 text-yellow-800' : 'bg-white border border-gray-200'}`}>
+                              {isSkipped ? 'スキップ解除' : 'この日をスキップ'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* タスク編集モーダル */}
+            {selectedTask && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedTask(null)}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">タスクを編集</h3>
+                    <button onClick={() => setSelectedTask(null)} className="text-gray-500">閉じる</button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+                    <textarea value={editDetails} onChange={e => setEditDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
+                    <div className="flex items-center gap-2">
+                      <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
+                      <select value={editPriority} onChange={e => setEditPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
+                        <option value="low">低</option>
+                        <option value="medium">中</option>
+                        <option value="high">高</option>
+                      </select>
+                      <label className="inline-flex items-center gap-2 ml-auto text-sm">
+                        <input type="checkbox" checked={editDone} onChange={e => setEditDone(e.target.checked)} />
+                        完了
+                      </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setSelectedTask(null)} className="px-3 py-2 rounded-md bg-gray-100">キャンセル</button>
+                      <button onClick={deleteTaskConfirm} className="px-3 py-2 rounded-md bg-red-50 text-red-600">削除</button>
+                      <button onClick={saveTaskEdits} className="px-4 py-2 rounded-md bg-indigo-600 text-white">保存</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+        
+            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
+              <div className="flex items-center justify-between mb-4 px-2">
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-lg font-semibold text-gray-800">{formattedListDate}</h3>
+                  {/* 達成率バッジ */}
+                  <div className={`ml-3 inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${completionPercent === 100 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
+                    <div className={`w-3 h-3 rounded-full ${completionPercent === 100 ? 'bg-white' : (completionPercent >= 75 ? 'bg-green-500' : completionPercent >= 40 ? 'bg-yellow-400' : 'bg-gray-400')}`} />
+                    <span className="text-sm">{completionPercent}%</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                      onClick={() => setIsNonScheduledOpen(true)}
+                      className="flex items-center gap-2 text-sm px-3 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50"
+                      title="予定外の習慣を記録"
+                  >
+                    <ListBulletIcon className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">予定外</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
+              {showCelebrate && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
+                  <style>{`
+                    @keyframes floatUp {
+                      0% { transform: translateY(0) scale(1); opacity: 1; }
+                      100% { transform: translateY(-140vh) scale(1.1); opacity: 0; }
+                    }
+                    .confetti {
+                      position: absolute;
+                      bottom: 10%;
+                      font-size: 28px;
+                      animation-name: floatUp;
+                      animation-timing-function: cubic-bezier(.18,.9,.35,1);
+                      animation-iteration-count: 1;
+                    }
+                  `}</style>
+                  <div className="w-full max-w-3xl mx-auto px-4">
+                    <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
+                      <div className="text-center">
+                        <div className="text-2xl md:text-2xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
+                        <div className="mt-4 text-lg md:text-xl opacity-95">今日もよく頑張りましたね！</div>
+                      </div>
+                    </div>
+                    {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
+                      <span
+                        key={i}
+                        className="confetti"
+                        style={{
+                          left: `${8 + (i * 11) % 84}%`,
+                          animationDuration: `${1800 + (i * 200)}ms`,
+                          animationDelay: `${200 + (i * 120)}ms`,
+                          transform: `translateY(0) rotate(${(i*30)%360}deg)`
+                        }}
+                      >
+                        {emo}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* --- 診断カード（最上部） --- */}
+              <div className="mb-4">
+                {isDiagnosisDay && (
+                  <div
+                    onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
+                    className={`flex items-center p-4 shadow-sm rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
+                  >
+                    {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
+                      エネルギーを診断する
+                    </span>
+                    {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
+                  </div>
+                )}
+                {isPersonalityDiagnosisDay && (
+                  <div
+                    onClick={() => !isPersonalityCompleted && setView?.('personality')}
+                    className={`mt-3 flex items-center p-4 shadow-sm rounded-lg transition ${isPersonalityCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-purple-50 hover:bg-purple-100 cursor-pointer'}`}
+                  >
+                    {isPersonalityCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-purple-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${isPersonalityCompleted ? 'line-through text-gray-500' : 'text-purple-800'}`}>
+                      パーソナリティを診断する
+                    </span>
+                    {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
+                  </div>
+                )}
+              </div>
+
+              {/* --- 本日のタスク（診断の下） --- */}
+              <div className="mb-4">
+                {dueTasks.length === 0 ? (
+                  <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">本日のタスクはありません。</div>
+                ) : (
+                  <div className="space-y-2">
+                    {dueTasks.map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => setSelectedTask(t)}
+                        className={`flex items-center gap-3 p-3 border shadow-sm ${t.done ? 'opacity-80' : ''} bg-amber-50 border-amber-100 rounded-md`}
+                      >
                         <input
-                            type="text"
-                            placeholder="例: 1, 15"
-                            defaultValue={newHabitFrequency.value.join(', ')}
-                            onChange={e => {
-                                const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
-                                setNewHabitFrequency(prev => ({...prev, value: value.sort((a,b) => a-b)}))
-                            }}
-                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
+                          type="checkbox"
+                          checked={!!t.done}
+                          onChange={async (e) => {
+                            e.stopPropagation();
+                            const next = e.target.checked;
+                            await handleToggleTaskLocal(t.id, next);
+                          }}
+                          className="w-5 h-5 cursor-pointer"
+                          aria-label={`タスク完了: ${t.title}`}
+                          onClick={e => e.stopPropagation()}
                         />
-                     </div>
-                  )}
 
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name="habitType" value="binary" checked={newHabitType==='binary'} onChange={() => setNewHabitType('binary')} />
-                          <span className="text-sm">1回でも実施</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name="habitType" value="amount" checked={newHabitType==='amount'} onChange={() => setNewHabitType('amount')} />
-                          <span className="text-sm">規定量の実施</span>
-                        </label>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-500' : 'text-gray-900'}`}>{t.title}</div>
+                          {t.details ? <div className="text-xs text-gray-600 truncate mt-1">{t.details}</div> : null}
+                        </div>
+
+                        <div className="flex items-center gap-2 ml-3">
+                          {t.dueDate ? <div className="text-xs text-gray-500">{new Date(t.dueDate).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</div> : null}
+                          <div className={`text-xs px-2 py-0.5 rounded-full font-semibold ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                            {t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}
+                          </div>
+                          {/* Task badge to visually distinguish from habits */}
+                          <div className="ml-2 text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full font-medium">タスク</div>
+                        </div>
                       </div>
+                    ))}
                   </div>
-                  {newHabitType === 'amount' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">目標値</label>
-                        <input type="number" value={newHabitTarget ?? ''} onChange={e => setNewHabitTarget(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">単位</label>
-                        <input type="text" value={newHabitUnit} onChange={e => setNewHabitUnit(e.target.value)} placeholder="例: km, 分, 回" className="w-full p-3 border border-gray-300 rounded-lg" />
-                      </div>
-                    </div>
+                )}
+              </div>
+
+              {/* 既存: 習慣リスト（タスクの下） */}
+              <div className="space-y-2">
+                  {sortedScheduledHabits.length > 0 ? (
+                      sortedScheduledHabits.map(habit => {
+                        // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
+                        const habitType = (habit.type ?? 'binary');
+                        const isCompleted = isHabitCompletedOnDate(habit, selectedDateString);
+                        const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
+                        const isSkipped = ((habit.skippedDates || []) .map(normalizeKey)).includes(selectedDateString);
+                        const streak = calculateStreak(habit);
+
+                        return (
+                          <div 
+                              key={habit.id} 
+                              onClick={() => setSelectedHabit(habit)}
+                              className={`flex items-center p-3 shadow-sm rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
+                          >
+                              <input
+                                type="checkbox"
+                                checked={habitType === 'binary' ? isCompleted : Boolean(amountVal)}
+                                onChange={() => toggleHabit(habit.id)}
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                onClick={e => e.stopPropagation()}
+                              />
+                              <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                {habit.name}
+                              </span>
+                              {isSkipped && (
+                                <div className="ml-2 text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">スキップ</div>
+                              )}
+
+                              <div className="flex items-center gap-3">
+                                {habitType === 'amount' && (
+                                  <div className="text-sm text-gray-700 font-semibold">
+                                    {amountVal}{habit.unit ? `${habit.unit}` : ''}{habit.target ? ` / ${habit.target}` : ''}
+                                  </div>
+                                )}
+                                {streak > 0 && <span className="text-orange-500 font-bold text-sm md:text-base mr-3">🔥 {streak}日</span>}
+                              </div>
+                          </div>
+                        );
+                      })
+                  ) : (
+                    (habits.length > 0 && !isDiagnosisDay) && <p className="text-gray-500 text-center py-4">今日やるべき習慣はありません。新しい習慣を追加するか、日付を変更してください。</p>
                   )}
-
-                  <div className="flex justify-end gap-2 pt-2">
-                     <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">キャンセル</button>
-                     <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow">追加</button>
-                  </div>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {/* /* Task add modal */}
-      {isTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsTaskModalOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">タスクを追加</h3>
-              <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-500">閉じる</button>
-            </div>
-            <div className="space-y-3">
-              <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-              <textarea value={taskDetails} onChange={e => setTaskDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
-              <div className="flex items-center gap-2">
-                <input type="date" value={taskDueDate} onChange={e => setTaskDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
-                <select value={taskPriority} onChange={e => setTaskPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
-                  <option value="low">低</option>
-                  <option value="medium">中</option>
-                  <option value="high">高</option>
-                </select>
-                <div className="flex-1" />
-                <button onClick={submitTask} className="px-4 py-2 bg-indigo-600 text-white rounded">追加</button>
+                  {habits.length === 0 && !isDiagnosisDay && (
+                    <p className="text-gray-500 text-center py-4">まだ習慣がありません。右下の＋ボタンから新しい習慣を追加して始めましょう！</p>
+                  )}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+            
+            {selectedHabit && (
+                <HabitDetail habit={selectedHabit} onClose={() => setSelectedHabit(null)} onDelete={deleteHabit} onUpdate={updateHabit} />
+            )}
+      </div>
 
-      {/* 予定外タスク用モーダル */}
-      {isNonScheduledOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setIsNonScheduledOpen(false)}>
-          <div className="bg-white rounded-xl w-full max-w-md p-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">予定外タスクをこの日で記録</h3>
-              <button onClick={() => setIsNonScheduledOpen(false)} className="text-gray-500 text-2xl leading-none">&times;</button>
-            </div>
-            <div className="space-y-2 max-h-[60vh] overflow-auto pr-2">
-              {nonScheduledHabits.length === 0 ? (
-                <p className="text-gray-500 text-center py-6">この日は予定外の習慣はありません。</p>
-              ) : nonScheduledHabits.map(h => {
-                const isSkipped = (h.skippedDates || []).includes(selectedDateString);
+      {/* 下部固定バー：週表示 + 右端に追加ボタン（既存 FAB と被らない配置） */}
+      <div className="fixed bottom-18 left-0 right-0 bg-white border-t border-gray-100 shadow-md z-40">
+        <div className="max-w-4xl mx-auto px-2 py-2 flex items-center gap-1">
+          <div className="flex items-center">
+            {/* 矢印を小さくしてスペースを節約 */}
+            <button onClick={() => changeWeek(-1)} className="p-1 rounded-md hover:bg-gray-100" aria-label="前の週へ">
+              <ChevronLeftIcon className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
+
+          <div className="flex-1">
+            {/* 7列グリッドにして余白を削減、各日を均等表示 */}
+            <div className="grid grid-cols-7 gap-1 items-center">
+              {currentWeekDays.map(d => {
+                const isSel = isSameDay(d, selectedDate);
+                const percent = calculateCompletionPercentForDate(d, habits); // 0..100
+                const btnClass = isSel ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50';
                 return (
-                  <div key={h.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-800">{h.name}</div>
-                      <div className="text-xs text-gray-500">{h.frequencyType === 'weekly' ? '週次' : h.frequencyType === 'monthly' ? '月次' : '毎日'}</div>
+                  <button
+                    key={d.toISOString()}
+                    onClick={() => handleDateSelect(d)}
+                    className={`flex flex-col items-center justify-center w-full py-1 rounded-md ${btnClass}`}
+                    title={`${d.toLocaleDateString('ja-JP')} - 完了率 ${percent}%`}
+                    aria-pressed={isSel}
+                  >
+                    <span className={`text-xs ${isSel ? 'text-white/90' : 'text-gray-500'}`}>{d.toLocaleDateString('ja-JP', { weekday: 'short' })}</span>
+                    <span className={`text-sm font-semibold ${isSel ? 'text-white' : 'text-gray-800'}`}>{d.getDate()}</span>
+                    <div className="h-2 mt-1 flex items-center justify-center">
+                      {percent > 0 ? (
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${percent >= 100 ? 'bg-green-500' : percent >= 40 ? 'bg-yellow-400' : 'bg-gray-400'}`}
+                          style={isSel ? { boxShadow: '0 0 0 2px rgba(255,255,255,0.12)' } : undefined}
+                        />
+                      ) : null}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => recordOrToggleForNonScheduled(h)} className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm">記録</button>
-                      <button onClick={() => toggleSkipForDate(h)} className={`px-3 py-2 rounded-md text-sm ${isSkipped ? 'bg-yellow-100 text-yellow-800' : 'bg-white border border-gray-200'}`}>
-                        {isSkipped ? 'スキップ解除' : 'この日をスキップ'}
-                      </button>
-                    </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* タスク編集モーダル */}
-      {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedTask(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">タスクを編集</h3>
-              <button onClick={() => setSelectedTask(null)} className="text-gray-500">閉じる</button>
-            </div>
-
-            <div className="space-y-3">
-              <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-              <textarea value={editDetails} onChange={e => setEditDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
-              <div className="flex items-center gap-2">
-                <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
-                <select value={editPriority} onChange={e => setEditPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
-                  <option value="low">低</option>
-                  <option value="medium">中</option>
-                  <option value="high">高</option>
-                </select>
-                <label className="inline-flex items-center gap-2 ml-auto text-sm">
-                  <input type="checkbox" checked={editDone} onChange={e => setEditDone(e.target.checked)} />
-                  完了
-                </label>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setSelectedTask(null)} className="px-3 py-2 rounded-md bg-gray-100">キャンセル</button>
-                <button onClick={deleteTaskConfirm} className="px-3 py-2 rounded-md bg-red-50 text-red-600">削除</button>
-                <button onClick={saveTaskEdits} className="px-4 py-2 rounded-md bg-indigo-600 text-white">保存</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
-        <div className="flex items-center justify-between mb-4 px-2">
-            <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-gray-800">
-                    {weekStart.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
-                </h3>
-                <button onClick={() => setIsDatePickerOpen(true)} className="p-1 text-gray-500 hover:text-indigo-600" aria-label="日付を選択">
-                    <CalendarIcon className="w-5 h-5"/>
-                </button>
-            </div>
-             <div className="flex items-center gap-2">
-                <button onClick={() => changeWeek(-1)} className="p-2 rounded-full hover:bg-gray-100" aria-label="前の週へ"><ChevronLeftIcon className="w-5 h-5 text-gray-600"/></button>
-                <button onClick={() => handleDateSelect(new Date())} className="px-3 py-1 text-sm bg-gray-100 text-gray-700 font-semibold rounded-md hover:bg-gray-200">今日</button>
-                <button onClick={() => changeWeek(1)} className="p-2 rounded-full hover:bg-gray-100" aria-label="次の週へ"><ChevronRightIcon className="w-5 h-5 text-gray-600"/></button>
-            </div>
-        </div>
         
-        <div className="overflow-hidden cursor-grab" ref={containerRef}>
-            <div
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onTransitionEnd={onTransitionEnd}
-                className="flex"
-                style={{
-                    width: '300%',
-                    transform: `translateX(${translateX}px)`,
-                    transition: `transform ${transitionDuration} ease-out`,
-                }}
-            >
-                <div className="w-1/3 flex-shrink-0">
-                    <WeekView days={prevWeekDays} habits={habits} selectedDate={selectedDate} onDateClick={setSelectedDate} />
-                </div>
-                <div className="w-1/3 flex-shrink-0">
-                    <WeekView days={currentWeekDays} habits={habits} selectedDate={selectedDate} onDateClick={setSelectedDate} />
-                </div>
-                <div className="w-1/3 flex-shrink-0">
-                    <WeekView days={nextWeekDays} habits={habits} selectedDate={selectedDate} onDateClick={setSelectedDate} />
-                </div>
-            </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-6 mb-4 px-2">
-          <div className="flex items-baseline gap-3">
-            <h3 className="text-lg font-semibold text-gray-800">{formattedListDate}</h3>
-            {/* 達成率バッジ */}
-            <div className={`ml-3 inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${completionPercent === 100 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
-              <div className={`w-3 h-3 rounded-full ${completionPercent === 100 ? 'bg-white' : (completionPercent >= 75 ? 'bg-green-500' : completionPercent >= 40 ? 'bg-yellow-400' : 'bg-gray-400')}`} />
-              <span className="text-sm">{completionPercent}%</span>
-            </div>
-          </div>
           <div className="flex items-center gap-2">
+            {/* 右矢印も小さめに */}
+            <button onClick={() => changeWeek(1)} className="p-1 rounded-md hover:bg-gray-100" title="次の週へ" aria-label="次の週へ">
+              <ChevronRightIcon className="w-4 h-4 text-gray-600" />
+            </button>
+
+            {/* 区切り線（'|'） */}
+            <div className="w-px bg-gray-300 h-12" aria-hidden />
+
+            {/* 右端の追加ボタン（小さめ・バー内） */}
             <button
-                onClick={() => setIsNonScheduledOpen(true)}
-                className="flex items-center gap-2 text-sm px-3 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50"
-                title="予定外の習慣を記録"
+              onClick={() => setFabOpen(v => !v)}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-indigo-600 text-white shadow-md"
+              aria-label="追加メニュー"
+              title="追加メニュー"
             >
-              <ListBulletIcon className="w-4 h-4 text-gray-600" />
-              <span className="text-sm text-gray-700">予定外</span>
+              <PlusIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
-        {showCelebrate && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
-            <style>{`
-              @keyframes floatUp {
-                0% { transform: translateY(0) scale(1); opacity: 1; }
-                100% { transform: translateY(-140vh) scale(1.1); opacity: 0; }
-              }
-              .confetti {
-                position: absolute;
-                bottom: 10%;
-                font-size: 28px;
-                animation-name: floatUp;
-                animation-timing-function: cubic-bezier(.18,.9,.35,1);
-                animation-iteration-count: 1;
-              }
-            `}</style>
-            <div className="w-full max-w-3xl mx-auto px-4">
-              <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
-                <div className="text-center">
-                  <div className="text-2xl md:text-2xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
-                  <div className="mt-4 text-lg md:text-xl opacity-95">今日もよく頑張りましたね！</div>
-                </div>
-              </div>
-              {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
-                <span
-                  key={i}
-                  className="confetti"
-                  style={{
-                    left: `${8 + (i * 11) % 84}%`,
-                    animationDuration: `${1800 + (i * 200)}ms`,
-                    animationDelay: `${200 + (i * 120)}ms`,
-                    transform: `translateY(0) rotate(${(i*30)%360}deg)`
-                  }}
-                >
-                  {emo}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* --- 診断カード（最上部） --- */}
-        <div className="mb-4">
-          {isDiagnosisDay && (
-            <div
-              onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
-              className={`flex items-center p-4 shadow-sm rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
-            >
-              {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
-              <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
-                エネルギーを診断する
-              </span>
-              {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
-            </div>
-          )}
-          {isPersonalityDiagnosisDay && (
-            <div
-              onClick={() => !isPersonalityCompleted && setView?.('personality')}
-              className={`mt-3 flex items-center p-4 shadow-sm rounded-lg transition ${isPersonalityCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-purple-50 hover:bg-purple-100 cursor-pointer'}`}
-            >
-              {isPersonalityCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-purple-600" />}
-              <span className={`flex-grow mx-4 text-lg font-semibold ${isPersonalityCompleted ? 'line-through text-gray-500' : 'text-purple-800'}`}>
-                パーソナリティを診断する
-              </span>
-              {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
-            </div>
-          )}
-        </div>
-
-        {/* --- 本日のタスク（診断の下） --- */}
-        <div className="mb-4">
-          {dueTasks.length === 0 ? (
-            <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">本日のタスクはありません。</div>
-          ) : (
-            <div className="space-y-2">
-              {dueTasks.map(t => (
-                <div
-                  key={t.id}
-                  onClick={() => setSelectedTask(t)}
-                  className={`flex items-center gap-3 p-3 border shadow-sm ${t.done ? 'opacity-80' : ''} bg-amber-50 border-amber-100 rounded-md`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!t.done}
-                    onChange={async (e) => {
-                      e.stopPropagation();
-                      const next = e.target.checked;
-                      await handleToggleTaskLocal(t.id, next);
-                    }}
-                    className="w-5 h-5 cursor-pointer"
-                    aria-label={`タスク完了: ${t.title}`}
-                    onClick={e => e.stopPropagation()}
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-500' : 'text-gray-900'}`}>{t.title}</div>
-                    {t.details ? <div className="text-xs text-gray-600 truncate mt-1">{t.details}</div> : null}
-                  </div>
-
-                  <div className="flex items-center gap-2 ml-3">
-                    {t.dueDate ? <div className="text-xs text-gray-500">{new Date(t.dueDate).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</div> : null}
-                    <div className={`text-xs px-2 py-0.5 rounded-full font-semibold ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                      {t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}
-                    </div>
-                    {/* Task badge to visually distinguish from habits */}
-                    <div className="ml-2 text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full font-medium">タスク</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 既存: 習慣リスト（タスクの下） */}
-        <div className="space-y-2">
-            {sortedScheduledHabits.length > 0 ? (
-                sortedScheduledHabits.map(habit => {
-                  // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
-                  const habitType = (habit.type ?? 'binary');
-                  const isCompleted = isHabitCompletedOnDate(habit, selectedDateString);
-                  const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
-                  const isSkipped = ((habit.skippedDates || []) .map(normalizeKey)).includes(selectedDateString);
-                  const streak = calculateStreak(habit);
-
-                  return (
-                    <div 
-                        key={habit.id} 
-                        onClick={() => setSelectedHabit(habit)}
-                        className={`flex items-center p-3 shadow-sm rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
-                    >
-                        <input
-                          type="checkbox"
-                          checked={habitType === 'binary' ? isCompleted : Boolean(amountVal)}
-                          onChange={() => toggleHabit(habit.id)}
-                          className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          onClick={e => e.stopPropagation()}
-                        />
-                        <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                          {habit.name}
-                        </span>
-                        {isSkipped && (
-                          <div className="ml-2 text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">スキップ</div>
-                        )}
-
-                        <div className="flex items-center gap-3">
-                          {habitType === 'amount' && (
-                            <div className="text-sm text-gray-700 font-semibold">
-                              {amountVal}{habit.unit ? `${habit.unit}` : ''}{habit.target ? ` / ${habit.target}` : ''}
-                            </div>
-                          )}
-                          {streak > 0 && <span className="text-orange-500 font-bold text-sm md:text-base mr-3">🔥 {streak}日</span>}
-                        </div>
-                    </div>
-                  );
-                })
-            ) : (
-              (habits.length > 0 && !isDiagnosisDay) && <p className="text-gray-500 text-center py-4">今日やるべき習慣はありません。新しい習慣を追加するか、日付を変更してください。</p>
-            )}
-            {habits.length === 0 && !isDiagnosisDay && (
-              <p className="text-gray-500 text-center py-4">まだ習慣がありません。右下の＋ボタンから新しい習慣を追加して始めましょう！</p>
-            )}
-        </div>
       </div>
-      
-      {selectedHabit && (
-          <HabitDetail habit={selectedHabit} onClose={() => setSelectedHabit(null)} onDelete={deleteHabit} onUpdate={updateHabit} />
-      )}
-
-    </div>
+    </>
   );
 };
 

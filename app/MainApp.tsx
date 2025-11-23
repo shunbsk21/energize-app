@@ -824,21 +824,21 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
-    if (view === 'diagnosis') {
-      return '現在のあなたのエネルギー状態を4つの側面（身体、精神、感情、知性）から診断し、カレンダーで記録を可視化します。';
-    }
-    if (view === 'habits') {
-      return '日々の習慣を記録して、エネルギーを高めましょう。新しい習慣は右下の＋ボタンから追加できます。';
-    }
-    if (view === 'analytics') {
-      return 'ここでは、診断結果の推移や習慣の達成率をグラフで確認できます。自分のエネルギー状態と行動の関連性を分析し、日々の改善に役立てましょう。';
-    }
-    if (view === 'groups') {
-        return '友達とグループを作成し、日々の習慣の進捗を共有できます。コメント機能で励まし合い、モチベーションを高めましょう。';
-    }
-    if (view === 'records') {
-        return '日々のチェックイン / チェックアウトの記録を確認できます。自分のエネルギー状態を振り返り、改善点を見つけましょう。';
-    }
+    // if (view === 'diagnosis') {
+    //   return '現在のあなたのエネルギー状態を4つの側面（身体、精神、感情、知性）から診断し、カレンダーで記録を可視化します。';
+    // }
+    // if (view === 'habits') {
+    //   return '日々の習慣を記録して、エネルギーを高めましょう。新しい習慣は右下の＋ボタンから追加できます。';
+    // }
+    // if (view === 'analytics') {
+    //   return 'ここでは、診断結果の推移や習慣の達成率をグラフで確認できます。自分のエネルギー状態と行動の関連性を分析し、日々の改善に役立てましょう。';
+    // }
+    // if (view === 'groups') {
+    //     return '友達とグループを作成し、日々の習慣の進捗を共有できます。コメント機能で励まし合い、モチベーションを高めましょう。';
+    // }
+    // if (view === 'records') {
+    //     return '日々のチェックイン / チェックアウトの記録を確認できます。自分のエネルギー状態を振り返り、改善点を見つけましょう。';
+    // }
     return '';
   }, [view]);
 
@@ -1211,7 +1211,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       {/* 下部固定タブバー */}
       {isUnderHabits && (
-        <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white/90 border-t border-gray-100 safe-bottom">
+        <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white border-t border-gray-100 safe-bottom">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-18 py-3">
               <button
