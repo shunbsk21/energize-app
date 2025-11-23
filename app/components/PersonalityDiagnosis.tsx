@@ -476,6 +476,24 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
                 ].map(({ key, labelLeft, labelRight }) => {
                   const pct = submittedResult.percents[key];
                   const str = submittedResult.strength[key];
+
+                  // 優先側を決めるヘルパー:
+                  // pct>50 -> left 優勢, pct<50 -> right 優勢
+                  // pct===50 -> submittedResult.type の文字で優先を決定 (例: INFJ の場合 EI は I が優先なら right)
+                  const getDominantSide = (axisKey: string, percent: number, typeStr?: string | null) => {
+                    if (percent > 50) return "left";
+                    if (percent < 50) return "right";
+                    if (!typeStr) return "left";
+                    const idxMap: Record<string, number> = { EI: 0, SN: 1, TF: 2, JP: 3 };
+                    const leftLetterMap: Record<string, string> = { EI: "E", SN: "S", TF: "T", JP: "J" };
+                    const idx = idxMap[axisKey];
+                    const letter = (typeStr || "")[idx] ?? leftLetterMap[axisKey];
+                    return letter === leftLetterMap[axisKey] ? "left" : "right";
+                  };
+                  const dominant = getDominantSide(key, pct, submittedResult?.type);
+                  const leftClass = dominant === "left" ? "bg-indigo-600" : "bg-gray-200";
+                  const rightClass = dominant === "right" ? "bg-indigo-600" : "bg-gray-200";
+
                   return (
                     <div key={key} className="flex flex-col">
                       <div className="flex items-center justify-between text-sm text-gray-700">
@@ -483,17 +501,10 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
                         <div className="text-center text-sm text-gray-800 font-medium">{pct}%</div>
                         <div className="w-28 text-right text-gray-600">{labelRight}</div>
                       </div>
-                      {/* 左寄り pct が 50 未満なら右寄り（青を右側に）、50 以上なら左側を青にする */}
                       <div className="w-full rounded-full h-3 mt-2 overflow-hidden">
                         <div className="flex h-3 rounded-full overflow-hidden">
-                          <div
-                            style={{ width: `${pct}%` }}
-                            className={`${pct >= 50 ? 'bg-indigo-600' : 'bg-gray-200'} transition-all`}
-                          />
-                          <div
-                            style={{ width: `${100 - pct}%` }}
-                            className={`${pct >= 50 ? 'bg-gray-200' : 'bg-indigo-600'} transition-all`}
-                          />
+                          <div style={{ width: `${pct}%` }} className={`${leftClass} transition-all`} />
+                          <div style={{ width: `${100 - pct}%` }} className={`${rightClass} transition-all`} />
                         </div>
                       </div>
                       <div className="text-xs text-gray-400 mt-1">強さ: {str}%</div>
