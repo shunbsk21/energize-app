@@ -1192,7 +1192,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex justify-between items-center h-18 py-3">
               <button
                 onClick={() => setView('diagnosis')}
-                className={`flex flex-col items-center text-xs w-1/5 ${isView('diagnosis') ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${(view === 'diagnosis' || view === 'personality') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <DiagnosisIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">診断</span>
