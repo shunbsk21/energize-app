@@ -564,7 +564,9 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                       const key = personalityResult.key;
                                       const recs = ENERGY_PERSONALITY_HABITS[key] ?? (personalityResult.data.advice.habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })));
                                       return recs.map((h: any, idx: number) => {
-                                        const energyMeta = ENERGY_CATEGORIES[h.energy as any] ?? { shortName: h.energy, color: '#9CA3AF', name: h.energy };
+                                        // h.energy は外部データなので安全に EnergyCategory にキャストして参照する
+                                        const energyKey = (h.energy ?? 'mental') as EnergyCategory;
+                                        const energyMeta = (ENERGY_CATEGORIES as Record<EnergyCategory, any>)[energyKey] ?? { shortName: String(h.energy), color: '#9CA3AF', name: String(h.energy) };
                                         return (
                                           <div key={idx} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
                                             <div className="flex-shrink-0">
