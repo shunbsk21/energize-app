@@ -997,7 +997,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               </div>
               <div className="flex-1">
                 <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>
-                <div className="text-xs text-gray-500 truncate">{profile.email || ''}</div>
               </div>
               <button onClick={() => { setIsProfileOpen(true); setIsMenuOpen(false); }} className="text-sm text-indigo-600 px-2 py-1 rounded hover:bg-indigo-50">表示</button>
             </div>
@@ -1051,7 +1050,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>
-                  <div className="text-xs text-gray-500 truncate">{profile.email || ''}</div>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
