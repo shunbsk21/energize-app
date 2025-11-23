@@ -130,8 +130,10 @@ function calcScores(answers: Record<number, AnswerValue>) {
     if (!v) return;
     let w = v - 3;
     if (q.direction === "negative") w = -w;
-    sums[q.dimension] += w;
-    counts[q.dimension] += 1;
+    // q.dimension may come from external data; cast to Dimension for safe indexing
+    const dim = q.dimension as Dimension;
+    sums[dim] += w;
+    counts[dim] += 1;
   });
 
   const maxes: Record<Dimension, number> = {
@@ -528,8 +530,9 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
                   { key: "TF", labelLeft: "思考(T)", labelRight: "感情(F)" },
                   { key: "JP", labelLeft: "判断(J)", labelRight: "知覚(P)" },
                 ].map(({ key, labelLeft, labelRight }) => {
-                  const pct = submittedResult.percents[key];
-                  const str = submittedResult.strength[key];
+                  // submittedResult.percents/strength indexed by Dimension — cast key to Dimension
+                  const pct = submittedResult.percents[key as Dimension];
+                  const str = submittedResult.strength[key as Dimension];
 
                   // 優先側を決めるヘルパー:
                   // pct>50 -> left 優勢, pct<50 -> right 優勢
