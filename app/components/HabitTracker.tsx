@@ -40,6 +40,8 @@ interface HabitTrackerProps {
   // 追加: タスク更新 / 削除ハンドラ（あれば呼び出す）
   onUpdateTask?: (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => Promise<void> | void;
   onDeleteTask?: (taskId: string) => Promise<void> | void;
+  // 追加: 学習コンテンツ
+  onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
 }
 
 // 優先度ソート用
