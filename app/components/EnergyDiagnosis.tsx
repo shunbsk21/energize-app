@@ -5,7 +5,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View } from '../types'; 
 import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT, ENERGY_PERSONALITIES } from '../constants';
 
-const THRESHOLD = 15;
+const THRESHOLD = 16;
 const getTypeKey = (scores: EnergyScores) => {
   const p = scores.physical >= THRESHOLD ? "High" : "Low";
   const m = scores.mental >= THRESHOLD ? "High" : "Low";
@@ -361,14 +361,30 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
     const index = keys.indexOf(key) + 1; // 1-based
     if (!data || index <= 0) return null;
 
-    // 日本語名のみを取り出してファイル名化
-    // 例: "覚醒した勇者 (The Awakened Hero)" -> "覚醒した勇者"
-    const rawName = String(data.name || '').split('(')[0].trim();
-    // 空白はアンダースコアに、ファイル名に使えない文字は除去
-    const sanitized = rawName
-      .replace(/\s+/g, '_')
-      .replace(/[^\p{L}\p{N}_]/gu, ''); // Unicode対応で文字（日本語含む）と数字を許可
-    const imageSrc = `images/energy_personalities/${index}_${sanitized}.png`;
+    // 画像ファイルは固定の命名規則で配置されているため、明示的なマップで参照する
+    // （提供されたファイル名一覧に完全一致するようにする）
+    const IMAGE_FILE_MAP: Record<number, string> = {
+      1: '1_覚醒した勇者.png',
+      2: '2_傷だらけの賢者.png',
+      3: '3_陽気な迷子.png',
+      4: '4_冷徹なマシン.png',
+      5: '5_暴走する情熱家.png',
+      6: '6_悲劇の軍師.png',
+      7: '7_夢見る病床の人.png',
+      8: '8_ご隠居アドバイザー.png',
+      9: '9_空回りのソルジャー.png',
+      10: '10_優秀なロボット.png',
+      11: '11_お祭りピエロ.png',
+      12: '12_穏やかなナマケモノ.png',
+      13: '13_憂鬱な哲学者.png',
+      14: '14_さまよえる野獣.png',
+      15: '15_燃え尽き前のロウソク.png',
+      16: '16_冬眠中のクマ.png',
+    };
+
+    // public フォルダ直下の images/energy_personalities に置いている前提で絶対パスを生成
+    const filename = IMAGE_FILE_MAP[index] || `${index}.png`;
+    const imageSrc = `/images/energy_personalities/${encodeURI(filename)}`;
     return { key, data, imageSrc };
   }, [displayedRecord]);
 
