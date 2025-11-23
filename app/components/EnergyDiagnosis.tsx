@@ -34,10 +34,7 @@ interface EnergyDiagnosisProps {
   // MainApp.tsx が渡す関数の型 (Firestore保存関数) に合わせる
   setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
   habits: Habit[];
-  // ページ切替用コールバック (親から渡す)
-  setView: (v: View) => void;
-  // 現在のビューかどうか判定するヘルパー (親から渡す)
-  isView: (v: View) => boolean;
+  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
 }
 
 type QuizStep = EnergyCategory | 'start' | 'results';

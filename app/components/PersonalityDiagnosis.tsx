@@ -91,8 +91,7 @@ interface Question {
 interface PersonalityProps {
   onComplete?: (result: any) => void;
   setIsHelpOpen?: (open: boolean) => void;
-  setView?: (v: View) => void;
-  isView?: (v: View) => boolean;
+  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
 }
 
 const fallbackPreference: Record<Dimension, "left" | "right"> = {
