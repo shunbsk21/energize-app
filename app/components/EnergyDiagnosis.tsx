@@ -3,7 +3,17 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
 import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View } from '../types'; 
-import { ENERGY_CATEGORIES, QUESTIONS, RATING_OPTIONS, getEnergyLevel, ADVICE_CONTENT, ENERGY_PERSONALITIES } from '../constants';
+import {
+  ENERGY_CATEGORIES,
+  QUESTIONS,
+  RATING_OPTIONS,
+  getEnergyLevel,
+  ADVICE_CONTENT,
+  ENERGY_PERSONALITIES,
+  ENERGY_PERSONALITY_HABITS
+} from '../constants';
+
+import AddHabitModal from "./AddHabitModal";
 
 const THRESHOLD = 16;
 const getTypeKey = (scores: EnergyScores) => {
@@ -275,6 +285,10 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
   const [localFrequency, setLocalFrequency] = useState(diagnosisFrequency);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
+  // Habit modal state
+  const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [habitDraft, setHabitDraft] = useState<{ title: string; detail: string; energy?: string } | null>(null);
+
   useEffect(() => {
     setLocalFrequency(diagnosisFrequency);
   }, [diagnosisFrequency]);
@@ -543,17 +557,59 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                               <div className="text-sm text-gray-600 mt-2">{personalityResult.data.description}</div>
                               {personalityResult.data.advice?.habits?.length > 0 && (
                                 <div className="mt-4">
-                                  <div className="text-sm font-medium text-gray-700 mb-2">おすすめの習慣</div>
-                                  <ul className="space-y-2">
-                                    {personalityResult.data.advice.habits.map((h: string, i: number) => (
-                                      <li key={i} className="flex items-start gap-2">
-                                        <span className="mt-1 w-2 h-2 rounded-full bg-indigo-600 flex-shrink-0" />
-                                        <span className="text-sm text-gray-700">{h}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  <div className="text-sm font-medium text-gray-700 mb-3">おすすめの習慣</div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* try to get structured habits from mapping by key; fallback to simple list */}
+                                    {(() => {
+                                      const key = personalityResult.key;
+                                      const recs = ENERGY_PERSONALITY_HABITS[key] ?? (personalityResult.data.advice.habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })));
+                                      return recs.map((h: any, idx: number) => {
+                                        const energyMeta = ENERGY_CATEGORIES[h.energy as any] ?? { shortName: h.energy, color: '#9CA3AF', name: h.energy };
+                                        return (
+                                          <div key={idx} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
+                                            <div className="flex-shrink-0">
+                                              <span
+                                                className="inline-flex items-center justify-center text-xs font-semibold rounded-full px-2 py-1 text-white"
+                                                style={{ backgroundColor: energyMeta.color }}
+                                                title={energyMeta.name}
+                                              >
+                                                {energyMeta.shortName}
+                                              </span>
+                                            </div>
+                                            <div className="flex-1">
+                                              <div className="font-medium text-gray-800 text-sm">{h.title}</div>
+                                              {h.detail ? <div className="text-sm text-gray-600 mt-1">{h.detail}</div> : null}
+                                            </div>
+                                            <div className="flex items-start">
+                                              <button
+                                                onClick={() => {
+                                                  setHabitDraft({ title: h.title, detail: h.detail, energy: h.energy });
+                                                  setIsHabitModalOpen(true);
+                                                }}
+                                                className="ml-2 inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white hover:bg-indigo-700"
+                                                aria-label="習慣に追加"
+                                              >
+                                                +
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      });
+                                    })()}
+                                  </div>
                                 </div>
                               )}
+
+                              {/* AddHabitModal reused */}
+                              <AddHabitModal
+                                isOpen={isHabitModalOpen}
+                                onClose={() => { setIsHabitModalOpen(false); setHabitDraft(null); }}
+                                initial={{
+                                  title: habitDraft?.title?.replace(/^\s*\d+\.\s*/, '') ?? '',
+                                  detail: habitDraft?.detail ?? '',
+                                  energy: habitDraft?.energy ?? undefined
+                                }}
+                              />
                             </div>
                           </div>
                         )}

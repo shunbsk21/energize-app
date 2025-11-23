@@ -238,7 +238,16 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
   }
 };
 
+// textarea 自動リサイズヘルパ（このファイル内で使用）
+const autoGrowTextArea = (el?: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
+};
+
 const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onUpdate }) => {
+  const detailsRef = React.useRef<HTMLTextAreaElement | null>(null);
+
   const [displayDate, setDisplayDate] = useState(new Date());
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -251,6 +260,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
     type: (habit.type ?? 'binary') as 'binary' | 'amount',
     target: habit.target ?? undefined,
     unit: habit.unit ?? '',
+    details: habit.details ?? '',
     skippedDates: habit.skippedDates ?? []
   });
 
@@ -263,8 +273,11 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       type: (habit.type ?? 'binary') as 'binary' | 'amount',
       target: habit.target ?? undefined,
       unit: habit.unit ?? '',
+      details: habit.details ?? '',
       skippedDates: habit.skippedDates ?? []
     });
+    // 自動リサイズを一度実行
+    setTimeout(() => autoGrowTextArea(detailsRef.current), 0);
   }, [habit, isEditing]);
 
   const completedDatesSet = useMemo(() => new Set((habit.completedDates || []).map(normalizeKey)), [habit.completedDates]);
@@ -494,6 +507,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       frequencyType: formData.frequencyType,
       frequencyValue: formData.frequencyValue,
       type: formData.type,
+      details: formData.details ?? undefined,
       skippedDates: formData.skippedDates ?? (habit.skippedDates ?? []),
       // completedDates は常に配列として保持（binary タイプで使う）
       completedDates: habit.completedDates ?? []
@@ -553,6 +567,20 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                   <label className="block text-sm font-medium text-gray-700 mb-1">習慣の名前</label>
                   <input type="text" value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))} className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"/>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
+                  <textarea
+                    ref={detailsRef}
+                    value={formData.details}
+                    onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+                    onChange={e => setFormData(f => ({...f, details: e.target.value}))}
+                    placeholder="例: 朝の10分で深呼吸しながら行う"
+                    rows={3}
+                    className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 resize-none"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">開始日</label>
                   <input type="date" value={formData.startDate} onChange={e => setFormData(f => ({...f, startDate: e.target.value}))} className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"/>

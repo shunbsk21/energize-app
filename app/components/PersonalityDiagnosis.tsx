@@ -2,10 +2,81 @@
 "use client";
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { View } from "../types";
+import {
+  PERSONALITY_QUESTIONS,
+  PERSONALITY_RATING_OPTIONS,
+  PERSONALITY_TYPE_MAP,
+  PERSONALITY_IMAGE_MAP,
+  PERSONALITY_HABITS,
+  ENERGY_CATEGORIES,
+} from "../constants";
+
+import AddHabitModal from "./AddHabitModal";
 
 // Firestore
 import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+
+// --- FrequencyEditor (EnergyDiagnosis と同等のUIをここでも利用) ---
+const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+const FrequencyEditor: React.FC<{
+  frequency: DiagnosisFrequency;
+  setFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>;
+}> = ({ frequency, setFrequency }) => {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
+        <select
+          value={frequency.frequencyType}
+          onChange={e => setFrequency({ frequencyType: e.target.value as FrequencyType, frequencyValue: [] })}
+          className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+        >
+          <option value="daily">毎日</option>
+          <option value="weekly">週次</option>
+          <option value="monthly">月次</option>
+        </select>
+      </div>
+
+      {frequency.frequencyType === 'weekly' && (
+        <div className="flex justify-center gap-1">
+          {WEEK_DAYS.map((day, index) => (
+            <button
+              type="button"
+              key={index}
+              onClick={() => {
+                const newValue = frequency.frequencyValue.includes(index)
+                  ? frequency.frequencyValue.filter(d => d !== index)
+                  : [...frequency.frequencyValue, index];
+                setFrequency(prev => ({ ...prev, frequencyValue: newValue.sort() }));
+              }}
+              className={`w-10 h-10 rounded-full font-semibold transition-colors text-sm md:text-base ${frequency.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {frequency.frequencyType === 'monthly' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
+          <input
+            type="text"
+            placeholder="例: 1, 15"
+            defaultValue={frequency.frequencyValue.join(', ')}
+            onChange={e => {
+              const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
+              setFrequency(prev => ({ ...prev, frequencyValue: value.sort((a,b) => a-b) }));
+            }}
+            className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+          />
+        </div>
+      )}
+    </div>
+  );
+};
 
 type Dimension = "EI" | "SN" | "TF" | "JP";
 type AnswerValue = 1 | 2 | 3 | 4 | 5;
@@ -24,68 +95,19 @@ interface PersonalityProps {
   isView?: (v: View) => boolean;
 }
 
-/* --- Questions --- */
-const QUESTIONS: Question[] = [
-  { id: 1, text: "疲れた週末は、家で一人で過ごすよりも、友人と出かけてパーッと発散したい。", dimension: "EI", direction: "positive" },
-  { id: 2, text: "考え事をするときは、誰かに話しながら整理するほうが得意だ。", dimension: "EI", direction: "positive" },
-  { id: 3, text: "大勢の人がいる交流会やパーティーに参加した後、ひどく疲れを感じて一人になりたくなる。", dimension: "EI", direction: "negative" },
-  { id: 4, text: "ランチタイムは、同僚や友人と雑談しながら食べるほうがエネルギーが湧く。", dimension: "EI", direction: "positive" },
-  { id: 5, text: "自分が注目の的になることは、プレッシャーというよりは快感だ。", dimension: "EI", direction: "positive" },
-
-  { id: 6, text: "新しい家電やアプリを使うときは、まず説明書やチュートリアルを順に確認したい。", dimension: "SN", direction: "positive" },
-  { id: 7, text: "話を聞くとき、具体的な事実よりも、背後の意味や可能性の方に興味がある。", dimension: "SN", direction: "negative" },
-  { id: 8, text: "実現していない未来のアイデアを空想するより、目の前の現実的な課題を片付ける方が好きだ。", dimension: "SN", direction: "positive" },
-  { id: 9, text: "道順を教えるときは、方角よりも目印で伝えることが多い。", dimension: "SN", direction: "positive" },
-  { id: 10, text: "細かい詳細にこだわるあまり、全体の大きな流れを見落とすことがある。", dimension: "SN", direction: "positive" },
-
-  { id: 11, text: "友人に悩みを相談されたら、共感よりも先に解決策を提案したくなる。", dimension: "TF", direction: "positive" },
-  { id: 12, text: "重大な決断では、自分の気持ちよりも論理的な正しさを優先する。", dimension: "TF", direction: "positive" },
-  { id: 13, text: "議論の場では、誰かの感情を害してでも真実をはっきりさせるべきだと思う。", dimension: "TF", direction: "positive" },
-  { id: 14, text: "人を評価するときは、成果よりも努力や貢献心を重視したい。", dimension: "TF", direction: "negative" },
-  { id: 15, text: "公平とは同じルールを適用することだと思う。", dimension: "TF", direction: "positive" },
-
-  { id: 16, text: "仕事は余裕を持って前倒しで終わらせたい。", dimension: "JP", direction: "positive" },
-  { id: 17, text: "旅行のプランはきっちり決めず、その日の気分で決めるのが好きだ。", dimension: "JP", direction: "negative" },
-  { id: 18, text: "部屋やデスクが整理されていないと落ち着かない。", dimension: "JP", direction: "positive" },
-  { id: 19, text: "予定が急に変更になってもむしろ楽しめる柔軟性がある。", dimension: "JP", direction: "negative" },
-  { id: 20, text: "物事はなるべく早く結論を出してスッキリしたい。", dimension: "JP", direction: "positive" },
-];
-
-/* --- Rating options --- */
-const RATING_OPTIONS = [
-  { value: 1, label: "全く違う" },
-  { value: 2, label: "ちょっと違う" },
-  { value: 3, label: "どちらでもない" },
-  { value: 4, label: "ややそう思う" },
-  { value: 5, label: "強くそう思う" },
-];
-
-/* --- TYPE_MAP / calc logic reused from previous implementation --- */
-const TYPE_MAP: Record<string, { name: string; description: string; habits?: string[] }> = {
-  "ESTJ": { name: "組織の指揮者 (ESTJ)", description: "現実的で秩序を重んじ、責任感が強いタイプ。", habits: ["予定表に必ず目を通す","小さなデッドラインを作る"] },
-  "ESTP": { name: "行動の達人 (ESTP)", description: "即断即決で実行力のある冒険家タイプ。", habits: ["短時間の集中ワークを取り入れる","身体を動かす習慣を作る"] },
-  "ESFJ": { name: "世話好きの世論家 (ESFJ)", description: "人の気持ちに敏感でチームで力を発揮する。", habits: ["感謝を伝える習慣","小さな褒めノート"] },
-  "ESFP": { name: "場を盛り上げるパフォーマー (ESFP)", description: "陽気でライブ感を楽しむタイプ。", habits: ["週に1回は友人と会う","短い創作を試す"] },
-  "ENTJ": { name: "戦略家の指導者 (ENTJ)", description: "ビジョンを描き、組織を動かすタイプ。", habits: ["目標を1週間単位で設定","週次レビュー"] },
-  "ENTP": { name: "アイデアの発火者 (ENTP)", description: "発想豊かで議論を楽しむイノベーター。", habits: ["アイデアノートを持つ","小さな実験をする"] },
-  "ENFJ": { name: "人を導く共感者 (ENFJ)", description: "人の成長を助けるカリスマタイプ。", habits: ["誰かの成長を記録する","感情を言語化する時間"] },
-  "ENFP": { name: "熱量の伝道師 (ENFP)", description: "情熱的で可能性を追い求めるムードメーカー。", habits: ["新しい趣味を月1で試す","感情日記をつける"] },
-  "ISTJ": { name: "堅実な守護者 (ISTJ)", description: "責任感が強く、信頼される実務家。", habits: ["ルーチンタスクを固定化","定期バックアップを習慣化"] },
-  "ISTP": { name: "冷静な職人 (ISTP)", description: "問題解決に強く、柔軟に動く職人気質。", habits: ["手を動かす時間を作る","短期的な目標を立てる"] },
-  "ISFJ": { name: "献身的な支援者 (ISFJ)", description: "周囲を支える安定の存在。", habits: ["身近な人へ小さな気遣いを","睡眠ルーチンを整える"] },
-  "ISFP": { name: "静かな美の探求者 (ISFP)", description: "感性に従い心地よさを追求するタイプ。", habits: ["自然に触れる時間を持つ","クリエイティブな短時間習慣"] },
-  "INTJ": { name: "孤高の設計者 (INTJ)", description: "長期的視点でシステムを設計する戦略家。", habits: ["週次の戦略レビュー","静かな集中タイム"] },
-  "INTP": { name: "理論を紡ぐ思索家 (INTP)", description: "概念や仕組みを深掘りする探究者。", habits: ["読書ログを残す","少しのメモ習慣"] },
-  "INFJ": { name: "洞察の導師 (INFJ)", description: "深い洞察と共感で価値ある導きをする。", habits: ["深掘りの時間を確保","ビジョンノートを作る"] },
-  "INFP": { name: "価値を追う理想主義者 (INFP)", description: "内面の価値観に忠実な創造者。", habits: ["気持ちを言語化する習慣","価値リストを作る"] },
-};
-
 const fallbackPreference: Record<Dimension, "left" | "right"> = {
   EI: "right",
   SN: "left",
   TF: "left",
   JP: "left",
 };
+
+// QUESTIONS / TYPE_MAP / IMAGE_MAP は constants.ts からインポートしています
+// 既存のコンポーネントロジックは変わりませんが、内部で使う名前を置き換えます
+const QUESTIONS = PERSONALITY_QUESTIONS;
+const RATING_OPTIONS = PERSONALITY_RATING_OPTIONS;
+const TYPE_MAP = PERSONALITY_TYPE_MAP;
+const IMAGE_FILE_MAP = PERSONALITY_IMAGE_MAP;
 
 // アイコン
 const HelpIcon: React.FC<{className?: string}> = ({className}) => (
@@ -207,27 +229,21 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
   // 頻度設定用モーダル制御（EnergyDiagnosis と同様の見た目に合わせる）
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   
+  // local frequency state persisted to localStorage under key "personalityDiagnosisFrequency"
+  const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("personalityDiagnosisFrequency") : null;
+      return raw ? JSON.parse(raw) : { frequencyType: "daily", frequencyValue: [] };
+    } catch {
+      return { frequencyType: "daily", frequencyValue: [] };
+    }
+  });
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  
-  // 画像マップ（public/images/personalities に配置している前提）
-  const IMAGE_FILE_MAP: Record<string, string> = {
-    INTJ: '1_INTJ.png',
-    INTP: '2_INTP.png',
-    ENTJ: '3_ENTJ.png',
-    ENTP: '4_ENTP.png',
-    INFJ: '5_INFJ.png',
-    INFP: '6_INFP.png',
-    ENFJ: '7_ENFJ.png',
-    ENFP: '8_ENFP.png',
-    ISTJ: '9_ISTJ.png',
-    ISFJ: '10_ISFJ.png',
-    ESTJ: '11_ESTJ.png',
-    ESFJ: '12_ESFJ.png',
-    ISTP: '13_ISTP.png',
-    ISFP: '14_ISFP.png',
-    ESTP: '15_ESTP.png',
-    ESFP: '16_ESFP.png',
-  };
+  // Habit create modal state
+  const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [habitDraft, setHabitDraft] = useState<{ title: string; detail: string; energy?: string } | null>(null);
 
   // submittedResult が変わったら表示用の画像パスを決定
   const resultImageSrc = useMemo(() => {
@@ -239,12 +255,6 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
   // 選択中の過去履歴詳細モーダル制御
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-
-  const getImageForType = (type?: string | null) => {
-    if (!type) return null;
-    const file = IMAGE_FILE_MAP[type] ?? `${type}.png`;
-    return `/images/16personalities/${encodeURI(file)}`;
-  };
 
   // Firestore: subscribe to user's personality history
   const currentQuestions = step === 'start' || step === 'results' ? [] : QUESTIONS.filter(q => q.dimension === step);
@@ -283,6 +293,25 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history]);
+
+  useEffect(() => {
+    // keep localFrequency in sync with stored value if it exists (safe on client)
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("personalityDiagnosisFrequency") : null;
+      if (raw) setLocalFrequency(JSON.parse(raw));
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  const handleSaveFrequency = () => {
+    try {
+      localStorage.setItem("personalityDiagnosisFrequency", JSON.stringify(localFrequency));
+    } catch (err) {
+      console.warn("Failed to save personalityDiagnosisFrequency", err);
+    }
+    setShowSaveSuccess(true);
+    setTimeout(() => setShowSaveSuccess(false), 2000);
+    setIsFrequencyModalOpen(false);
+  };
 
   const openRecordDetail = (rec: any) => {
     setSelectedRecord(rec);
@@ -332,6 +361,19 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
           const ref = doc(db, 'users', uid, 'personalityHistory', today);
           await setDoc(ref, payload);
           // local history will update via snapshot listener
+          // mark as completed for other local UIs (HabitTracker) and notify via event
+          try {
+            const key = 'personalityDiagnosisCompletedDates';
+            const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+            const arr: string[] = raw ? JSON.parse(raw) : [];
+            if (!arr.includes(today)) {
+              arr.unshift(today);
+              localStorage.setItem(key, JSON.stringify(arr));
+            }
+          } catch (e) { /* noop */ }
+          try {
+            window.dispatchEvent(new CustomEvent('personality-diagnosis-saved', { detail: { date: today } }));
+          } catch (e) { /* noop */ }
         } catch (err) {
           console.error('Failed to save personality result', err);
         }
@@ -340,6 +382,18 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
         const date = new Date();
         const rec = { id: date.toISOString(), date: date.toLocaleDateString('sv-SE'), type: res.type, percents: res.percents, strength: res.strength };
         setHistory(prev => [rec, ...prev].slice(0, 20));
+        // also persist completion locally + notify
+        try {
+          const today = date.toLocaleDateString('sv-SE');
+          const key = 'personalityDiagnosisCompletedDates';
+          const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+          const arr: string[] = raw ? JSON.parse(raw) : [];
+          if (!arr.includes(today)) {
+            arr.unshift(today);
+            localStorage.setItem(key, JSON.stringify(arr));
+          }
+          window.dispatchEvent(new CustomEvent('personality-diagnosis-saved', { detail: { date: today } }));
+        } catch (e) { /* noop */ }
       }
 
       onComplete?.(res);
@@ -515,9 +569,61 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
 
               <div>
                 <div className="text-sm font-medium text-gray-700">おすすめの習慣</div>
-                <ul className="mt-2 list-disc list-inside text-gray-700">
-                  {(TYPE_MAP[submittedResult.type]?.habits ?? ["自分に合う習慣を少し試して継続すること。"]).map((h: string, i: number) => <li key={i}>{h}</li>)}
-                </ul>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(() => {
+                    const typeKey = submittedResult?.type;
+                    const habits = (typeKey && PERSONALITY_HABITS[typeKey]) || (TYPE_MAP[typeKey]?.habits ? TYPE_MAP[typeKey].habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })) : []);
+                    if (!habits || habits.length === 0) {
+                      return <div className="text-sm text-gray-500 col-span-full">自分に合う習慣を少し試して継続すること。</div>;
+                    }
+                    return habits.map((h: any, i: number) => {
+                      const energyKey = h.energy as 'physical'|'mental'|'emotional'|'intellectual';
+                      const energyMeta = ENERGY_CATEGORIES?.[energyKey];
+                      // card per habit with + button
+                      return (
+                        <div key={i} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
+                          <div className="flex-shrink-0">
+                            <span
+                              className="inline-flex items-center justify-center text-xs font-semibold rounded-full px-2 py-1 text-white"
+                              style={{ backgroundColor: energyMeta?.color ?? '#9CA3AF' }}
+                              title={energyMeta?.name}
+                            >
+                              {energyMeta?.shortName ?? energyKey}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800 text-sm">{h.title}</div>
+                            {h.detail ? <div className="text-sm text-gray-600 mt-1">{h.detail}</div> : null}
+                          </div>
+                          <div className="flex items-start">
+                            <button
+                              onClick={() => {
+                                setHabitDraft({ title: h.title, detail: h.detail, energy: energyKey });
+                                setIsHabitModalOpen(true);
+                              }}
+                              className="ml-2 inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white hover:bg-indigo-700"
+                              aria-label="習慣に追加"
+                            >
+                              +
+                            </button>
+                         </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Habit creation modal (prefilled when + pressed) */}
+                <AddHabitModal
+                  isOpen={isHabitModalOpen}
+                  onClose={() => { setIsHabitModalOpen(false); setHabitDraft(null); }}
+                  initial={{
+                    // タイトル先頭に付与された "1. " のような番号接頭辞を削除して渡す
+                    title: habitDraft?.title?.replace(/^\s*\d+\.\s*/, '') ?? '',
+                    detail: habitDraft?.detail ?? ''
+                  }}
+                  // no onCreate passed: AddHabitModal will dispatch `habit-created` event which HabitTracker listens to
+                />
               </div>
 
               <div className="flex justify-end mt-4">
@@ -553,6 +659,21 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
         {isDetailModalOpen && selectedRecord && (
           // ...existing detail modal unchanged...
           <div>{/* ...existing code ... */}</div>
+        )}
+
+        {/* Frequency modal (personality) */}
+        {isFrequencyModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setIsFrequencyModalOpen(false)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-3">診断の頻度設定</h3>
+              <FrequencyEditor frequency={localFrequency} setFrequency={setLocalFrequency} />
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setIsFrequencyModalOpen(false)} className="px-4 py-2 rounded-lg bg-white border">キャンセル</button>
+                <button onClick={handleSaveFrequency} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">保存</button>
+              </div>
+              {showSaveSuccess && <div className="mt-2 text-sm text-green-600">保存しました</div>}
+            </div>
+          </div>
         )}
       </div>
     );

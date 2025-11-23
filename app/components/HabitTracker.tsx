@@ -106,6 +106,14 @@ const CheckCircleIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const BrainIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c1.657 0 3 1.343 3 3v1h2a2 2 0 012 2v1.5M9 6V5a3 3 0 013-2" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5V9a2 2 0 01-2 2H3v2a2 2 0 002 2h1v1a3 3 0 003 3h4a3 3 0 003-3v-1h1a2 2 0 002-2v-2h-2a2 2 0 01-2-2v-.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 13.5c0-1.5 1.5-2.5 3-2.5s3 1 3 2.5" />
+  </svg>
+);
+
 const MoodIcon = ({ level }: { level: number }) => {
   // 簡易アイコン: emoji を利用（スタイルは調整可能）
   const map = {
@@ -566,6 +574,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [newHabitType, setNewHabitType] = useState<'binary' | 'amount'>('binary');
   const [newHabitTarget, setNewHabitTarget] = useState<number | undefined>(undefined);
   const [newHabitUnit, setNewHabitUnit] = useState<string>('');
+  const [newHabitDetails, setNewHabitDetails] = useState<string>('');
+  const newHabitDetailsRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
@@ -594,6 +604,58 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [fabOpen, setFabOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement | null>(null);
 
+  // personality 診断の頻度 / 完了日を localStorage から読み込む（Energy と同様の UX を出す）
+  const [localPersonalityFrequency, setLocalPersonalityFrequency] = useState<DiagnosisFrequency>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('personalityDiagnosisFrequency') : null;
+      return raw ? JSON.parse(raw) : { frequencyType: 'daily', frequencyValue: [] };
+    } catch {
+      return { frequencyType: 'daily', frequencyValue: [] };
+    }
+  });
+  const [personalityCompletedDates, setPersonalityCompletedDates] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('personalityDiagnosisCompletedDates') : null;
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    // listen storage events (other tabs) to keep in sync
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'personalityDiagnosisFrequency') {
+        try { setLocalPersonalityFrequency(JSON.parse(e.newValue || '{}')); } catch {}
+      }
+      if (e.key === 'personalityDiagnosisCompletedDates') {
+        try { setPersonalityCompletedDates(JSON.parse(e.newValue || '[]')); } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    // listen custom event dispatched when personality is saved
+    const handler = (ev: Event) => {
+      try {
+        const ce = ev as CustomEvent;
+        const date = ce?.detail?.date;
+        if (!date) return;
+        setPersonalityCompletedDates(prev => prev.includes(date) ? prev : [date, ...prev]);
+      } catch {}
+    };
+    window.addEventListener('personality-diagnosis-saved', handler as EventListener);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('personality-diagnosis-saved', handler as EventListener);
+    };
+  }, []);
+
+  // add-modal 開閉時に自動リサイズ実行
+  useEffect(() => {
+    if (newHabitDetailsRef.current) {
+      setTimeout(() => autoGrowTextArea(newHabitDetailsRef.current), 0);
+    }
+  }, [/* runs when modal renders — relies on ref presence */]);
+  
   // --- localTasks: props から同期するローカルコピー（即時UI反映用） ---
   const [localTasks, setLocalTasks] = useState<typeof tasks>(tasks);
   useEffect(() => setLocalTasks(tasks), [tasks]);
@@ -1085,6 +1147,14 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       return energyHistory.some(record => record.date === selectedDateString);
   }, [energyHistory, selectedDateString]);
 
+  const isPersonalityDiagnosisDay = useMemo(() => {
+    return isDiagnosisScheduledForDate(localPersonalityFrequency, selectedDate);
+  }, [localPersonalityFrequency, selectedDate]);
+
+  const isPersonalityCompleted = useMemo(() => {
+    return personalityCompletedDates.includes(selectedDateISO);
+  }, [personalityCompletedDates, selectedDateISO]);
+
 
   // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)
   // フォーム submit ハンドラ: MainApp 側の onAddHabit(newHabitData) を呼び出す
@@ -1097,6 +1167,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     const base: any = {
       name: newHabitName.trim(),
+      details: newHabitDetails.trim() || undefined,
       type: newHabitType,
       startDate: newHabitStartDate ?? new Date().toLocaleDateString('sv-SE'),
       frequencyType: newHabitFrequency?.type ?? 'daily',
@@ -1128,6 +1199,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       }
       // 成功時はフォームをクリアしてモーダルを閉じる（ローディング状態を触らない）
       setNewHabitName('');
+      setNewHabitDetails('');
       setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
       setNewHabitFrequency({ type: 'daily', value: [] });
       setNewHabitType('binary');
@@ -1418,7 +1490,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 <span className="text-sm font-medium text-gray-800">学習を追加</span>
               </button>
             )}
-            
+
             {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
             <button
               onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
@@ -1471,6 +1543,20 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
+                    <textarea
+                      ref={newHabitDetailsRef}
+                      value={newHabitDetails}
+                      onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
+                      onChange={e => setNewHabitDetails(e.target.value)}
+                      placeholder="例: 朝の10分で深呼吸しながら行う"
+                      rows={3}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900 resize-none"
+                    />
+                  </div>
+
                    <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">開始日</label>
                     <input
@@ -1480,6 +1566,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
                     <select 
@@ -1767,6 +1854,18 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 エネルギーを診断する
               </span>
               {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
+            </div>
+          )}
+          {isPersonalityDiagnosisDay && (
+            <div
+              onClick={() => !isPersonalityCompleted && setView?.('personality')}
+              className={`mt-3 flex items-center p-4 shadow-sm rounded-lg transition ${isPersonalityCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-purple-50 hover:bg-purple-100 cursor-pointer'}`}
+            >
+              {isPersonalityCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-purple-600" />}
+              <span className={`flex-grow mx-4 text-lg font-semibold ${isPersonalityCompleted ? 'line-through text-gray-500' : 'text-purple-800'}`}>
+                パーソナリティを診断する
+              </span>
+              {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
             </div>
           )}
         </div>

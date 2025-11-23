@@ -44,6 +44,7 @@ export interface Habit {
   // amount 用の目標値 / 単位（例: target=10, unit='km'）
   target?: number;
   unit?: string;
+  details?: string;
   skippedDates?: string[];
   startDate: string;
   frequencyType: FrequencyType;
