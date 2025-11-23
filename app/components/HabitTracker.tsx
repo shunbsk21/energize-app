@@ -523,6 +523,14 @@ const MoonIcon: React.FC<{className?: string}> = ({className}) => (
   </svg>
 );
 
+// Scholar icon (small) for FAB
+const ScholarIconSmall: React.FC<{className?: string}> = ({className}) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="7" r="3" />
+    <path d="M5 21c2-4 6-6 7-6s5 2 7 6" />
+  </svg>
+);
+
 // --- HabitTracker Component Start ---
 
 const HabitTracker: React.FC<HabitTrackerProps> = ({ 
@@ -544,7 +552,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onAddTask,
   onToggleTask,
   onUpdateTask,
-  onDeleteTask
+  onDeleteTask,
+  onAddLearning
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
@@ -1382,6 +1391,27 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
         {fabOpen && (
           <div className="flex flex-col items-end space-y-3 mb-2">
+
+            {/* 学習ボタン：クリックでタイトルを入力して onAddLearning を呼ぶ */}
+            <button
+              onClick={() => {
+                // タイトル入力は Learnings のフルスクリーン編集側で行うため、ここでは view 切替とイベント送出のみ
+                setFabOpen(false);
+                setView('learnings');
+                // 少し待ってからイベント送出（Learnings がマウントされるタイミングに合わせる）
+                setTimeout(() => {
+                  try { window.dispatchEvent(new CustomEvent('open-learning-editor')); } catch { /* noop */ }
+                }, 60);
+              }}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+              title="学習を追加"
+            >
+              <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
+                <ScholarIconSmall className="w-5 h-5" />
+              </span>
+              <span className="text-sm font-medium text-gray-800">学習を追加</span>
+            </button>
+
             {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
             <button
               onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
@@ -1403,6 +1433,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
               <span className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-50 text-indigo-600 font-semibold">＋</span>
               <span className="text-sm font-medium text-gray-800">習慣を追加</span>
             </button>
+
           </div>
         )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { ADMIN_ID } from './config';
 
 // ★ Firestore関連のモジュールをインポート
 import {
@@ -27,6 +28,7 @@ import Records from './components/Records';
 import ProfileModal from './components/Profile';
 import Tasks from './components/Tasks';
 import Notes from './components/Notes';
+import Learnings from './components/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
 
@@ -81,6 +83,14 @@ const NoteIcon: React.FC<{className?: string}> = ({className}) => (
   </svg>
 );
 
+// --- ScholarIcon (Google Scholar っぽい) ---
+const ScholarIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="7" r="3" strokeLinejoin="round" strokeLinecap="round"/>
+    <path d="M5 21c2-4 6-6 7-6s5 2 7 6" strokeLinejoin="round" strokeLinecap="round"/>
+  </svg>
+);
+
 // --- Icon Components End ---
 
 
@@ -91,6 +101,8 @@ interface MainAppProps {
 }
 
 const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
+  type LearningItem = { id?: string; title: string; url?: string; notes?: string; tags?: string[]; createdAt?: string; updatedAt?: string; createdBy?: string };
+
   const [view, setView] = useState<View>('habits');
   
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
@@ -117,6 +129,56 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // add learnings state
+  const [learnings, setLearnings] = useState<LearningItem[]>([]);
+  
+  // 確認用: 実際のログインユーザーの email を一度出力してください（後で削除可）
+  useEffect(() => { console.info('profile:', profile); }, [profile]);
+
+  // 既存の学習コンテンツを読み込む（簡易）
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'learnings'));
+        const items: LearningItem[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        // createdAt/updatedAt を ISO 文字列に統一（Firestore タイムスタンプか文字列に対応）
+        const normalized = items.map(i => ({
+          ...i,
+          createdAt: i.createdAt ? String(i.createdAt) : undefined,
+          updatedAt: i.updatedAt ? String(i.updatedAt) : undefined,
+        }));
+        setLearnings(normalized);
+      } catch (err) {
+        console.error('load learnings failed', err);
+      }
+    };
+    load();
+  }, []);
+
+  // 管理者のみ学習コンテンツを追加（UID 判定）
+  const handleCreateLearning = async (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => {
+    if ((profile as any)?.id !== ADMIN_ID) {
+      console.warn('only admin can add learning content');
+      return;
+    }
+    try {
+      const now = new Date().toISOString();
+      const ref = collection(db, 'learnings');
+      const docRef = await addDoc(ref, {
+        title: payload.title,
+        url: payload.url ?? null,
+        notes: payload.notes ?? null,
+        tags: payload.tags ?? [],
+        createdAt: now,
+        updatedAt: now,
+        createdBy: profile.id ?? null,
+      });
+      setLearnings(prev => [{ id: docRef.id, title: payload.title, url: payload.url, notes: payload.notes, tags: payload.tags, createdAt: now, updatedAt: now, createdBy: profile.id }, ...prev]);
+    } catch (err) {
+      console.error('学習コンテンツの追加に失敗しました', err);
+    }
+  };
 
   // ログアウト処理 (変更なし)
   const handleLogout = async () => {
@@ -771,6 +833,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   onToggleTask={handleToggleTask}
                   onUpdateTask={handleUpdateTask}
                   onDeleteTask={handleDeleteTask}
+                  onAddLearning={handleCreateLearning}
                 />;
       case 'analytics':
         return <Analytics 
@@ -811,6 +874,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         return <Tasks /* 必要な props を渡す（例: tasks, onAddTask 等） */ />
       case 'notes':
         return <Notes /* 必要な props を渡す（例: notes, onAddNote 等） */ />
+      case 'learnings':
+        return (
+          <Learnings
+            learnings={learnings}
+            onAddLearning={handleCreateLearning}
+            profile={profile}
+          />
+        );
+      
       default:
         return null;
     }
@@ -838,20 +910,26 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* アイコン + 下テキスト */}
-                  <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-2 rounded-md ${isUnderHabits ? 'text-indigo-600' : 'text-gray-500'}`}>
-                    <HabitIcon className="w-6 h-6"/>
-                    <span className="text-xs mt-1">習慣</span>
-                  </button>
-                  <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-2 rounded-md ${isView('tasks') ? 'text-indigo-600' : 'text-gray-500'}`}>
-                    <TaskIcon className="w-6 h-6"/>
-                    <span className="text-xs mt-1">タスク</span>
-                  </button>
-                  <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-2 rounded-md ${isView('notes') ? 'text-indigo-600' : 'text-gray-500'}`}>
-                    <NoteIcon className="w-6 h-6"/>
-                    <span className="text-xs mt-1">メモ</span>
-                  </button>
+                <div className="ml-6">
+                  {/* カード風コンテナにまとめて、アイコンは小さめに表示 */}
+                  <div className="inline-flex items-center gap-1 bg-white rounded-lg border border-gray-100 px-2 py-1">
+                    <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-1 rounded-md ${isUnderHabits ? 'text-indigo-600' : 'text-gray-500'}`}>
+                      <HabitIcon className="w-5 h-5"/>
+                      <span className="text-[11px] mt-0.5">習慣</span>
+                    </button>
+                    <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-1 rounded-md ${isView('tasks') ? 'text-indigo-600' : 'text-gray-500'}`}>
+                      <TaskIcon className="w-5 h-5"/>
+                      <span className="text-[11px] mt-0.5">タスク</span>
+                    </button>
+                    <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-1 rounded-md ${isView('notes') ? 'text-indigo-600' : 'text-gray-500'}`}>
+                      <NoteIcon className="w-5 h-5"/>
+                      <span className="text-[11px] mt-0.5">メモ</span>
+                    </button>
+                    <button onClick={() => setView('learnings')} title="学習" className={`flex flex-col items-center p-1 rounded-md ${isView('learnings') ? 'text-amber-600' : 'text-gray-500'}`}>
+                      <ScholarIcon className="w-5 h-5"/>
+                      <span className="text-[11px] mt-0.5">学習</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center">

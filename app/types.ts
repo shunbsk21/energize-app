@@ -7,7 +7,7 @@ export type EnergyCategory = 'physical' | 'mental' | 'emotional' | 'intellectual
 
 export type FrequencyType = 'daily' | 'weekly' | 'monthly';
 
-export type View = 'diagnosis' | 'habits' | 'analytics' | 'records' | 'groups' | 'tasks' | 'notes';
+export type View = 'diagnosis' | 'habits' | 'analytics' | 'records' | 'groups' | 'tasks' | 'notes' | 'learnings';
 
 export interface Question {
   id: string;
