@@ -1579,31 +1579,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                       <option value="monthly">月次</option>
                     </select>
                   </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name="habitType" value="binary" checked={newHabitType==='binary'} onChange={() => setNewHabitType('binary')} />
-                          <span className="text-sm">1回でも実施</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name="habitType" value="amount" checked={newHabitType==='amount'} onChange={() => setNewHabitType('amount')} />
-                          <span className="text-sm">規定量の実施</span>
-                        </label>
-                      </div>
-                  </div>
-                  {newHabitType === 'amount' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">目標値</label>
-                        <input type="number" value={newHabitTarget ?? ''} onChange={e => setNewHabitTarget(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">単位</label>
-                        <input type="text" value={newHabitUnit} onChange={e => setNewHabitUnit(e.target.value)} placeholder="例: km, 分, 回" className="w-full p-3 border border-gray-300 rounded-lg" />
-                      </div>
-                    </div>
-                  )}
                   {newHabitFrequency.type === 'weekly' && (
                     <div className="flex justify-center gap-1">
                       {WEEK_DAYS.map((day, index) => (
@@ -1633,6 +1608,32 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
                         />
                      </div>
+                  )}
+
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="habitType" value="binary" checked={newHabitType==='binary'} onChange={() => setNewHabitType('binary')} />
+                          <span className="text-sm">1回でも実施</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="habitType" value="amount" checked={newHabitType==='amount'} onChange={() => setNewHabitType('amount')} />
+                          <span className="text-sm">規定量の実施</span>
+                        </label>
+                      </div>
+                  </div>
+                  {newHabitType === 'amount' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">目標値</label>
+                        <input type="number" value={newHabitTarget ?? ''} onChange={e => setNewHabitTarget(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">単位</label>
+                        <input type="text" value={newHabitUnit} onChange={e => setNewHabitUnit(e.target.value)} placeholder="例: km, 分, 回" className="w-full p-3 border border-gray-300 rounded-lg" />
+                      </div>
+                    </div>
                   )}
 
                   <div className="flex justify-end gap-2 pt-2">

@@ -271,7 +271,15 @@ const FrequencyEditor: React.FC<{
 };
 
 
-const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, setIsHelpOpen, diagnosisFrequency, setDiagnosisFrequency, habits, setView, isView }) => {
+const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
+  history,
+  onComplete,
+  setIsHelpOpen,
+  diagnosisFrequency,
+  setDiagnosisFrequency,
+  habits,
+  handleAddHabit
+}) => {
   const [step, setStep] = useState<QuizStep>('start');
   const [answers, setAnswers] = useState<{ [key: string]: number }>({});
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -609,8 +617,8 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({ history, onComplete, 
                                 initial={{
                                   title: habitDraft?.title?.replace(/^\s*\d+\.\s*/, '') ?? '',
                                   detail: habitDraft?.detail ?? '',
-                                  energy: habitDraft?.energy ?? undefined
                                 }}
+                                onCreate={handleAddHabit}
                               />
                             </div>
                           </div>

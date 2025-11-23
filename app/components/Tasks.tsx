@@ -1,5 +1,6 @@
 // ...existing code...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 // Firestore (modular)
 import {
   collection,
@@ -46,6 +47,12 @@ const formatMMDD = (iso?: string) => {
     return `${parts[1]}/${parts[2]}`;
   }
   return iso;
+};
+
+// Simple Portal helper (render children into document.body)
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  if (typeof document === 'undefined') return null;
+  return createPortal(<>{children}</>, document.body);
 };
 
 // --- Simple CalendarPicker (no external deps) ---
@@ -100,45 +107,47 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
       </button>
 
       {open && (
-        <div
-          className={`absolute left-0 w-64 bg-white rounded shadow-lg p-3 z-50 ${openUpwards ? 'bottom-full mb-2' : 'mt-2'}`}
-          onMouseDown={e => e.stopPropagation()}
-          style={{ maxHeight: 320, overflowY: 'auto' }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{'<'}</button>
-            <div className="text-sm font-medium">{viewDate.toLocaleString(undefined, { month: 'long' })} {viewDate.getFullYear()}</div>
-            <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>{'>'}</button>
-          </div>
+        <Portal>
+          <div
+            className={`absolute left-0 w-64 bg-white rounded shadow-lg p-3 z-50 ${openUpwards ? 'bottom-full mb-2' : 'mt-2'}`}
+            onMouseDown={e => e.stopPropagation()}
+            style={{ maxHeight: 320, overflowY: 'auto' }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{'<'}</button>
+              <div className="text-sm font-medium">{viewDate.toLocaleString(undefined, { month: 'long' })} {viewDate.getFullYear()}</div>
+              <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>{'>'}</button>
+            </div>
 
-          <div className="grid grid-cols-7 gap-1 text-xs text-center mb-2">
-            {['日','月','火','水','木','金','土'].map(w => <div key={w} className="text-gray-400">{w}</div>)}
-          </div>
+            <div className="grid grid-cols-7 gap-1 text-xs text-center mb-2">
+              {['日','月','火','水','木','金','土'].map(w => <div key={w} className="text-gray-400">{w}</div>)}
+            </div>
 
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: startDay }).map((_, i) => <div key={`pad-${i}`} />)}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1;
-              const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-              const iso = toLocalISO(cellDate);
-              const isSelected = value === iso;
-              const isToday = iso === todayIso;
-              return (
-                <button
-                  key={day}
-                  onClick={() => selectDay(day)}
-                  className={`w-8 h-8 flex items-center justify-center rounded ${isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100' } ${isToday && !isSelected ? 'ring-2 ring-indigo-200' : ''}`}
-                >
-                  {day}
-                </button>
-              );
-            })}
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: startDay }).map((_, i) => <div key={`pad-${i}`} />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+                const iso = toLocalISO(cellDate);
+                const isSelected = value === iso;
+                const isToday = iso === todayIso;
+                return (
+                  <button
+                    key={day}
+                    onClick={() => selectDay(day)}
+                    className={`w-8 h-8 flex items-center justify-center rounded ${isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100' } ${isToday && !isSelected ? 'ring-2 ring-indigo-200' : ''}`}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex justify-between text-sm">
+              <button className="px-2 py-1 text-gray-600" onClick={() => { onChange(undefined); setOpen(false); }}>クリア</button>
+              <button className="px-2 py-1 text-gray-600" onClick={() => setOpen(false)}>閉じる</button>
+            </div>
           </div>
-          <div className="mt-3 flex justify-between text-sm">
-            <button className="px-2 py-1 text-gray-600" onClick={() => { onChange(undefined); setOpen(false); }}>クリア</button>
-            <button className="px-2 py-1 text-gray-600" onClick={() => setOpen(false)}>閉じる</button>
-          </div>
-        </div>
+        </Portal>
       )}
     </div>
   );
@@ -164,17 +173,19 @@ const PrioritySelect: React.FC<{ value?: TaskItem['priority']; onChange: (p: Tas
         {value ? priorityLabel(value) : '優先度'}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-36 bg-white rounded shadow-lg z-50">
-          {items.map(it => (
-            <button
-              key={it.key}
-              onClick={() => { onChange(it.key); setOpen(false); }}
-              className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 ${it.className}`}
-            >
-              {it.label}
-            </button>
-          ))}
-        </div>
+        <Portal>
+          <div className="absolute right-4 mt-2 w-36 bg-white rounded shadow-lg z-50">
+            {items.map(it => (
+              <button
+                key={it.key}
+                onClick={() => { onChange(it.key); setOpen(false); }}
+                className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 ${it.className}`}
+              >
+                {it.label}
+              </button>
+            ))}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -185,6 +196,10 @@ export const tasksForDate = (tasks: TaskItem[], date: string) => tasks.filter(t 
 const Tasks: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // 追加: 未完了 / 完了済みセクションの開閉状態
+  const [incompleteOpen, setIncompleteOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
 
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
@@ -326,9 +341,10 @@ const Tasks: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* ヘッダカード：タイトルと簡易フィルタ（画像の左上のカードに相当） */}
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">タスク</h2>
           <div className="flex items-center gap-3">
             <label className="inline-flex items-center gap-2 text-sm">
@@ -337,92 +353,130 @@ const Tasks: React.FC = () => {
             </label>
           </div>
         </div>
+        {/* ここに将来的な検索やタグフィルタを追加可能 */}
+      </div>
 
-        <div className="space-y-2">
+      {/* タスクリストカード：折りたたみ対応（未完了 / 完了済み） */}
+      <div className="mt-4 space-y-4">
+        {/* 未完了セクションヘッダ */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIncompleteOpen(v => !v)}
+              className="text-left text-lg font-semibold text-gray-900 flex items-center gap-2"
+              aria-expanded={incompleteOpen}
+            >
+              <span className={`inline-block w-5 text-center ${incompleteOpen ? 'transform rotate-90' : ''}`}>▸</span>
+              <span>未完了</span>
+              <span className="text-sm text-gray-500">（{visible.length}件）</span>
+            </button>
+          </div>
+          <div className="text-sm text-gray-500">{/* 保留: 右側にフィルタやソート */}</div>
+        </div>
+        <div className={incompleteOpen ? 'space-y-2 transition-all' : 'hidden'}>
           {visible.length === 0 ? (
             <p className="text-gray-500">タスクがありません。</p>
           ) : (
-            visible.map(t => (
-              <div key={t.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg shadow-sm hover:shadow-md">
-                <input
-                  type="checkbox"
-                  checked={!!t.done}
-                  onChange={e => toggleTask(t.id, e.target.checked)}
-                  className="w-5 h-5"
-                />
+            visible.map((t, idx) => {
+              const stableKey = t.id ? t.id : `task-${idx}`;
+              return (
+                <div key={stableKey} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg shadow-sm hover:shadow-md">
+                  <input
+                    type="checkbox"
+                    checked={!!t.done}
+                    onChange={e => toggleTask(t.id, e.target.checked)}
+                    className="w-5 h-5"
+                  />
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div className="truncate">
-                      <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</div>
-                      {t.details ? <div className="text-xs text-gray-500 truncate mt-1">{t.details}</div> : null}
-                    </div>
-
-                    <div className="flex items-center gap-2 ml-3">
-                      {t.dueDate ? <div className="text-xs text-gray-500">{formatMMDD(t.dueDate)}</div> : null}
-                      <div className={`text-xs px-2 py-0.5 rounded-full ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        {priorityLabel(t.priority)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="truncate">
+                        <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</div>
+                        {t.details ? <div className="text-xs text-gray-500 truncate mt-1">{t.details}</div> : null}
                       </div>
-                      <button onClick={() => setEditingId(t.id)} className="text-xs text-gray-500 px-2 py-1 rounded hover:bg-gray-100">⋯</button>
+
+                      <div className="flex items-center gap-2 ml-3">
+                        {t.dueDate ? <div className="text-xs text-gray-500">{formatMMDD(t.dueDate)}</div> : null}
+                        <div className={`text-xs px-2 py-0.5 rounded-full ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          {priorityLabel(t.priority)}
+                        </div>
+                        <button onClick={() => setEditingId(t.id)} className="text-xs text-gray-500 px-2 py-1 rounded hover:bg-gray-100">⋯</button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
-        {/* 完了済み一覧（折りたたみ） */}
+        {/* 完了済みセクション（折りたたみ制御） */}
         {showCompleted && (
-          <div className="mt-4">
-            <div className="text-sm text-gray-600 mb-2">完了済み</div>
-            <div className="space-y-2">
-              {completedList.length === 0 ? <div className="text-gray-500 text-sm">完了済みはありません。</div> : completedList.map(ct => (
-                <div key={ct.id} className="flex items-center gap-3 p-2 bg-white rounded shadow-sm">
-                  <div className="flex-1">
-                    <div className="text-sm">{ct.title}</div>
-                    <div className="text-xs text-gray-400">{ct.completedAt ? new Date(ct.completedAt).toLocaleString() : ''}</div>
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setCompletedOpen(v => !v)}
+                className="text-left text-sm font-medium text-gray-700 flex items-center gap-2"
+                aria-expanded={completedOpen}
+              >
+                <span className={`inline-block w-4 text-center ${completedOpen ? 'transform rotate-90' : ''}`}>▸</span>
+                <span>完了済み</span>
+                <span className="text-sm text-gray-400">（{completedList.length}件）</span>
+              </button>
+            </div>
+
+            <div className={completedOpen ? 'mt-3 space-y-2' : 'hidden'}>
+              {completedList.length === 0 ? <div className="text-gray-500 text-sm">完了済みはありません。</div> : completedList.map((ct, idx) => {
+                const stableKey = ct.id ? ct.id : `completed-${idx}`;
+                return (
+                  <div key={stableKey} className="flex items-center gap-3 p-2 bg-white rounded shadow-sm">
+                    <div className="flex-1">
+                      <div className="text-sm">{ct.title}</div>
+                      <div className="text-xs text-gray-400">{ct.completedAt ? new Date(ct.completedAt).toLocaleString() : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => toggleTask(ct.id, false)} className="px-3 py-1 text-sm bg-gray-100 rounded">元に戻す</button>
+                      <button onClick={() => removeTask(ct.id)} className="px-3 py-1 text-sm text-red-600">削除</button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => toggleTask(ct.id, false)} className="px-3 py-1 text-sm bg-gray-100 rounded">元に戻す</button>
-                    <button onClick={() => removeTask(ct.id)} className="px-3 py-1 text-sm text-red-600">削除</button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
-
       </div>
-
+      
       {/* Floating + button */}
-      <button onClick={() => { setEditingId(null); setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsCreateOpen(true); }} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
-
-      {/* Create / Edit Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsCreateOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{editingId ? 'タスクを編集' : 'タスクを追加'}</h3>
-              <button onClick={() => setIsCreateOpen(false)} className="text-gray-500">閉じる</button>
-            </div>
-
-            <div className="space-y-3">
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-              <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
-              <div className="flex gap-2 items-center">
-                <CalendarPicker value={dueDate} onChange={setDueDate} />
-                <PrioritySelect value={priority} onChange={setPriority} />
-                <div className="flex-1" />
-                <button onClick={submit} className="px-4 py-2 bg-indigo-600 text-white rounded">{editingId ? '更新' : '追加'}</button>
+     <button onClick={() => { setEditingId(null); setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsCreateOpen(true); }} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
+       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
+     </button>
+ 
+     {/* Create / Edit Modal */}
+     {isCreateOpen && (
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsCreateOpen(false)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">{editingId ? 'タスクを編集' : 'タスクを追加'}</h3>
+                <button onClick={() => setIsCreateOpen(false)} className="text-gray-500">閉じる</button>
+              </div>
+    
+              <div className="space-y-3">
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+                <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
+                <div className="flex gap-2 items-center">
+                  <CalendarPicker value={dueDate} onChange={setDueDate} />
+                  <PrioritySelect value={priority} onChange={setPriority} />
+                  <div className="flex-1" />
+                  <button onClick={submit} className="px-4 py-2 bg-indigo-600 text-white rounded">{editingId ? '更新' : '追加'}</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        </Portal>
+     )}
+
+    </>
   );
 };
 

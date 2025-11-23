@@ -222,7 +222,11 @@ const getCurrentUid = () => {
   }
 };
 
-const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHelpOpen, setView, isView }) => {
+const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
+  onComplete, 
+  setIsHelpOpen,
+  handleAddHabit
+}) => {
   const [step, setStep] = useState<Dimension | 'start' | 'results'>('start');
   const [answers, setAnswers] = useState<Record<number, AnswerValue>>({});
   const [submittedResult, setSubmittedResult] = useState<any | null>(null);
@@ -625,7 +629,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({ onComplete, setIsHel
                     title: habitDraft?.title?.replace(/^\s*\d+\.\s*/, '') ?? '',
                     detail: habitDraft?.detail ?? ''
                   }}
-                  // no onCreate passed: AddHabitModal will dispatch `habit-created` event which HabitTracker listens to
+                  onCreate={handleAddHabit}
                 />
               </div>
 

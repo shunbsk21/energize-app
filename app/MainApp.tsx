@@ -412,17 +412,19 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   };
 
   // (2) 習慣(Habit) (変更なし)
-  const handleAddHabit = async (newHabitData: Omit<Habit, 'id'>) => {
+  const handleAddHabit = useCallback(async (newHabitData: Omit<Habit, 'id'>) => {
     if (!profile.id) return;
     try {
       const habitsRef = collection(db, 'users', profile.id, 'habits');
-      const docRef = await addDoc(habitsRef, newHabitData);
-      const createdHabit: Habit = { ...newHabitData, id: docRef.id };
+      // sanitize: remove undefined fields because Firestore rejects undefined
+      const toSave = Object.fromEntries(Object.entries(newHabitData).filter(([, v]) => v !== undefined));
+      const docRef = await addDoc(habitsRef, toSave);
+      const createdHabit: Habit = { ...(toSave as Omit<Habit, 'id'>), id: docRef.id };
       setHabits(prevHabits => [...prevHabits, createdHabit]);
     } catch (error) {
       console.error("習慣の追加に失敗しました:", error);
     }
-  };
+  }, [profile.id]);
   
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     if (!profile.id || !updatedHabit.id) return;
@@ -447,6 +449,22 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       console.error("習慣の削除に失敗しました:", error);
     }
   };
+
+  // 追加: グローバル habit-created イベントを拾って handleAddHabit を呼ぶ
+  useEffect(() => {
+    const handler = async (ev: Event) => {
+      try {
+        const ce = ev as CustomEvent;
+        const payload = ce?.detail;
+        if (!payload) return;
+        await handleAddHabit(payload);
+      } catch (err) {
+        console.error('global habit-created handler error', err);
+      }
+    };
+    window.addEventListener('habit-created', handler as EventListener);
+    return () => window.removeEventListener('habit-created', handler as EventListener);
+  }, [handleAddHabit]);
   
   // (3) グループ・友達関連 (★ handleAddComment を修正 ★)
   
@@ -839,11 +857,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   diagnosisFrequency={diagnosisFrequency} 
                   setDiagnosisFrequency={handleDiagnosisFrequencyChange}
                   habits={habits}
-                  isView={isView}
-                  setView={setView}
+                  handleAddHabit={handleAddHabit}
                 />;
       case 'personality':
-        return <PersonalityDiagnosis setIsHelpOpen={setIsHelpOpen}/>;
+        return <PersonalityDiagnosis
+          setIsHelpOpen={setIsHelpOpen}
+          handleAddHabit={handleAddHabit}
+        />;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 
@@ -939,7 +959,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // --- JSX (変更なし) ---
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-28"> {/* pb-28: 下部タブ分の余白 */}
-      <header className="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-40">
+      <header className={`bg-white sticky top-0 z-40 ${showDiagnosisTabs ? '' : 'shadow-sm'}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">
                 {/* 左: ハンバーガーメニュー + タイトル */}
@@ -994,7 +1014,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       {/* 上部固定タブ（診断カテゴリ一覧） - アイコン＋ラベルで横に並ぶタブ */}
       {showDiagnosisTabs && (
-        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b">
+        <div className="bg-white shadow-sm sticky top-15 z-40">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <div className="flex items-center gap-2 overflow-x-auto">
               {[
@@ -1032,12 +1052,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       {isMenuOpen && (
         <>
           {/* backdrop to cover bottom tabs and put menu topmost */}
-          <div className="fixed inset-0 z-50" onClick={() => setIsMenuOpen(false)} aria-hidden />
+          <div
+            className="fixed inset-0 z-50 bg-black/30"
+            onClick={() => setIsMenuOpen(false)}
+            aria-hidden
+          />
 
           {/* Mobile: left full-height panel (topmost z-60) */}
           <nav
             ref={menuRef}
-            className="fixed left-0 top-0 bottom-0 z-60 w-72 bg-gradient-to-b from-white to-gray-50 shadow-2xl border-r p-4 overflow-auto md:hidden"
+            className="fixed left-0 top-0 bottom-0 z-60 w-72 bg-gradient-to-b from-white to-gray-50 shadow-md border-r border-gray-200 p-4 overflow-auto md:hidden"
             aria-label="サイドメニュー"
           >
             {/* App header inside menu */}
@@ -1089,13 +1113,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="mb-4">
               <div className="text-xs text-gray-400 uppercase mb-2">その他</div>
               <button onClick={() => { setView('tasks'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100">
-                <TaskIcon className="w-5 h-5 text-gray-600" /> タスク
+                <TaskIcon className="w-5 h-5 text-indigo-600" /> タスク
               </button>
               <button onClick={() => { setView('notes'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
-                <NoteIcon className="w-5 h-5 text-gray-600" /> メモ
+                <NoteIcon className="w-5 h-5 text-emerald-500" /> メモ
               </button>
               <button onClick={() => { setView('learnings'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
-                <ScholarIcon className="w-5 h-5 text-gray-600" /> 学習
+                <ScholarIcon className="w-5 h-5 text-amber-500" /> 学習
               </button>
             </div>
 
@@ -1106,7 +1130,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
           {/* Desktop: separate floating panel (topmost z-60) */}
           <div className="hidden md:block">
-            <div className="fixed top-16 left-4 z-60 w-64 bg-white rounded-lg shadow-2xl border p-4">
+            <div className="fixed top-16 left-4 z-60 w-64 bg-white rounded-lg shadow-md border border-gray-200 p-4">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">E</div>
                 <div className="text-sm font-semibold">EnerGize</div>

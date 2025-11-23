@@ -548,12 +548,18 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                 {isEditing ? (
                   <p className="text-gray-500 text-sm">習慣の編集</p>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded-md">{frequencyText}</div>
-                    {habit.type === 'amount' && habit.target ? (
-                      <div className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
-                        目標: <span className="font-semibold">{habit.target}</span>{habit.unit ? ` ${habit.unit}` : ''}
-                      </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded-md">{frequencyText}</div>
+                      {habit.type === 'amount' && habit.target ? (
+                        <div className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
+                          目標: <span className="font-semibold">{habit.target}</span>{habit.unit ? ` ${habit.unit}` : ''}
+                        </div>
+                      ) : null}
+                    </div>
+                    {/* 追加: タイトル・タグの下に詳細を小さなテキストで表示 */}
+                    {habit.details ? (
+                      <p className="text-sm text-gray-500 line-clamp-3">{habit.details}</p>
                     ) : null}
                   </div>
                 )}

@@ -13,8 +13,13 @@ function autoGrowTextArea(el?: HTMLTextAreaElement | null) {
 interface InitialDraft {
   title?: string;
   detail?: string;
-  energy?: string;
   startDate?: string;
+  // 追加: 初期頻度 / 型 / 目標値 / 単位 を受け取る
+  frequencyType?: FrequencyType;
+  frequencyValue?: number[];
+  type?: "binary" | "amount";
+  target?: number;
+  unit?: string;
 }
 
 interface AddHabitModalProps {
@@ -25,14 +30,21 @@ interface AddHabitModalProps {
   onCreate?: (payload: any) => Promise<void> | void;
 }
 
-const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, initial, onCreate }) => {
+const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+const AddHabitModal: React.FC<AddHabitModalProps> = ({ 
+  isOpen,
+  onClose, 
+  initial,
+  onCreate
+}) => {
   const [name, setName] = useState(initial?.title ?? "");
   const [details, setDetails] = useState(initial?.detail ?? "");
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
-  const [frequency, setFrequency] = useState<{ type: FrequencyType; value: number[] }>({ type: "daily", value: [] });
-  const [type, setType] = useState<"binary" | "amount">("binary");
-  const [target, setTarget] = useState<number | undefined>(undefined);
-  const [unit, setUnit] = useState<string>("");
+  const [frequency, setFrequency] = useState<{ type: FrequencyType; value: number[] }>({ type: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
+  const [type, setType] = useState<"binary" | "amount">(initial?.type ?? "binary");
+  const [target, setTarget] = useState<number | undefined>(initial?.target ?? undefined);
+  const [unit, setUnit] = useState<string>(initial?.unit ?? "");
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -40,10 +52,10 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, initial,
     setName(initial?.title ?? "");
     setDetails(initial?.detail ?? "");
     setStartDate(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
-    setType("binary");
-    setTarget(undefined);
-    setUnit("");
-    setFrequency({ type: "daily", value: [] });
+    setType(initial?.type ?? "binary");
+    setTarget(initial?.target ?? undefined);
+    setUnit(initial?.unit ?? "");
+    setFrequency({ type: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
     setTimeout(() => autoGrowTextArea(detailsRef.current), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initial]);
@@ -60,8 +72,6 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, initial,
       frequencyValue: Array.isArray(frequency.value) ? frequency.value : (frequency.value ? [frequency.value] : []),
       skippedDates: [],
       createdAt: new Date().toISOString(),
-      // optional: energy tag (metadata)
-      energy: initial?.energy ?? undefined,
     };
 
     if (type === "amount") {
@@ -141,12 +151,49 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, initial,
             <select
               value={frequency.type}
               onChange={e => setFrequency({ type: e.target.value as FrequencyType, value: [] })}
-              className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             >
               <option value="daily">毎日</option>
               <option value="weekly">週次</option>
               <option value="monthly">月次</option>
             </select>
+
+            {frequency.type === "weekly" && (
+              <div className="flex justify-center gap-1 mt-3">
+                {WEEK_DAYS.map((d, idx) => {
+                  const active = frequency.value.includes(idx);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        const newVal = active ? frequency.value.filter(v => v !== idx) : [...frequency.value, idx];
+                        setFrequency(prev => ({ ...prev, value: newVal.sort() }));
+                      }}
+                      className={`w-10 h-10 rounded-full font-semibold transition-colors text-sm md:text-base ${active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {frequency.type === "monthly" && (
+              <div className="mt-3">
+                <label className="block text-sm text-gray-600 mb-1">日付を選択 (カンマ区切り)</label>
+                <input
+                  type="text"
+                  placeholder="例: 1, 15"
+                  defaultValue={frequency.value.join(', ')}
+                  onChange={e => {
+                    const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
+                    setFrequency(prev => ({ ...prev, value: value.sort((a,b) => a - b) }));
+                  }}
+                  className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                />
+              </div>
+            )}
           </div>
 
           <div>
