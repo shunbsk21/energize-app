@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ADMIN_ID } from './config';
 
 // ★ Firestore関連のモジュールをインポート
@@ -104,6 +104,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   type LearningItem = { id?: string; title: string; url?: string; notes?: string; tags?: string[]; createdAt?: string; updatedAt?: string; createdBy?: string };
 
   const [view, setView] = useState<View>('habits');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -132,6 +134,28 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // add learnings state
   const [learnings, setLearnings] = useState<LearningItem[]>([]);
+
+  // メニュー外クリック / ESC で閉じる（モバイル左側オーバーレイ対応）
+  useEffect(() => {
+    const onDocDown = (e: MouseEvent) => {
+      if (!isMenuOpen) return;
+      const el = menuRef.current;
+      if (!el) return;
+      // クリック先がメニュー内でなければ閉じる
+      if (!(e.target instanceof Node) || !el.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isMenuOpen]);
   
   // 確認用: 実際のログインユーザーの email を一度出力してください（後で削除可）
   useEffect(() => { console.info('profile:', profile); }, [profile]);
@@ -906,36 +930,28 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       <header className="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">
-                <div className="flex items-center">
+                {/* 左: ハンバーガーメニュー + タイトル */}
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <button
+                      aria-label="メニュー"
+                      onClick={() => setIsMenuOpen(v => !v)}
+                      className="p-2 rounded-md hover:bg-gray-100"
+                    >
+                      {/* simple hamburger */}
+                      <svg className="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </button>
+                  </div>
                   <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
                 </div>
 
-                <div className="ml-6">
-                  {/* カード風コンテナにまとめて、アイコンは小さめに表示 */}
-                  <div className="inline-flex items-center gap-1 bg-white rounded-lg border border-gray-100 px-2 py-1">
-                    <button onClick={() => setView('habits')} title="習慣" className={`flex flex-col items-center p-1 rounded-md ${isUnderHabits ? 'text-indigo-600' : 'text-gray-500'}`}>
-                      <HabitIcon className="w-5 h-5"/>
-                      <span className="text-[11px] mt-0.5">習慣</span>
-                    </button>
-                    <button onClick={() => setView('tasks')} title="タスク" className={`flex flex-col items-center p-1 rounded-md ${isView('tasks') ? 'text-indigo-600' : 'text-gray-500'}`}>
-                      <TaskIcon className="w-5 h-5"/>
-                      <span className="text-[11px] mt-0.5">タスク</span>
-                    </button>
-                    <button onClick={() => setView('notes')} title="メモ" className={`flex flex-col items-center p-1 rounded-md ${isView('notes') ? 'text-indigo-600' : 'text-gray-500'}`}>
-                      <NoteIcon className="w-5 h-5"/>
-                      <span className="text-[11px] mt-0.5">メモ</span>
-                    </button>
-                    <button onClick={() => setView('learnings')} title="学習" className={`flex flex-col items-center p-1 rounded-md ${isView('learnings') ? 'text-amber-600' : 'text-gray-500'}`}>
-                      <ScholarIcon className="w-5 h-5"/>
-                      <span className="text-[11px] mt-0.5">学習</span>
-                    </button>
-                  </div>
-                </div>
-
+                {/* 右: プロフィール */}
                 <div className="flex items-center">
                   <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
                     {profile.imageUrl ? (
-                        <img src={profile.imageUrl} alt={profile.displayName} className="w-full h-full object-cover" />
+                        <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
                     ) : (
                         <UserIcon className="w-6 h-6"/>
                     )}
@@ -944,6 +960,128 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             </div>
         </div>
       </header>
+
+      {/* /* ===========================
+      グローバルメニュー（ヘッダーとは別の場所に固定表示）
+      - モバイル: 画面左から全高で被せる
+      - デスクトップ: ヘッダー下に小さなパネルを表示
+      =========================== */ }
+      {isMenuOpen && (
+        <>
+          {/* backdrop to cover bottom tabs and put menu topmost */}
+          <div className="fixed inset-0 z-50" onClick={() => setIsMenuOpen(false)} aria-hidden />
+
+          {/* Mobile: left full-height panel (topmost z-60) */}
+          <nav
+            ref={menuRef}
+            className="fixed left-0 top-0 bottom-0 z-60 w-72 bg-gradient-to-b from-white to-gray-50 shadow-2xl border-r p-4 overflow-auto md:hidden"
+            aria-label="サイドメニュー"
+          >
+            {/* App header inside menu */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">E</div>
+              <div>
+                <div className="text-sm font-semibold text-gray-800">EnerGize</div>
+                <div className="text-xs text-gray-500">Your energy dashboard</div>
+              </div>
+            </div>
+
+            {/* Profile row (icon on left) */}
+            <div className="flex items-center gap-3 px-2 py-3 bg-white rounded-lg shadow-sm mb-4">
+              <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
+                {profile.imageUrl ? (
+                  <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon className="w-6 h-6 text-gray-500" />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>
+                <div className="text-xs text-gray-500 truncate">{profile.email || ''}</div>
+              </div>
+              <button onClick={() => { setIsProfileOpen(true); setIsMenuOpen(false); }} className="text-sm text-indigo-600 px-2 py-1 rounded hover:bg-indigo-50">表示</button>
+            </div>
+
+            {/* Main navigation */}
+            <div className="mb-4">
+              <div className="text-xs text-gray-400 uppercase mb-2">主要</div>
+              <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600">
+                <DiagnosisIcon className="w-5 h-5 text-indigo-500" /> 診断
+              </button>
+              <button onClick={() => { setView('habits'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 mt-2">
+                <HabitIcon className="w-5 h-5 text-emerald-500" /> 習慣
+              </button>
+              <div className="ml-6 mt-2 flex flex-col gap-1">
+                <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">診断</button>
+                <button onClick={() => { setView('habits'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">習慣</button>
+                <button onClick={() => { setView('groups'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">グループ</button>
+                <button onClick={() => { setView('records'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">記録</button>
+                <button onClick={() => { setView('analytics'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">分析</button>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="text-xs text-gray-400 uppercase mb-2">その他</div>
+              <button onClick={() => { setView('tasks'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100">
+                <TaskIcon className="w-5 h-5 text-gray-600" /> タスク
+              </button>
+              <button onClick={() => { setView('notes'); setIsMenuOpen(false); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
+                <NoteIcon className="w-5 h-5 text-gray-600" /> メモ
+              </button>
+              <button onClick={() => { setView('learnings'); setIsMenuOpen(false); setTimeout(() => window.dispatchEvent(new CustomEvent('open-learning-editor')), 80); }} className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 mt-2">
+                <ScholarIcon className="w-5 h-5 text-gray-600" /> 学習
+              </button>
+            </div>
+
+            <div className="mt-auto pt-3 border-t">
+              <button onClick={() => { setIsMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-red-600">ログアウト</button>
+            </div>
+          </nav>
+
+          {/* Desktop: separate floating panel (topmost z-60) */}
+          <div className="hidden md:block">
+            <div className="fixed top-16 left-4 z-60 w-64 bg-white rounded-lg shadow-2xl border p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">E</div>
+                <div className="text-sm font-semibold">EnerGize</div>
+              </div>
+              <div className="flex items-center gap-3 px-2 py-2 bg-gray-50 rounded mb-3">
+                <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
+                  {profile.imageUrl ? <img src={profile.imageUrl} className="w-full h-full object-cover" alt="" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>
+                  <div className="text-xs text-gray-500 truncate">{profile.email || ''}</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-indigo-50 hover:text-indigo-600">
+                  <DiagnosisIcon className="w-5 h-5 text-indigo-500" /> 診断
+                </button>
+                <button onClick={() => { setView('habits'); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-emerald-50 hover:text-emerald-600">
+                  <HabitIcon className="w-5 h-5 text-emerald-500" /> 習慣
+                </button>
+                <div className="ml-5 mt-1 flex flex-col gap-1">
+                  <button onClick={() => { setView('diagnosis'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">診断</button>
+                  <button onClick={() => { setView('habits'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">習慣</button>
+                  <button onClick={() => { setView('groups'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">グループ</button>
+                  <button onClick={() => { setView('records'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">記録</button>
+                  <button onClick={() => { setView('analytics'); setIsMenuOpen(false); }} className="text-sm px-2 py-1 rounded hover:bg-gray-100 text-gray-700 text-left">分析</button>
+                </div>
+                <button onClick={() => { setView('tasks'); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100">
+                  <TaskIcon className="w-5 h-5 text-gray-600" /> タスク
+                </button>
+                <button onClick={() => { setView('notes'); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100">
+                  <NoteIcon className="w-5 h-5 text-gray-600" /> メモ
+                </button>
+                <button onClick={() => { setView('learnings'); setIsMenuOpen(false); setTimeout(() => window.dispatchEvent(new CustomEvent('open-learning-editor')), 80); }} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100">
+                  <ScholarIcon className="w-5 h-5 text-gray-600" /> 学習
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {isHelpOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsHelpOpen(false)}>
