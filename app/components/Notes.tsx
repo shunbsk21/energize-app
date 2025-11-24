@@ -403,7 +403,6 @@ const Notes: React.FC<{
               <FullscreenEditorForm
                   key={editingNote.id || 'new'}
                   note={editingNote}
-                  allTags={allTags}
                   onCancel={() => { setEditingNote(null); setIsFullscreenEditOpen(false); setEditingIsNew(false); }}
                   onSave={async (title, body, tags) => {
                     // 新規 or 更新 を切り分け
