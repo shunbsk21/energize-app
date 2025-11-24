@@ -1407,21 +1407,14 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   return (
     <>
        <div className="space-y-6 pb-24"> {/* 下部固定バー + 下部タブ分の余白を確保 */}
-          {/* ヘッダー行：左にタイトル+リスト、右にカレンダー+今日 を同列表示（幅不足で折り返さないように spacer を利用） */}
-          <div className="flex items-center w-full gap-3">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-800">習慣トラッカー</h2>
-              <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                <ListBulletIcon className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* spacer を挟んで右端に配置。右側は折り返さない（flex-shrink-0） */}
-            <div className="flex-1" />
-              <div className="flex items-center gap-2 flex-shrink-0">
+          {/* コンパクト化したヘッダー + チェックイン領域（スペースを詰める） */}
+          <div className="bg-white py-2 px-3 rounded-lg border border-gray-200">
+            <div className="flex items-center w-full gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-lg md:text-xl font-bold text-gray-800 truncate">{formattedListDate}</h2>
                 <button
                   onClick={() => setIsDatePickerOpen(true)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md"
+                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md bg-white border border-gray-200 hover:bg-gray-50"
                   aria-label="日付を選択"
                   title="日付を選択"
                 >
@@ -1429,39 +1422,23 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 </button>
                 <button
                   onClick={() => handleDateSelect(new Date())}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md"
+                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md bg-white border border-gray-200 hover:bg-gray-50"
                   title="今日に移動"
                   aria-label="今日に移動"
                 >
                   <span className="text-sm text-gray-800">今日</span>
                 </button>
               </div>
-            </div>
+              <div className="flex-1" />
 
-            {/* チェックイン／チェックアウト等（ヘッダーの下に配置） */}
-            <div className="flex items-center justify-end mt-2">
-              <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-                <button
-                  onClick={() => setIsCheckInOpen(true)}
-                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-                  aria-pressed={checkedInToday}
-                >
-                  <SunIcon className={`w-5 h-5 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
-                  <span className="text-sm font-medium text-gray-800">チェックイン</span>
-                  {checkedInToday && <CheckCircleIcon className="w-5 h-5 text-green-600 ml-1" />}
-                </button>
-                <button
-                  onClick={() => setIsCheckOutOpen(true)}
-                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-                  aria-pressed={checkedOutToday}
-                >
-                  <MoonIcon className={`w-5 h-5 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className="text-sm font-medium text-gray-800">チェックアウト</span>
-                  {checkedOutToday && <CheckCircleIcon className="w-5 h-5 text-blue-600 ml-1" />}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => setIsListModalOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors" aria-label="習慣リスト">
+                  <ListBulletIcon className="w-5 h-5" />
                 </button>
               </div>
             </div>
-
+          </div>
+          
             <CheckInModal
               isOpen={isCheckInOpen}
               onClose={() => setIsCheckInOpen(false)}
@@ -1487,31 +1464,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 habits={habits}
                 onSelectHabit={handleSelectHabitFromList}
             />
-        
-            {/* 数量入力モーダル: system prompt の代替 */}
-            {isAmountModalOpen && amountModalHabit && (
-              <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
-                      <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
-                    </div>
-                    <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
-                  </div>
-                  <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
-                    <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
-                    <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
-                      <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
             
-            {/* FAB: + を押すと左・上に丸ボタンを展開 */}
+            {/* 追加ボタン： +を押すと左・上に丸ボタンを展開 */}
             <div ref={fabRef} className="fixed z-40 right-4 bottom-28 flex flex-col items-end" aria-hidden={!fabOpen}>
               {/* 子ボタンは fabOpen が true のときのみレンダリングして、リストと重ならないように十分な間隔を確保 */}
               {fabOpen && (
@@ -1564,6 +1518,199 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 </div>
               )}
             </div>
+            
+            {/* メインコンテンツ */}
+            <div className="">
+              {/* --- 診断カード（最上部） --- */}
+              <div className="mb-6">
+                {isDiagnosisDay && (
+                  <div
+                    onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
+                    className={`flex items  -center p-4 shadow-sm rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
+                  >
+                    {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
+                      エネルギーを診断する
+                    </span>
+                    {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
+                  </div>
+                )}
+                {isPersonalityDiagnosisDay && (
+                  <div
+                    onClick={() => !isPersonalityCompleted && setView?.('personality')}
+                    className={`mt-2 flex items-center p-4 shadow-sm rounded-lg transition ${isPersonalityCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-purple-50 hover:bg-purple-100 cursor-pointer'}`}
+                    style={{ marginTop: '0.4rem' }}
+                  >
+                    {isPersonalityCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-purple-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${isPersonalityCompleted ? 'line-through text-gray-500' : 'text-purple-800'}`}>
+                      パーソナリティを診断する
+                    </span>
+                    {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
+                  </div>
+                )}
+              </div>
+
+              {dueTasks.length === 0 ? (<></>) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3>タスクリスト</h3>
+                  </div>
+                  {/* --- 本日のタスク（診断の下） --- */}
+                  <div className="mb-4">
+                    <div className="space-y-2">
+                      {dueTasks.map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => setSelectedTask(t)}
+                          className={`flex items-center gap-3 p-3 border shadow-sm ${t.done ? 'opacity-80' : ''} bg-amber-50 border-amber-100 rounded-md`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!t.done}
+                            onChange={async (e) => {
+                              e.stopPropagation();
+                              const next = e.target.checked;
+                              await handleToggleTaskLocal(t.id, next);
+                            }}
+                            className="w-5 h-5 cursor-pointer"
+                            aria-label={`タスク完了: ${t.title}`}
+                            onClick={e => e.stopPropagation()}
+                          />
+
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-500' : 'text-gray-900'}`}>{t.title}</div>
+                            {t.details ? <div className="text-xs text-gray-600 truncate mt-1">{t.details}</div> : null}
+                          </div>
+
+                          <div className="flex items-center gap-2 ml-3">
+                            {t.dueDate ? <div className="text-xs text-gray-500">{new Date(t.dueDate).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</div> : null}
+                            <div className={`text-xs px-2 py-0.5 rounded-full font-semibold ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                              {t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}
+                            </div>
+                            {/* Task badge to visually distinguish from habits */}
+                            <div className="ml-2 text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full font-medium">タスク</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {/* 既存: 習慣リスト（タスクの下） */}
+              <div className="flex items-center justify-between mb-2">
+                <h3>習慣リスト</h3>
+                <div className="flex items-baseline gap-3">
+                  {/* 達成率バッジ */}
+                  <div className={`ml-3 inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${completionPercent === 100 ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}>
+                    <div className={`w-3 h-3 rounded-full ${completionPercent === 100 ? 'bg-white' : (completionPercent >= 75 ? 'bg-green-500' : completionPercent >= 40 ? 'bg-yellow-400' : 'bg-gray-400')}`} />
+                    <span className="text-sm">{completionPercent}%</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                      onClick={() => setIsNonScheduledOpen(true)}
+                      className="flex items-center gap-2 text-sm px-3 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50"
+                      title="予定外の習慣を記録"
+                  >
+                    <ListBulletIcon className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">予定外</span>
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                  {/* チェックイン／チェックアウトをヘッダー内に収め、パディングを小さく */}
+                  <div className="mb-2 flex items-center justify-start gap-2">
+                    <button
+                      onClick={() => setIsCheckInOpen(true)}
+                      className={`flex flex-1 items-center gap-2 px-4 py-2 shadow-sm rounded-md text-sm transition ${checkedInToday ? 'bg-green-50 border border-green-300' : 'bg-gray-50 hover:bg-gray-100'}`}
+                      aria-pressed={checkedInToday}
+                    >
+                      <SunIcon className={`w-4 h-4 ${checkedInToday ? 'text-green-600' : 'text-gray-600'}`} />
+                      <span className="text-sm font-medium text-gray-800">チェックイン</span>
+                      {checkedInToday && <CheckCircleIcon className="w-4 h-4 text-green-600 ml-1" />}
+                    </button>
+                    <button
+                      onClick={() => setIsCheckOutOpen(true)}
+                      className={`flex flex-1 items-center gap-2 px-4 py-2 shadow-sm rounded-md text-sm transition ${checkedOutToday ? 'bg-blue-50 border border-blue-300' : 'bg-gray-50 hover:bg-gray-1000'}`}
+                      aria-pressed={checkedOutToday}
+                    >
+                      <MoonIcon className={`w-4 h-4 ${checkedOutToday ? 'text-blue-600' : 'text-gray-600'}`} />
+                      <span className="text-sm font-medium text-gray-800">チェックアウト</span>
+                      {checkedOutToday && <CheckCircleIcon className="w-4 h-4 text-blue-600 ml-1" />}
+                    </button>
+                  </div>
+                  {sortedScheduledHabits.length > 0 ? (
+                      sortedScheduledHabits.map(habit => {
+                        // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
+                        const habitType = (habit.type ?? 'binary');
+                        const isCompleted = isHabitCompletedOnDate(habit, selectedDateString);
+                        const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
+                        const isSkipped = ((habit.skippedDates || []) .map(normalizeKey)).includes(selectedDateString);
+                        const streak = calculateStreak(habit);
+
+                        return (
+                          <div 
+                              key={habit.id} 
+                              onClick={() => setSelectedHabit(habit)}
+                              className={`flex items-center p-3 shadow-sm rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
+                          >
+                              <input
+                                type="checkbox"
+                                checked={habitType === 'binary' ? isCompleted : Boolean(amountVal)}
+                                onChange={() => toggleHabit(habit.id)}
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                onClick={e => e.stopPropagation()}
+                              />
+                              <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                {habit.name}
+                              </span>
+                              {isSkipped && (
+                                <div className="ml-2 text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">スキップ</div>
+                              )}
+
+                              <div className="flex items-center gap-3">
+                                {habitType === 'amount' && (
+                                  <div className="text-sm text-gray-700 font-semibold">
+                                    {amountVal}{habit.unit ? `${habit.unit}` : ''}{habit.target ? ` / ${habit.target}` : ''}
+                                  </div>
+                                )}
+                                {streak > 0 && <span className="text-orange-500 font-bold text-sm md:text-base mr-3">🔥 {streak}日</span>}
+                              </div>
+                          </div>
+                        );
+                      })
+                  ) : (
+                    (habits.length > 0 && !isDiagnosisDay) && <p className="text-gray-500 text-center py-4">今日やるべき習慣はありません。新しい習慣を追加するか、日付を変更してください。</p>
+                  )}
+                  {habits.length === 0 && !isDiagnosisDay && (
+                    <p className="text-gray-500 text-center py-4">まだ習慣がありません。右下の＋ボタンから新しい習慣を追加して始めましょう！</p>
+                  )}
+              </div>
+            </div>
+            
+            {/* 数量入力モーダル: system prompt の代替 */}
+            {isAmountModalOpen && amountModalHabit && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={cancelAmountModal}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="text-lg font-semibold text-gray-900">{amountModalHabit.name}</div>
+                      <div className="text-sm text-gray-600">{selectedDate.toLocaleDateString()}</div>
+                    </div>
+                    <button onClick={cancelAmountModal} className="text-gray-500 text-2xl leading-none">&times;</button>
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); saveAmountModal(); }}>
+                    <label className="block text-sm text-gray-700 mb-2">達成量（{amountModalHabit.unit ?? ''}）</label>
+                    <input autoFocus value={amountModalValue} onChange={e => setAmountModalValue(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={cancelAmountModal} className="px-4 py-2 rounded-lg bg-gray-100 text-sm">キャンセル</button>
+                      <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">保存</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
             {/* 習慣追加モーダル */}
             {isAddModalOpen && (
@@ -1775,193 +1922,49 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                 </div>
               </div>
             )}
-        
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
-              <div className="flex items-center justify-between mb-4 px-2">
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-lg font-semibold text-gray-800">{formattedListDate}</h3>
-                  {/* 達成率バッジ */}
-                  <div className={`ml-3 inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${completionPercent === 100 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                    <div className={`w-3 h-3 rounded-full ${completionPercent === 100 ? 'bg-white' : (completionPercent >= 75 ? 'bg-green-500' : completionPercent >= 40 ? 'bg-yellow-400' : 'bg-gray-400')}`} />
-                    <span className="text-sm">{completionPercent}%</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                      onClick={() => setIsNonScheduledOpen(true)}
-                      className="flex items-center gap-2 text-sm px-3 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50"
-                      title="予定外の習慣を記録"
-                  >
-                    <ListBulletIcon className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm text-gray-700">予定外</span>
-                  </button>
-                </div>
-              </div>
 
-              {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
-              {showCelebrate && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
-                  <style>{`
-                    @keyframes floatUp {
-                      0% { transform: translateY(0) scale(1); opacity: 1; }
-                      100% { transform: translateY(-140vh) scale(1.1); opacity: 0; }
-                    }
-                    .confetti {
-                      position: absolute;
-                      bottom: 10%;
-                      font-size: 28px;
-                      animation-name: floatUp;
-                      animation-timing-function: cubic-bezier(.18,.9,.35,1);
-                      animation-iteration-count: 1;
-                    }
-                  `}</style>
-                  <div className="w-full max-w-3xl mx-auto px-4">
-                    <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
-                      <div className="text-center">
-                        <div className="text-2xl md:text-2xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
-                        <div className="mt-4 text-lg md:text-xl opacity-95">今日もよく頑張りましたね！</div>
-                      </div>
+            {/* 祝福オーバーレイ（completionPercent === 100 の場合に一時表示） */}
+            {showCelebrate && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 pointer-events-auto">
+                <style>{`
+                  @keyframes floatUp {
+                    0% { transform: translateY(0) scale(1); opacity: 1; }
+                    100% { transform: translateY(-140vh) scale(1.1); opacity: 0; }
+                  }
+                  .confetti {
+                    position: absolute;
+                    bottom: 10%;
+                    font-size: 28px;
+                    animation-name: floatUp;
+                    animation-timing-function: cubic-bezier(.18,.9,.35,1);
+                    animation-iteration-count: 1;
+                  }
+                `}</style>
+                <div className="w-full max-w-3xl mx-auto px-4">
+                  <div className="bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-2xl shadow-2xl px-6 py-10 md:py-16 animate-fade-in">
+                    <div className="text-center">
+                      <div className="text-2xl md:text-2xl font-extrabold leading-tight">🎉 おめでとう！100%達成 🎉</div>
+                      <div className="mt-4 text-lg md:text-xl opacity-95">今日もよく頑張りましたね！</div>
                     </div>
-                    {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
-                      <span
-                        key={i}
-                        className="confetti"
-                        style={{
-                          left: `${8 + (i * 11) % 84}%`,
-                          animationDuration: `${1800 + (i * 200)}ms`,
-                          animationDelay: `${200 + (i * 120)}ms`,
-                          transform: `translateY(0) rotate(${(i*30)%360}deg)`
-                        }}
-                      >
-                        {emo}
-                      </span>
-                    ))}
                   </div>
+                  {['✨','🎊','💫','🌟','🎉','✨','🎈','⭐️'].map((emo, i) => (
+                    <span
+                      key={i}
+                      className="confetti"
+                      style={{
+                        left: `${8 + (i * 11) % 84}%`,
+                        animationDuration: `${1800 + (i * 200)}ms`,
+                        animationDelay: `${200 + (i * 120)}ms`,
+                        transform: `translateY(0) rotate(${(i*30)%360}deg)`
+                      }}
+                    >
+                      {emo}
+                    </span>
+                  ))}
                 </div>
-              )}
-              {/* --- 診断カード（最上部） --- */}
-              <div className="mb-4">
-                {isDiagnosisDay && (
-                  <div
-                    onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
-                    className={`flex items-center p-4 shadow-sm rounded-lg transition ${isDiagnosisCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-indigo-50 hover:bg-indigo-100 cursor-pointer'}`}
-                  >
-                    {isDiagnosisCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-indigo-600" />}
-                    <span className={`flex-grow mx-4 text-lg font-semibold ${isDiagnosisCompleted ? 'line-through text-gray-500' : 'text-indigo-800'}`}>
-                      エネルギーを診断する
-                    </span>
-                    {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
-                  </div>
-                )}
-                {isPersonalityDiagnosisDay && (
-                  <div
-                    onClick={() => !isPersonalityCompleted && setView?.('personality')}
-                    className={`mt-3 flex items-center p-4 shadow-sm rounded-lg transition ${isPersonalityCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-purple-50 hover:bg-purple-100 cursor-pointer'}`}
-                  >
-                    {isPersonalityCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-purple-600" />}
-                    <span className={`flex-grow mx-4 text-lg font-semibold ${isPersonalityCompleted ? 'line-through text-gray-500' : 'text-purple-800'}`}>
-                      パーソナリティを診断する
-                    </span>
-                    {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
-                  </div>
-                )}
               </div>
+            )}
 
-              {/* --- 本日のタスク（診断の下） --- */}
-              <div className="mb-4">
-                {dueTasks.length === 0 ? (
-                  <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">本日のタスクはありません。</div>
-                ) : (
-                  <div className="space-y-2">
-                    {dueTasks.map(t => (
-                      <div
-                        key={t.id}
-                        onClick={() => setSelectedTask(t)}
-                        className={`flex items-center gap-3 p-3 border shadow-sm ${t.done ? 'opacity-80' : ''} bg-amber-50 border-amber-100 rounded-md`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!t.done}
-                          onChange={async (e) => {
-                            e.stopPropagation();
-                            const next = e.target.checked;
-                            await handleToggleTaskLocal(t.id, next);
-                          }}
-                          className="w-5 h-5 cursor-pointer"
-                          aria-label={`タスク完了: ${t.title}`}
-                          onClick={e => e.stopPropagation()}
-                        />
-
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-500' : 'text-gray-900'}`}>{t.title}</div>
-                          {t.details ? <div className="text-xs text-gray-600 truncate mt-1">{t.details}</div> : null}
-                        </div>
-
-                        <div className="flex items-center gap-2 ml-3">
-                          {t.dueDate ? <div className="text-xs text-gray-500">{new Date(t.dueDate).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</div> : null}
-                          <div className={`text-xs px-2 py-0.5 rounded-full font-semibold ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                            {t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}
-                          </div>
-                          {/* Task badge to visually distinguish from habits */}
-                          <div className="ml-2 text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full font-medium">タスク</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 既存: 習慣リスト（タスクの下） */}
-              <div className="space-y-2">
-                  {sortedScheduledHabits.length > 0 ? (
-                      sortedScheduledHabits.map(habit => {
-                        // habit は optimistic を反映した表示用オブジェクト（getDisplayedHabit を使っている useMemo の結果）
-                        const habitType = (habit.type ?? 'binary');
-                        const isCompleted = isHabitCompletedOnDate(habit, selectedDateString);
-                        const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
-                        const isSkipped = ((habit.skippedDates || []) .map(normalizeKey)).includes(selectedDateString);
-                        const streak = calculateStreak(habit);
-
-                        return (
-                          <div 
-                              key={habit.id} 
-                              onClick={() => setSelectedHabit(habit)}
-                              className={`flex items-center p-3 shadow-sm rounded-lg transition cursor-pointer ${isCompleted ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'}`}
-                          >
-                              <input
-                                type="checkbox"
-                                checked={habitType === 'binary' ? isCompleted : Boolean(amountVal)}
-                                onChange={() => toggleHabit(habit.id)}
-                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                onClick={e => e.stopPropagation()}
-                              />
-                              <span className={`flex-grow mx-3 text-base md:text-lg ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                                {habit.name}
-                              </span>
-                              {isSkipped && (
-                                <div className="ml-2 text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">スキップ</div>
-                              )}
-
-                              <div className="flex items-center gap-3">
-                                {habitType === 'amount' && (
-                                  <div className="text-sm text-gray-700 font-semibold">
-                                    {amountVal}{habit.unit ? `${habit.unit}` : ''}{habit.target ? ` / ${habit.target}` : ''}
-                                  </div>
-                                )}
-                                {streak > 0 && <span className="text-orange-500 font-bold text-sm md:text-base mr-3">🔥 {streak}日</span>}
-                              </div>
-                          </div>
-                        );
-                      })
-                  ) : (
-                    (habits.length > 0 && !isDiagnosisDay) && <p className="text-gray-500 text-center py-4">今日やるべき習慣はありません。新しい習慣を追加するか、日付を変更してください。</p>
-                  )}
-                  {habits.length === 0 && !isDiagnosisDay && (
-                    <p className="text-gray-500 text-center py-4">まだ習慣がありません。右下の＋ボタンから新しい習慣を追加して始めましょう！</p>
-                  )}
-              </div>
-            </div>
-            
             {selectedHabit && (
                 <HabitDetail habit={selectedHabit} onClose={() => setSelectedHabit(null)} onDelete={deleteHabit} onUpdate={updateHabit} />
             )}
