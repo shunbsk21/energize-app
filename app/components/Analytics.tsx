@@ -659,12 +659,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
   return (
     <div className="space-y-8 animate-fade-in" ref={chartRef}>
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-800">アナリティクス</h2>
-          <button onClick={() => setIsHelpOpen(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-            <HelpIcon className="w-6 h-6" />
-          </button>
-        </div>
         <div className="flex items-center gap-2 p-1 bg-gray-200/70 rounded-lg">
           {(['all', 30, 7] as const).map(p => (
             <button

@@ -183,61 +183,65 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
   }, [filtered, page, perPage]);
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white p-4 rounded-xl shadow-md">
-
-          <div className="flex flex-col gap-2">
-            {/* 上段: チェックイン / チェックアウト のタブ */}
-            <div className="flex items-center gap-3">
-              <div className="inline-flex items-center bg-gray-50 rounded-full p-1">
-                <button
-                  onClick={() => { setView('checkin'); setPage(1); setCheckoutFilter('all'); }}
-                  className={`px-4 py-2 rounded-full text-sm font-medium ${view === 'checkin' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600'}`}
-                >
-                  チェックイン
-                </button>
-                <button
-                  onClick={() => { setView('checkout'); setPage(1); }}
-                  className={`px-4 py-2 rounded-full text-sm font-medium ${view === 'checkout' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-600'}`}
-                >
-                  チェックアウト
-                </button>
+    <>
+      <div className="fixed left-4 right-4 z-40 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-4">
+        <div className="w-full max-w-4xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
+              {/* 上段: チェックイン / チェックアウト のタブ */}
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center bg-gray-50 rounded-full p-1">
+                  <button
+                    onClick={() => { setView('checkin'); setPage(1); setCheckoutFilter('all'); }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium ${view === 'checkin' ? 'bg-white shadow-sm text-green-700' : 'text-gray-600'}`}
+                  >
+                    チェックイン
+                  </button>
+                  <button
+                    onClick={() => { setView('checkout'); setPage(1); }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium ${view === 'checkout' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-600'}`}
+                  >
+                    チェックアウト
+                  </button>
+                </div>
               </div>
+              {/* タブ直下にフィルタチップを常時表示（チェックイン時は非活性風に） */}
+              {/* チェックアウト選択時のみ表示するフィルタチップ（感謝は青色に合わせる） */}
+              {view === 'checkout' && (
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    onClick={() => { setCheckoutFilter('all'); setPage(1); }}
+                    className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'all' ? 'bg-green-100 border-green-200 text-green-700' : 'bg-white border-gray-200 text-gray-600'}`}
+                  >
+                    すべて
+                  </button>
+                  <button
+                    onClick={() => { setCheckoutFilter('gratitude'); setPage(1); }}
+                    className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'gratitude' ? 'bg-indigo-100 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600'}`}
+                  >
+                    感謝
+                  </button>
+                  <button
+                    onClick={() => { setCheckoutFilter('note'); setPage(1); }}
+                    className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'note' ? 'bg-yellow-100 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600'}`}
+                  >
+                    日記
+                  </button>
+                </div>
+              )}
             </div>
-            {/* タブ直下にフィルタチップを常時表示（チェックイン時は非活性風に） */}
-            {/* チェックアウト選択時のみ表示するフィルタチップ（感謝は青色に合わせる） */}
-            {view === 'checkout' && (
-              <div className="flex items-center gap-2 mt-1">
-                <button
-                  onClick={() => { setCheckoutFilter('all'); setPage(1); }}
-                  className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'all' ? 'bg-green-100 border-green-200 text-green-700' : 'bg-white border-gray-200 text-gray-600'}`}
-                >
-                  すべて
-                </button>
-                <button
-                  onClick={() => { setCheckoutFilter('gratitude'); setPage(1); }}
-                  className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'gratitude' ? 'bg-indigo-100 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600'}`}
-                >
-                  感謝
-                </button>
-                <button
-                  onClick={() => { setCheckoutFilter('note'); setPage(1); }}
-                  className={`px-3 py-1 rounded-full text-sm border ${checkoutFilter === 'note' ? 'bg-yellow-100 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600'}`}
-                >
-                  日記
-                </button>
-              </div>
-            )}
+            <div className="w-6" /> {/* 右側に左と同じ程度の余白を確保する小さなプレースホルダ */}
           </div>
-            
-
+        </div>
+      </div>
+      <div className={`space-y-4 ${view === 'checkin' ? 'mt-24' : 'mt-36'}`}>
         <div className="mt-4">
           {total === 0 ? (
             <p className="text-sm text-gray-500">表示する記録がありません。</p>
           ) : (
             <div className="space-y-3">
               {paged.map((r: any) => (
-                <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
+                <div key={r.id} className="p-3 bg-white rounded-lg">
                   <div className="flex items-start justify-between">
                     {/* 日付 + 値/レーティングをアイコン付きで表示 */}
                     <div className="flex items-center gap-2">
@@ -351,7 +355,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 };
 
