@@ -426,7 +426,8 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
 
           <div className="mb-3">
             <div className="flex flex-col md:flex-row gap-2 bg-gray-50 rounded p-2">
-              {Object.entries(selectedRecord.categories).map(([k,v]) => {
+              {['status','self','vision','action'].map((k) => {
+                const v = selectedRecord.categories[k] ?? 0;
                 const catLabel = PURELIFE_CATEGORIES.find(c => c.key===k)?.label || k;
                 const pct = Math.round((v / 50) * 100);
                 const barColor = v >= 40 ? 'bg-green-500' : (v >= 30 ? 'bg-yellow-400' : 'bg-red-500');
@@ -445,23 +446,39 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
             </div>
           </div>
 
-          {/* アドバイスはスコア枠の外に、最も低い項目を優先してカード表示（＋で習慣追加） */}
+          {/* アドバイス：低スコアがあれば改善優先で表示。全て30点以上なら最もスコアの低い項目を「さらに良くする」文脈で表示 */}
           <div className="mt-8">
             {(() => {
-              const entries = Object.entries(selectedRecord.categories);
-              const lowEntries = entries.filter(([,v]) => v <= 30).sort((a,b) => a[1] - b[1]); // 小さい順
-              if (lowEntries.length === 0) {
-                return <div className="p-3 bg-green-50 rounded text-sm text-gray-700">全体的に良好です。引き続き同様の習慣を続けましょう。</div>;
+              const orderedKeys = ['status','self','vision','action'];
+              const entries = orderedKeys.map(k => [k, selectedRecord.categories[k] ?? 0] as [string, number]);
+              const lowEntries = entries.filter(([,v]) => v <= 30).sort((a,b) => a[1] - b[1]); // 小さい順（改善が必要）
+
+              // 決定する primaryKey と文脈フラグ
+              let primaryKey = '';
+              let contextIsImprovement = true;
+              if (lowEntries.length > 0) {
+                primaryKey = lowEntries[0][0];
+                contextIsImprovement = true;
+              } else {
+                // 全て30点より上：一番スコアが低いカテゴリを選ぶ（entries already ordered for display, but pick numeric min）
+                const sorted = entries.slice().sort((a,b) => a[1] - b[1]);
+                primaryKey = sorted[0][0];
+                contextIsImprovement = false;
               }
-              const primaryKey = lowEntries[0][0];
+
               const primaryAdvice = PURELIFE_ADVICE[primaryKey] || [];
 
               return (
                 <div className="space-y-4">
-                  {/* フォーカス：最優先の低スコア項目（カードグリッド） */}
-                  <div className="">
-                    <div className="text-lg font-bold">{PURELIFE_CATEGORIES.find(c => c.key===primaryKey)?.label}</div>
-                    <div className="text-sm text-gray-600 mb-3">改善が最も求められます</div>
+                  <div className="p-4 bg-white rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-lg font-bold">{PURELIFE_CATEGORIES.find(c => c.key===primaryKey)?.label}</div>
+                      </div>
+                      <div className="text-sm text-gray-500">現在: {selectedRecord.categories[primaryKey] ?? 0}/50</div>
+                    </div>
+
+                    <div className="text-sm text-gray-600 mb-3">{contextIsImprovement ? 'まずは改善につながる習慣を試しましょう。' : 'さらに伸ばすために取り入れるとよい習慣を紹介します。'}</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {primaryAdvice.map((a, idx) => (
                         <div key={idx} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
@@ -472,7 +489,6 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
                           <div className="flex items-start">
                             <button
                               onClick={() => {
-                                // open AddHabitModal with draft (keeps same behavior as other diagnoses)
                                 setHabitDraft({ title: String(a).replace(/^\s*\d+\.\s*/, ''), detail: a });
                                 setIsHabitModalOpen(true);
                               }}
