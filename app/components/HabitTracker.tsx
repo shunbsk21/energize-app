@@ -44,6 +44,10 @@ interface HabitTrackerProps {
   onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
   // 新: 管理者フラグ（ADMIN 以外では学習追加ボタンを非表示にする）
   isAdmin?: boolean;
+  // optional: purelife scheduling/completion data and open handler
+  purelifeFrequency?: DiagnosisFrequency;
+  purelifeCompletedDates?: string[]; // ISO 'YYYY-MM-DD' strings
+  onOpenPurelife?: () => void;
 }
 
 // 優先度ソート用
@@ -592,6 +596,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onUpdateTask,
   onDeleteTask,
   onAddLearning,
+  purelifeFrequency,
+  purelifeCompletedDates,
+  onOpenPurelife,
   isAdmin = false
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
@@ -1190,6 +1197,18 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     return personalityCompletedDates.includes(selectedDateISO);
   }, [personalityCompletedDates, selectedDateISO]);
 
+  // --- purelife の表示制御（props の頻度 / 完了日を使う） ---
+  const hasPurelifeConfig = Boolean(purelifeFrequency);
+  const isPurelifeDay = useMemo(() => {
+    if (!purelifeFrequency) return false;
+    return isDiagnosisScheduledForDate(purelifeFrequency, selectedDate);
+  }, [purelifeFrequency, selectedDate]);
+
+  const isPurelifeCompleted = useMemo(() => {
+    if (!purelifeCompletedDates) return false;
+    return purelifeCompletedDates.includes(selectedDateISO);
+  }, [purelifeCompletedDates, selectedDateISO]);
+
 
   // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)
   // フォーム submit ハンドラ: MainApp 側の onAddHabit(newHabitData) を呼び出す
@@ -1502,6 +1521,26 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                     </button>
                   )}
 
+                  {/* メモボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
+                  <button
+                    onClick={() => {
+                      // set pending flag so Notes can open creator even if it mounts slightly after navigation
+                      setFabOpen(false);
+                      try { (window as any).__openNoteCreatorPending = true; } catch {}
+                      setView('notes');
+                      // also dispatch event after a short delay to handle fast mounts
+                      setTimeout(() => {
+                        try { window.dispatchEvent(new CustomEvent('open-note-creator')); } catch {}
+                      }, 120);
+                    }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50"
+                    aria-label="メモを追加"
+                    title="メモを追加"
+                  >
+                    <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">✎</span>
+                    <span className="text-sm font-medium text-gray-800">メモを追加</span>
+                  </button>
+
                   {/* タスクボタン：他の操作ボタン（チェックイン等）に合わせた外観 */}
                   <button
                     onClick={() => { setIsTaskModalOpen(true); setFabOpen(false); }}
@@ -1509,7 +1548,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                     aria-label="タスクを追加"
                     title="タスクを追加"
                   >
-                    <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">✎</span>
+                    <span className="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-700 font-semibold">
+                      <ListBulletIcon className="w-5 h-5" />
+                    </span>
                     <span className="text-sm font-medium text-gray-800">タスクを追加</span>
                   </button>
 
@@ -1532,6 +1573,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
             <div className="">
               {/* --- 診断カード（最上部） --- */}
               <div className="mb-6">
+
+                {/* エネルギー診断 */}
                 {isDiagnosisDay && (
                   <div
                     onClick={() => !isDiagnosisCompleted && setView('diagnosis')}
@@ -1544,6 +1587,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                     {!isDiagnosisCompleted && <ChevronRightIcon className="w-6 h-6 text-indigo-600" />}
                   </div>
                 )}
+
+                {/* パーソナリティ診断：設定した頻度に基づき表示・無効化 */}
                 {isPersonalityDiagnosisDay && (
                   <div
                     onClick={() => !isPersonalityCompleted && setView?.('personality')}
@@ -1557,6 +1602,26 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                     {!isPersonalityCompleted && <ChevronRightIcon className="w-6 h-6 text-purple-600" />}
                   </div>
                 )}
+
+                {/* purelife 診断：設定した頻度に基づき表示・無効化 */}
+                {hasPurelifeConfig && isPurelifeDay && (
+                  <div
+                    onClick={() => {
+                      if (isPurelifeCompleted) return;
+                      if (typeof onOpenPurelife === 'function') { onOpenPurelife(); }
+                      else { setView('purelife'); }
+                    }}
+                    className={`mt-2 flex items-center p-4 shadow-sm rounded-lg transition ${isPurelifeCompleted ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-teal-50 hover:bg-teal-100 cursor-pointer'}`}
+                    style={{ marginTop: '0.4rem' }}
+                  >
+                    {isPurelifeCompleted ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <DiagnosisIcon className="w-6 h-6 text-teal-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${isPurelifeCompleted ? 'line-through text-gray-500' : 'text-teal-800'}`}>
+                      purelife診断を実施する
+                    </span>
+                    {!isPurelifeCompleted && <ChevronRightIcon className="w-6 h-6 text-teal-600" />}
+                  </div>
+                )}
+                
               </div>
 
               {dueTasks.length === 0 ? (<></>) : (

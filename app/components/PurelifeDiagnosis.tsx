@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   setDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
 
 type AnswersMap = Record<string, number>;
@@ -209,6 +210,24 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
         } else {
           setStep('idle');
         }
+
+        // --- load saved frequency from users/{uid}/settings/main ---
+        try {
+          const settingsRef = doc(db, "users", myUid, "settings", "main");
+          const settingsSnap = await getDoc(settingsRef);
+          if (settingsSnap.exists()) {
+            const data: any = settingsSnap.data();
+              // prefer explicit purelife key, fall back to generic 'frequency' if present
+            if (data.purelifeFrequency) {
+              setLocalFrequency(data.purelifeFrequency);
+            } else if (data.frequency) {
+              setLocalFrequency(data.frequency);
+            }
+          }
+        } catch (e) {
+          console.warn("[Purelife] failed to load saved frequency", e);
+        }
+         // per-user subcollection done
       } catch (e) {
         console.error("fetch history error", e);
       } finally {
@@ -283,9 +302,18 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       setIsFrequencyModalOpen(false);
       return;
     }
+    const docRef = doc(db, "users", uid, "settings", "main");
     try {
-      // save under users/{uid}/settings/main to match your Firestore rules pattern
-      await setDoc(doc(db, "users", uid, "settings", "main"), { frequency: localFrequency }, { merge: true });
+      console.log("[Purelife] saving frequency -> users/%s/settings/main", uid, { localFrequency });
+      // save under a dedicated key "purelifeFrequency" to keep it separate and consistent
+      await setDoc(docRef, { purelifeFrequency: localFrequency }, { merge: true });
+      // read back to confirm
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        console.log("[Purelife] saved settings doc:", snap.id, snap.data());
+      } else {
+        console.warn("[Purelife] save succeeded but doc not found after save");
+      }
     } catch (e) {
       console.error("save frequency error", e);
     } finally {

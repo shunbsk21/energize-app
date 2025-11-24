@@ -134,6 +134,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // --- Purelife 設定を保持して HabitTracker に渡す ---
+  const [purelifeFrequency, setPurelifeFrequency] = useState<DiagnosisFrequency | null>(null);
+  const [purelifeCompletedDates, setPurelifeCompletedDates] = useState<string[]>([]);
+
   // add learnings state
   const [learnings, setLearnings] = useState<LearningItem[]>([]);
 
@@ -320,6 +324,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               }));
             }
           }
+          // purelife の頻度 / 完了日を読み込む（存在するキーに対応）
+          if (settingsData.purelifeFrequency) {
+            setPurelifeFrequency(settingsData.purelifeFrequency);
+          } else if (settingsData.frequency && settingsData.frequencyType) {
+            // 互換性のためフォールバック（まれ）
+            setPurelifeFrequency(settingsData.frequency);
+          }
+          const completed = settingsData.purelifeCompletedDates ?? settingsData.purelife_completed_dates ?? settingsData.purelifeCompleted ?? [];
+          if (Array.isArray(completed)) setPurelifeCompletedDates(completed);
         }
 
         // --- 4. 全員のプロフィール情報を取得 ---
@@ -877,6 +890,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   setIsHelpOpen={setIsHelpOpen} 
                   setView={setView} 
                   diagnosisFrequency={diagnosisFrequency}
+                  // pass purelife configuration so HabitTracker can show the card on scheduled days
+                  purelifeFrequency={purelifeFrequency ?? undefined}
+                  purelifeCompletedDates={purelifeCompletedDates}
+                  onOpenPurelife={() => setView('purelife')}
                   onAddCheckin={handleAddCheckin}
                   onAddCheckout={handleAddCheckout}
                   checkins={checkins}

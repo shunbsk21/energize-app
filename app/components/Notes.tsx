@@ -62,6 +62,27 @@ const Notes: React.FC<{
     return () => unsub();
   }, []);
 
+  // Global event listener: open note creator from other components (e.g. HabitTracker)
+  useEffect(() => {
+    const openHandler = () => {
+      const nowIso = new Date().toISOString();
+      const draft: NoteItem = { id: '', title: undefined, body: '', tags: [], createdAt: nowIso, updatedAt: nowIso, archived: false, deleted: false };
+      setEditingNote(draft);
+      setEditingIsNew(true);
+      setIsFullscreenEditOpen(true);
+      setActionMenuNote(null);
+      try { delete (window as any).__openNoteCreatorPending; } catch {}
+    };
+    window.addEventListener('open-note-creator', openHandler as EventListener);
+    // If HabitTracker set a pending flag before Notes mounted, open immediately
+    try {
+      if ((window as any).__openNoteCreatorPending) {
+        openHandler();
+      }
+    } catch {}
+    return () => window.removeEventListener('open-note-creator', openHandler as EventListener);
+  }, []);
+
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [viewArchived, setViewArchived] = useState(false);
