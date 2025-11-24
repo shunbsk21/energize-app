@@ -100,6 +100,10 @@ const calculateLongestStreak = (habit: Habit): number => {
 
   const isScheduled = (date: Date) => {
     if (date < start) return false;
+    const key = date.toLocaleDateString('sv-SE');
+    // 予定日の判定に加え、「その日に記録済み（done）／スキップ済み」であれば
+    // 非予定日でも連続記録計算に含める（ユーザーの要求に合わせる）
+    if (doneSet.has(key) || skipSet.has(key)) return true;
     switch (habit.frequencyType) {
       case 'daily': return true;
       case 'weekly': {
@@ -189,6 +193,9 @@ const calculateCurrentStreak = (habit: Habit): number => {
 
   const isScheduled = (date: Date) => {
     if (date < start) return false;
+    const key = date.toLocaleDateString('sv-SE');
+    // 非予定日でもその日に記録済みなら「スケジュールあり」と見なす
+    if (doneSet.has(key) || skipSet.has(key)) return true;
     switch (habit.frequencyType) {
       case 'daily': return true;
       case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());

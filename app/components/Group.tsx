@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
+import GroupDetail from './GroupDetail';
 
 interface GroupProps {
     profile: Profile;
@@ -477,432 +478,6 @@ const SharedHabitsModal: React.FC<{
     );
 };
 
-const GroupDetail: React.FC<{
-    group: GroupType;
-    profile: Profile;
-    following: Friend[];
-    onFollowUser: (friendId: string) => void;
-    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
-    habits: Habit[];
-    onBack: () => void;
-    onInviteMembers: (group: GroupType, memberIds: string[]) => void;
-    onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
-    allUserProfiles: Map<string, Profile | Friend>;
-    onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
-}> = ({ 
-    group, profile, following, onFollowUser, 
-    onAddComment, habits, onBack, onInviteMembers, onRemoveMember, allUserProfiles,
-    onUpdateGroupSharedHabits
-}) => {
-    const [newComment, setNewComment] = useState('');
-    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-    const [memberToRemove, setMemberToRemove] = useState<(Profile | Friend) | null>(null);
-    const [messages, setMessages] = useState<Comment[]>([]);
-
-    const initialLoadRef = useRef<boolean>(true);
-
-    const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-    const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
-    const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
-
-    const groupSharedIds: string[] = (group as any).sharedHabitIds || (group as any).sharedHabits || [];
-    const groupSharedByMember = (group as any).sharedByMember || {};
-
-    const [memberSharedMap, setMemberSharedMap] = useState<Record<string, string[]>>({});
-    const [memberHabitsMap, setMemberHabitsMap] = useState<Record<string, Habit[]>>({});
-
-    useEffect(() => {
-        const q = query(
-            collection(db, 'group_chats', group.id, 'messages'),
-            orderBy('timestamp', 'asc')
-        );
-
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          const loadedMessages: Comment[] = [];
-          querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              loadedMessages.push({
-                  id: doc.id,
-                  groupId: data.groupId,
-                  authorId: data.authorId,
-                  authorName: data.authorName,
-                  text: data.text,
-                  timestamp: data.timestamp,
-                  authorImageUrl: data.authorImageUrl || null
-              } as Comment);
-          });
-          // docChanges to detect newly added messages
-          querySnapshot.docChanges().forEach(change => {
-              if (change.type === 'added') {
-                  const data = change.doc.data() as any;
-                  // skip toast for initial load
-                  if (!initialLoadRef.current && data && data.text) {
-                      // avoid notifying sender on their own new message
-                      if (data.authorId !== profile.id) {
-                          const authorLabel = data.authorName || '名無し';
-                          toast(`${authorLabel}: ${String(data.text)}`, { duration: 4000 });
-                      }
-                  }
-              }
-          });
-+
-          setMessages(loadedMessages);
-          if (initialLoadRef.current) initialLoadRef.current = false;
-        }, (error) => {
-            console.error("チャットの読み込みに失敗しました:", error);
-        });
-        return () => unsubscribe();
-    }, [group.id]);
-
-    useEffect(() => {
-        if (!selectedMemberId) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                // 1) member の users/{memberId}/groups/{groupId}
-                const memberGroupDocRef = firestoreDoc(db, 'users', selectedMemberId, 'groups', group.id);
-                const snap = await getDoc(memberGroupDocRef);
-                if (cancelled) return;
-                if (snap.exists()) {
-                    const data = snap.data() as any;
-                    const sharedForGroup = (data?.sharedByMember && data.sharedByMember[selectedMemberId]) || data?.sharedHabitIds || [];
-                    console.debug('[Group] member groups doc found', { memberId: selectedMemberId, groupId: group.id, path: `users/${selectedMemberId}/groups/${group.id}`, sharedForGroup, rawData: data });
-                    setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
-                    return;
-                }
-
-                // 2) global groups/{groupId}
-                try {
-                    const globalGroupRef = firestoreDoc(db, 'groups', group.id);
-                    const gSnap = await getDoc(globalGroupRef);
-                    if (!cancelled && gSnap.exists()) {
-                        const gdata = gSnap.data() as any;
-                        const sharedForGroup = (gdata?.sharedByMember && gdata.sharedByMember[selectedMemberId]) || gdata?.sharedHabitIds || [];
-                        console.debug('[Group] global groups doc found', { memberId: selectedMemberId, groupId: group.id, path: `groups/${group.id}`, sharedForGroup, rawData: gdata });
-                        setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
-                        return;
-                    }
-                } catch (e) { console.debug('[Group] global groups fetch failed', e); }
-
-                // 3) fallback: group object
-                const fallback = (group as any).sharedByMember && (group as any).sharedByMember[selectedMemberId];
-                console.debug('[Group] fallback used for shared habits', { memberId: selectedMemberId, groupSharedByMember: (group as any).sharedByMember, fallback });
-                setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(fallback) ? fallback : [] }));
-            } catch (err) {
-                console.error('failed to load member shared habits', err);
-                setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: [] }));
-            }
-        })();
-        return () => { cancelled = true; };
-    // 依存配列は要素数を固定するためプリミティブ化して渡す
-    }, [selectedMemberId, group.id, JSON.stringify((group as any)?.sharedByMember || (group as any)?.sharedHabitIds || {})]);
-
-    useEffect(() => {
-        if (!selectedMemberId) return;
-        // 既にキャッシュがあれば何もしない
-        if (memberHabitsMap[selectedMemberId]) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const habitsCol = collection(db, 'users', selectedMemberId, 'habits');
-                const q = query(habitsCol);
-                const snap = await getDocs(q);
-                if (cancelled) return;
-                const loaded: Habit[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Habit));
-                console.debug('[Group] loaded member habits', { memberId: selectedMemberId, count: loaded.length });
-                setMemberHabitsMap(prev => ({ ...prev, [selectedMemberId]: loaded }));
-            } catch (err) {
-                console.error('[Group] failed to load member habits', selectedMemberId, err);
-                setMemberHabitsMap(prev => ({ ...prev, [selectedMemberId]: [] }));
-            }
-        })();
-        return () => { cancelled = true; };
-    // 依存配列で selectedMemberId の有無を考慮して参照するように変更
-    }, [selectedMemberId, JSON.stringify(selectedMemberId ? (memberHabitsMap[selectedMemberId] || []) : [])]);
-
-    // デバッグログ: メンバーモーダルを開くときに resolvedShared をログに出す（関数をJSXとして返していた箇所を修正）
-    const _resolvedSharedJSON = selectedMemberId ? JSON.stringify(memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []) : '[]';
-    const _memberHabitsJSON = selectedMemberId ? JSON.stringify(((allUserProfiles.get(selectedMemberId) as any)?.habits) || []) : '[]';
-    useEffect(() => {
-        if (!isMemberModalOpen || !selectedMemberId) return;
-        try {
-            const resolvedShared = JSON.parse(_resolvedSharedJSON) as string[];
-            const memberHabits = JSON.parse(_memberHabitsJSON) as any[];
-            console.debug('[Group] opening MemberHabitsModal', { selectedMemberId, resolvedShared, memberHabits });
-        } catch (e) {
-            console.debug('[Group] opening MemberHabitsModal (parse failed)', { selectedMemberId, _resolvedSharedJSON, _memberHabitsJSON, err: e });
-        }
-    }, [isMemberModalOpen, selectedMemberId, _resolvedSharedJSON, _memberHabitsJSON]);
-
-    const getMemberProfile = (memberId: string) => {
-        return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
-    };
-
-    const getMemberProgress = (memberId: string): number | null => {
-        // 自分自身は既存ロジックのまま
-        if (memberId === profile.id) {
-            const today = new Date();
-            const todayStr = today.toLocaleDateString('sv-SE');
-            const scheduled = habits.filter(h => isHabitScheduledForDate(h, today));
-            if (scheduled.length === 0) return 0;
-            const completed = scheduled.filter(h => (h.completedDates || []).includes(todayStr)).length;
-            return Math.round((completed / scheduled.length) * 100);
-        }
-
-        // グループで共有している習慣の id 列を取得
-        const sharedForMember = groupSharedByMember[memberId] || memberSharedMap[memberId] || [];
-        if (!sharedForMember || sharedForMember.length === 0) {
-            // 共有習慣が0件なら達成率を出さない
-            return null;
-        }
-
-        // メンバーの習慣オブジェクトをキャッシュから取得
-        const memberHabits = memberHabitsMap[memberId];
-        if (!memberHabits) {
-            // 習慣データがまだロードされていなければ表示を保留（'-' 表示）
-            return null;
-        }
-
-        // 共有対象の habit オブジェクトだけ抽出
-        const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
-        if (sharedHabits.length === 0) {
-            // id はあるが habit オブジェクトが見つからない場合は 0% を返す（保守的）
-            return 0;
-        }
-
-        // 今日が対象の習慣のみで達成率を計算
-        const today = new Date();
-        const todayStr = today.toLocaleDateString('sv-SE');
-        const scheduledToday = sharedHabits.filter(h => isHabitScheduledForDate(h, today));
-        if (scheduledToday.length === 0) {
-            // 共有はあるが今日対象がなければ 0%
-            return 0;
-        }
-        const completedToday = scheduledToday.filter(h => (h.completedDates || []).includes(todayStr)).length;
-        return Math.round((completedToday / scheduledToday.length) * 100);
-    };
-
-    const handlePostComment = () => {
-        if(!newComment.trim()) return;
-        const commentData: Omit<Comment, 'id'> = {
-            groupId: group.id,
-            authorId: profile.id,
-            authorName: profile.displayName,
-            text: newComment.trim(),
-            timestamp: new Date().toISOString()
-        };
-        onAddComment(commentData);
-        setNewComment('');
-    };
-
-    // グループ化: 日付（YYYY/MM/DD）ごとにメッセージをまとめる
-    const groupedMessages = useMemo(() => {
-        const groups: Record<string, Comment[]> = {};
-        messages.forEach(m => {
-            const d = m.timestamp ? new Date(m.timestamp) : new Date();
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const key = `${yyyy}/${mm}/${dd}`;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(m);
-        });
-        return Object.keys(groups)
-            .sort((a, b) => a.localeCompare(b))
-            .map(date => ({ date, items: groups[date] }));
-    }, [messages]);
-    
-    const followingIds = useMemo(() => new Set(following.map(f => f.id)), [following]);
-    const isOwner = profile.id === group.ownerId;
-
-    const confirmRemoveMember = () => {
-        if (memberToRemove) {
-            onRemoveMember(group.id, memberToRemove.id);
-            setMemberToRemove(null);
-        }
-    };
-
-    return (
-        <div className="animate-fade-in space-y-6">
-            <div className="flex items-center gap-2">
-                <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100">
-                    <ChevronLeftIcon className="w-6 h-6 text-gray-600"/>
-                </button>
-                <h2 className="text-2xl font-bold text-gray-800">{group.name}</h2>
-
-                {group.members.includes(profile.id) && (
-                    <button onClick={() => setIsSharedHabitsOpen(true)} className="ml-3 px-3 py-1 rounded-lg bg-indigo-100 text-indigo-700 text-sm">
-                        自分の共有習慣を設定
-                    </button>
-                )}
-            </div>
-
-            <div className="bg-white p-6 rounded-xl shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-800">今日の進捗</h3>
-                    {isOwner && (
-                        <button onClick={() => setIsInviteModalOpen(true)} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold p-2 rounded-md hover:bg-indigo-50">
-                            <UserPlusIcon className="w-5 h-5" />
-                            招待する
-                        </button>
-                    )}
-                </div>
-                <div className="space-y-4">
-                    {group.members.map(memberId => {
-                        const member = getMemberProfile(memberId);
-                        const progress = getMemberProgress(memberId);
-                        const isSelf = memberId === profile.id;
-                        const isFollowing = followingIds.has(memberId);
-
-                        return (
-                            <div key={memberId} className="flex items-center gap-4">
-                                <button onClick={() => { setSelectedMemberId(memberId); setIsMemberModalOpen(true); }} className="flex items-center gap-4 flex-grow text-left">
-                                    <img src={(member && member.imageUrl) || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
-                                    <div className="flex-grow">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-gray-700">{member.displayName}</span>
-                                                {isFollowing && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium">フォロー済み</span>
-                                                )}
-                                            </div>
-                                            <span className="font-bold text-indigo-600">{progress === null ? '-' : `${progress}%`}</span>
-                                        </div>
-                                        {progress !== null ? (
-                                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                                <div className="bg-indigo-500 h-2.5 rounded-full" style={{width: `${progress}%`}}></div>
-                                            </div>
-                                        ) : (
-                                            <div className="w-full h-2.5" />
-                                        )}
-                                    </div>
-                                </button>
-
-                                {!isSelf && !isFollowing && (
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); onFollowUser(memberId); }}
-                                        className="p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
-                                        title={`${member.displayName} をフォローする`}
-                                    >
-                                        <UserPlusIcon className="w-5 h-5" />
-                                    </button>
-                                )}
-                                {isOwner && !isSelf && (
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); setMemberToRemove(member); }}
-                                        className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                                        title={`${member.displayName} を退会させる`}
-                                    >
-                                        <UserMinusIcon className="w-5 h-5" />
-                                    </button>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
-
-             <div className="bg-white p-6 rounded-xl shadow-md">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">コメント</h3>
-                <div className="space-y-4 max-h-96 overflow-y-auto pr-2 mb-4">
-                    {groupedMessages.map(group => (
-                        <div key={group.date} className="mb-6">
-                            {/* 日付セパレータ（中央に丸いバッジ、両側に薄い線） */}
-                            <div className="flex items-center justify-center my-3">
-                                <div className="flex items-center gap-3 w-full max-w-md">
-                                    <div className="flex-1 h-px bg-gray-200" />
-                                    <span className="inline-block text-xs text-gray-500 bg-white border border-gray-100 rounded-full px-3 py-1 shadow-sm">
-                                        {group.date}
-                                    </span>
-                                    <div className="flex-1 h-px bg-gray-200" />
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                {group.items.map(message => {
-                                    const isAuthor = message.authorId === profile.id;
-                                    const authorImageUrl = (message as any).authorImageUrl || null;
-
-                                    return (
-                                        <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
-                                            {!isAuthor && (
-                                                <img
-                                                    src={authorImageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
-                                                    alt={message.authorName}
-                                                    className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1"
-                                                />
-                                            )}
-                                            <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-800'} shadow-sm`}>
-                                                {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName || '名無しのさん'}</p>}
-                                                <p className="text-sm">{message.text}</p>
-                                                <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>
-                                                    {new Date(message.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex items-center gap-2">
-                    <input type="text" value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="コメントを入力..." onKeyPress={e => e.key === 'Enter' && handlePostComment()} className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"/>
-                    <button onClick={handlePostComment} className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition">
-                        <SendIcon className="w-5 h-5"/>
-                    </button>
-                </div>
-            </div>
-
-            {isMemberModalOpen && selectedMemberId && (
-                <MemberHabitsModal
-                    memberId={selectedMemberId}
-                    memberProfile={(allUserProfiles.get(selectedMemberId) as Profile | Friend) || null}
-                    memberHabits={memberHabitsMap[selectedMemberId]} // 追加：取得済みの習慣を渡す
-                    groupSharedHabitIds={memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []}
-                    currentUserId={profile.id}
-                    isFollowing={followingIds.has(selectedMemberId)}
-                    onClose={() => { setIsMemberModalOpen(false); setSelectedMemberId(null); }}
-                    onFollowUser={(id) => { onFollowUser(id); }}
-                    onEditMySharedHabits={() => { setIsMemberModalOpen(false); setIsSharedHabitsOpen(true); }}
-                />
-            )}
-
-            {isSharedHabitsOpen && (
-              <SharedHabitsModal
-                group={group}
-                profile={profile}
-                myHabits={habits}
-                initialSharedIds={groupSharedByMember[profile.id] || []}
-                onClose={() => setIsSharedHabitsOpen(false)}
-                onSave={(ids) => {
-                    onUpdateGroupSharedHabits(group.id, profile.id, ids);
-                    setIsSharedHabitsOpen(false);
-                }}
-              />
-            )}
-            {isInviteModalOpen && (
-                <InviteMemberModal
-                    group={group}
-                    profile={profile}
-                    following={following}
-                    onFollowUser={onFollowUser}
-                    onClose={() => setIsInviteModalOpen(false)}
-                    onInvite={(memberIds) => onInviteMembers(group, memberIds)}
-                />
-            )}
-            {memberToRemove && (
-                <ConfirmRemoveModal 
-                    member={memberToRemove}
-                    groupName={group.name}
-                    onClose={() => setMemberToRemove(null)}
-                    onConfirm={confirmRemoveMember}
-                />
-            )}
-        </div>
-    );
-};
-
 const Group: React.FC<GroupProps> = ({ 
     profile, 
     following,
@@ -928,6 +503,79 @@ const Group: React.FC<GroupProps> = ({
     // 友達候補（候補リストはモーダルで表示）
     const [isCandidatesOpen, setIsCandidatesOpen] = useState(false);
 
+    // 進捗モーダル（Group コンポーネント側で管理）
+    const [isProgressOpen, setIsProgressOpen] = useState(false);
+    const [progressGroup, setProgressGroup] = useState<GroupType | null>(null);
+    const openProgressFor = (g: GroupType) => { setProgressGroup(g); setIsProgressOpen(true); };
+    const closeProgress = () => { setProgressGroup(null); setIsProgressOpen(false); };
+
+    const GroupProgressModal: React.FC<{ group: GroupType; onClose: () => void }> = ({ group, onClose }) => {
+      const weekdayNames = ['日','月','火','水','木','金','土'];
+      const getMemberProfile = (memberId: string) => allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
+      const isHabitScheduledForDateLocal = (habit: Habit, date: Date) => {
+        const d = new Date(date); d.setHours(0,0,0,0);
+        const s = new Date((habit as any).startDate || habit.startDate); s.setHours(0,0,0,0);
+        if (d < s) return false;
+        if ((habit as any).frequencyType === 'daily') return true;
+        if ((habit as any).frequencyType === 'weekly') return Array.isArray((habit as any).frequencyValue) && (habit as any).frequencyValue.includes(d.getDay());
+        if ((habit as any).frequencyType === 'monthly') return Array.isArray((habit as any).frequencyValue) && (habit as any).frequencyValue.includes(d.getDate());
+        return false;
+      };
+      const today = new Date();
+      const todayStr = today.toLocaleDateString('sv-SE');
+
+      const getMemberProgress = (memberId: string) => {
+        if (memberId === profile.id) {
+          const scheduled = habits.filter(h => isHabitScheduledForDateLocal(h, today));
+          if (scheduled.length === 0) return 0;
+          const completed = scheduled.filter(h => (h.completedDates || []).includes(todayStr)).length;
+          return Math.round((completed / scheduled.length) * 100);
+        }
+        const sharedForMember = (group as any).sharedByMember?.[memberId] || (group as any).sharedHabitIds || [];
+        if (!sharedForMember || sharedForMember.length === 0) return null;
+        const memberProfile = allUserProfiles.get(memberId) as any;
+        const memberHabits: Habit[] = (memberProfile && memberProfile.habits) || [];
+        if (!memberHabits || memberHabits.length === 0) return null;
+        const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
+        if (sharedHabits.length === 0) return 0;
+        const scheduledToday = sharedHabits.filter(h => isHabitScheduledForDateLocal(h, today));
+        if (scheduledToday.length === 0) return 0;
+        const completedToday = scheduledToday.filter(h => (h.completedDates || []).includes(todayStr)).length;
+        return Math.round((completedToday / scheduledToday.length) * 100);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[90]" onClick={onClose}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold">{group.name} の今日の進捗</h3>
+              <button onClick={onClose} className="text-gray-500">閉じる</button>
+            </div>
+            <div className="space-y-3">
+              {group.members.map(memberId => {
+                const member = getMemberProfile(memberId);
+                const progress = getMemberProgress(memberId);
+                const isSelf = memberId === profile.id;
+                return (
+                  <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <img src={member.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                      <div>
+                        <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="w-28 text-right">
+                      {progress === null ? <span className="text-sm text-gray-400">-</span> : <span className="font-bold text-indigo-600">{progress}%</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const handleCreateGroup = (name: string, members: string[]) => {
         const newGroupData: Omit<GroupType, 'id'> = {
             name,
@@ -942,19 +590,21 @@ const Group: React.FC<GroupProps> = ({
     };
 
     if (selectedGroup) {
-        return <GroupDetail 
-                    group={selectedGroup} 
-                    profile={profile} 
-                    following={following}
-                    onFollowUser={onFollowUser}
-                    onAddComment={onAddComment}
-                    habits={habits} 
-                    onBack={() => setSelectedGroup(null)} 
-                    onInviteMembers={handleInviteMembers}
-                    onRemoveMember={onRemoveMember}
-                    allUserProfiles={allUserProfiles}
-                    onUpdateGroupSharedHabits={onUpdateGroupSharedHabits}
-                />;
+      return (
+        <GroupDetail 
+          group={selectedGroup} 
+          profile={profile} 
+          following={following}
+          onFollowUser={onFollowUser}
+          onAddComment={onAddComment}
+          habits={habits} 
+          onBack={() => setSelectedGroup(null)} 
+          onInviteMembers={handleInviteMembers}
+          onRemoveMember={onRemoveMember}
+          allUserProfiles={allUserProfiles}
+          onUpdateGroupSharedHabits={onUpdateGroupSharedHabits}
+        />
+      );
     }
 
     // --- フォロー中の友達ページ（モーダルではなくページ遷移で表示） ---
@@ -1104,42 +754,51 @@ const Group: React.FC<GroupProps> = ({
             <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">参加中のグループ</h3>
                 <div className="space-y-4">
-                    {groups.map(group => (
-                        <div key={group.id} onClick={() => setSelectedGroup(group)} className="p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-indigo-400 transition-colors">
-                            <h3 className="text-lg font-bold text-gray-800">{group.name}</h3>
-                            <div className="flex items-center mt-2">
-                                <div className="flex -space-x-2">
-                                    {group.members.slice(0,5).map(memberId => {
-                                        const member = allUserProfiles.get(memberId);
-                                        return (
-                                            <img key={memberId} 
-                                                 src={member?.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} 
-                                                 alt={member?.displayName || 'member'} 
-                                                 className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
-                                        );
-                                    })}
-                                </div>
-                                <span className="ml-3 text-sm text-gray-500">{group.members.length}人のメンバー</span>
-                            </div>
-                        </div>
-                    ))}
+                  {groups.map(group => (
+                      <div key={group.id} onClick={() => setSelectedGroup(group)} className="p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-indigo-400 transition-colors">
+                          <h3 className="text-lg font-bold text-gray-800">{group.name}</h3>
+                          <div className="flex items-center mt-2">
+                              <div className="flex -space-x-2">
+                                  {group.members.slice(0,5).map(memberId => {
+                                      const member = allUserProfiles.get(memberId);
+                                      return (
+                                        <img key={memberId} 
+                                          src={member?.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} 
+                                          alt={member?.displayName || 'member'} 
+                                          className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200"
+                                        />
+                                      );
+                                  })}
+                              </div>
+                              <span className="ml-3 text-sm text-gray-500">{group.members.length}人のメンバー</span>
+                              <div className="flex-1" />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openProgressFor(group); }}
+                                className="ml-3 px-3 py-1 bg-white border border-gray-200 rounded-md text-sm text-indigo-600 hover:bg-indigo-50"
+                              >
+                                進捗
+                              </button>
+                          </div>
+                      </div>
+                  ))}
+                  {isProgressOpen && progressGroup && <GroupProgressModal group={progressGroup} onClose={closeProgress} />}
                 </div>
 
                 {groups.length === 0 && (
-                    <div className="text-center text-gray-500 py-10">
-                        <p>まだグループに参加していません。</p>
-                        <p>新しいグループを作成するか、招待を待ちましょう！</p>
-                    </div>
+                  <div className="text-center text-gray-500 py-10">
+                      <p>まだグループに参加していません。</p>
+                      <p>新しいグループを作成するか、招待を待ちましょう！</p>
+                  </div>
                 )}
             </div>
 
             {isCreateOpen && <CreateGroupModal 
-                                profile={profile} 
-                                following={following}
-                                onFollowUser={onFollowUser}
-                                onClose={() => setIsCreateOpen(false)} 
-                                onCreate={handleCreateGroup} 
-                            />}
+              profile={profile} 
+              following={following}
+              onFollowUser={onFollowUser}
+              onClose={() => setIsCreateOpen(false)} 
+              onCreate={handleCreateGroup} 
+            />}
         </div>
     );
 };

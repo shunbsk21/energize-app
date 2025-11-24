@@ -974,19 +974,10 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     // ...existing code...
     const selectedDateString = selectedDate.toLocaleDateString('sv-SE');
-  
-    const scheduledHabits = useMemo(() => {
-      return habits.filter(h => isHabitScheduledForDate(h, selectedDate));
-    }, [habits, selectedDate]);
-  
-    const nonScheduledHabits = useMemo(() => {
-      const key = selectedDate.toLocaleDateString('sv-SE');
-      return habits.filter(h => {
-        // not scheduled by frequency OR explicitly scheduled but we still want "not in scheduled list"
-        return !isHabitScheduledForDate(h, selectedDate);
-      });
-    }, [habits, selectedDate]);
-  
+
+    // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
+    const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
+
     // helper: その日 Habit が完了扱いか（scheduledHabits を参照する前に定義）
     const isHabitCompletedOnDate = (habit: Habit, dkey: string) => {
       const type = (habit.type ?? 'binary');
@@ -998,9 +989,23 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         return (habit.completedDates || []).includes(dkey);
       }
     };
-  
-    // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
-    const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
+    
+    // 表示用の"実効的な"habit（optimistic を優先）を考慮して
+    const scheduledHabits = useMemo(() => {
+      return habits.filter(h => {
+        const eff = optimistic[h.id] ?? h;
+        // 「予定」に該当する or その日に記録済み（予定外で記録したもの）を含める
+        return isHabitScheduledForDate(eff, selectedDate) || isHabitCompletedOnDate(eff, selectedDateString);
+      });
+    }, [habits, selectedDate, selectedDateString, optimistic]);
+
+    const nonScheduledHabits = useMemo(() => {
+      return habits.filter(h => {
+        const eff = optimistic[h.id] ?? h;
+        // 予定に該当せず、かつその日に記録済みでないものだけを「予定外」リストに表示
+        return !isHabitScheduledForDate(eff, selectedDate) && !isHabitCompletedOnDate(eff, selectedDateString);
+      });
+    }, [habits, selectedDate, selectedDateString, optimistic]);
   
     const getDisplayedHabit = (h: Habit) => optimistic[h.id] ?? h;
   
@@ -1085,6 +1090,10 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
       const isScheduled = (date: Date) => {
         if (date < start) return false;
+        const key = date.toLocaleDateString('sv-SE');
+        // 予定日判定に先立ち、その日に記録済み（done）または skip があれば
+        // 非予定日でも連続計算に含める（ユーザー操作で記録した日を優先）
+        if (doneSet.has(key) || skipSet.has(key)) return true;
         switch (habit.frequencyType) {
           case 'daily': return true;
           case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());
@@ -1878,7 +1887,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                           <div className="flex items-center gap-2">
                             <button onClick={() => recordOrToggleForNonScheduled(h)} className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm">記録</button>
                             <button onClick={() => toggleSkipForDate(h)} className={`px-3 py-2 rounded-md text-sm ${isSkipped ? 'bg-yellow-100 text-yellow-800' : 'bg-white border border-gray-200'}`}>
-                              {isSkipped ? 'スキップ解除' : 'この日をスキップ'}
+                              {isSkipped ? 'skip解除' : 'skip'}
                             </button>
                           </div>
                         </div>

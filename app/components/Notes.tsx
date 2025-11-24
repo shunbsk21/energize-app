@@ -401,34 +401,36 @@ const Notes: React.FC<{
             {/* body: inline form so header save can trigger submit */}
             <div className="p-4 overflow-auto flex-1">
               <FullscreenEditorForm
-                key={editingNote.id || 'new'}
-                note={editingNote}
-                onCancel={() => { setEditingNote(null); setIsFullscreenEditOpen(false); setEditingIsNew(false); }}
-                onSave={async (title, body, tags) => {
-                  // 新規 or 更新 を切り分け
-                  const uid = getCurrentUid();
-                  if (editingIsNew) {
-                    if (!db || !uid) { console.error('create: not logged in / db missing'); return; }
-                    try {
-                      const payload = { title: title || null, body, tags, archived: false, deleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
-                      const ref = await addDoc(collection(db, 'users', uid, 'notes'), payload);
-                      // Firestore snapshot will sync the created note; just close editor
-                      setEditingIsNew(false);
+                  key={editingNote.id || 'new'}
+                  note={editingNote}
+                  allTags={allTags}
+                  onCancel={() => { setEditingNote(null); setIsFullscreenEditOpen(false); setEditingIsNew(false); }}
+                  onSave={async (title, body, tags) => {
+                    // 新規 or 更新 を切り分け
+                    const uid = getCurrentUid();
+                    if (editingIsNew) {
+                      if (!db || !uid) { console.error('create: not logged in / db missing'); return; }
+                      try {
+                        const payload = { title: title || null, body, tags, archived: false, deleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+                        const ref = await addDoc(collection(db, 'users', uid, 'notes'), payload);
+                        // Firestore snapshot will sync the created note; just close editor
+                        setEditingIsNew(false);
+                        setIsFullscreenEditOpen(false);
+                        setEditingNote(null);
+                        onAddNote?.({ title: title || undefined, body, tags, archived: false, deleted: false });
+                      } catch (err) {
+                        console.error('create-from-fullscreen error:', err);
+                      }
+                    } else {
+                      if (!editingNote) return;
+                      const updated: NoteItem = { ...editingNote, title: title || undefined, body, tags, updatedAt: defaultNow() };
+                      await updateNote(updated, { setActive: false });
                       setIsFullscreenEditOpen(false);
                       setEditingNote(null);
-                      onAddNote?.({ title: title || undefined, body, tags, archived: false, deleted: false });
-                    } catch (err) {
-                      console.error('create-from-fullscreen error:', err);
                     }
-                  } else {
-                    if (!editingNote) return;
-                    const updated: NoteItem = { ...editingNote, title: title || undefined, body, tags, updatedAt: defaultNow() };
-                    await updateNote(updated, { setActive: false });
-                    setIsFullscreenEditOpen(false);
-                    setEditingNote(null);
-                  }
-                }}
-                parseTagsInput={parseTagsInput}
+                  }}
+                  parseTagsInput={parseTagsInput}
+                  allTags={allTags}
               />
             </div>
           </div>
@@ -446,22 +448,55 @@ const NoteEditor: React.FC<{
   onCancel: () => void;
   onSave: (title: string|undefined, body: string, tags: string[]) => void;
   parseTagsInput: (s: string) => string[];
-}> = ({ initial, onCancel, onSave, parseTagsInput }) => {
+  allTags?: string[];
+}> = ({ initial, onCancel, onSave, parseTagsInput, allTags = [] }) => {
   const [title, setTitle] = useState(initial.title ?? '');
   const [body, setBody] = useState(initial.body ?? '');
+  const [tags, setTags] = useState<string[]>(initial.tags ?? []);
   const [tagsInput, setTagsInput] = useState((initial.tags || []).join(', '));
+
+  const addTag = (t: string) => {
+    const v = t.trim().toLowerCase().replace(/\s+/g,'-');
+    if (!v) return;
+    if (!tags.includes(v)) setTags(prev => [...prev, v]);
+    setTagsInput('');
+  };
+  const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
+  const toggleTag = (t: string) => tags.includes(t) ? removeTag(t) : addTag(t);
 
   useEffect(() => {
     setTitle(initial.title ?? '');
     setBody(initial.body ?? '');
+    setTags((initial.tags ?? []));
     setTagsInput((initial.tags || []).join(', '));
   }, [initial]);
 
   return (
-    <form onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, parseTagsInput(tagsInput)); }} className="space-y-3">
+    <form onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, tags); }} className="space-y-3">
       {/* タイトル → タグ → 詳細 の順 */}
       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-      <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="タグ（カンマ区切り）" className="w-full p-2 border border-gray-200 rounded" />
+      <div>
+        <div className="mb-2">
+          <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',' ) { e.preventDefault(); addTag(tagsInput); }
+          }} placeholder="タグを入力して Enter（または既存タグをクリック）" className="w-full p-2 border border-gray-200 rounded" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {tags.map(t => (
+            <span key={t} className="inline-flex items-center gap-2 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs mb-1">
+              #{t}
+              <button type="button" onClick={() => removeTag(t)} className="text-indigo-600 px-1">✕</button>
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 mb-1">
+         {allTags.filter(t => !tags.includes(t)).map(t => (
+            <button key={t} type="button" onClick={() => toggleTag(t)} className="px-2 py-1 text-sm rounded bg-gray-100 text-gray-700">
+              #{t}
+            </button>
+          ))}
+        </div>
+      </div>
       <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" rows={10} className="w-full p-2 border border-gray-200 rounded whitespace-pre-wrap" />
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-500">タグは半角カンマで区切ってください</div>
@@ -480,24 +515,48 @@ const FullscreenEditorForm: React.FC<{
   onCancel: () => void;
   onSave: (title: string|undefined, body: string, tags: string[]) => void;
   parseTagsInput: (s: string) => string[];
-}> = ({ note, onCancel, onSave, parseTagsInput }) => {
+  allTags?: string[];
+}> = ({ note, onCancel, onSave, parseTagsInput, allTags = [] }) => {
   const [title, setTitle] = useState(note.title ?? '');
+  const [tags, setTags] = useState<string[]>(note.tags ?? []);
   const [tagsInput, setTagsInput] = useState((note.tags || []).join(', '));
   const [body, setBody] = useState(note.body ?? '');
 
+  const addTag = (t: string) => {
+    const v = t.trim().toLowerCase().replace(/\s+/g,'-');
+    if (!v) return;
+    if (!tags.includes(v)) setTags(prev => [...prev, v]);
+    setTagsInput('');
+  };
+  const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
+  const toggleTag = (t: string) => tags.includes(t) ? removeTag(t) : addTag(t);
+
   useEffect(() => {
     setTitle(note.title ?? '');
+    setTags(note.tags ?? []);
     setTagsInput((note.tags || []).join(', '));
     setBody(note.body ?? '');
   }, [note]);
 
   return (
-    <form id={`fs-editor-form-${note.id}`} onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, parseTagsInput(tagsInput)); }} className="flex flex-col h-full">
+    <form id={`fs-editor-form-${note.id}`} onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, tags); }} className="flex flex-col h-full">
       <div className="mb-3">
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-3 border border-gray-200 rounded" />
       </div>
       <div className="mb-3">
-        <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="タグ（カンマ区切り）" className="w-full p-3 border border-gray-200 rounded" />
+        <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagsInput); }
+          }} placeholder="タグを入力して Enter（または既存タグをクリック）" className="w-full p-3 border border-gray-200 rounded" />
+        <div className="flex flex-wrap gap-2 mt-2 mb-1">
+          {tags.map(t => <span key={t} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-sm">#{t} <button type="button" onClick={() => removeTag(t)} className="ml-2 text-indigo-600">✕</button></span>)}
+        </div>
+        <div className="flex flex-wrap gap-2 mb-1">
+          {allTags.filter(t => !tags.includes(t)).map(t => (
+            <button key={t} type="button" onClick={() => toggleTag(t)} className="px-2 py-1 text-sm rounded bg-gray-100 text-gray-700">
+              #{t}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="flex-1">
         <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" className="w-full p-3 border border-gray-200 rounded h-full min-h-[300px] resize-none whitespace-pre-wrap" />
