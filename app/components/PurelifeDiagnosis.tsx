@@ -39,6 +39,7 @@ const formatDateLabel = (iso: string) => {
 
 interface PurelifeProps {
   handleAddHabit?: (newHabitData: any) => Promise<void> | void;
+  setIsHelpOpen?: (open: boolean) => void;
 }
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
@@ -139,7 +140,8 @@ const DatePickerModal: React.FC<{
 };
 
 const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
-  handleAddHabit
+  handleAddHabit,
+  setIsHelpOpen
 }) => {
   // default answers
   const defaultAnswers = useMemo(() => {

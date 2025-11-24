@@ -863,7 +863,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           handleAddHabit={handleAddHabit}
         />;
       case 'purelife':
-        return <PurelifeDiagnosis handleAddHabit={handleAddHabit} />;
+        return <PurelifeDiagnosis
+          setIsHelpOpen={setIsHelpOpen}
+          handleAddHabit={handleAddHabit}
+        />;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 
