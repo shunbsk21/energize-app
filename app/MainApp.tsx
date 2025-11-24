@@ -32,6 +32,7 @@ import Learnings from './components/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
 import PersonalityDiagnosis from './components/PersonalityDiagnosis';
+import PurelifeDiagnosis from './components/PurelifeDiagnosis';
 
 // --- Icon Components Start (コード変更なし) ---
 
@@ -861,6 +862,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           setIsHelpOpen={setIsHelpOpen}
           handleAddHabit={handleAddHabit}
         />;
+      case 'purelife':
+        return <PurelifeDiagnosis handleAddHabit={handleAddHabit} />;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 
@@ -943,10 +946,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 「診断, 習慣, グループ, 記録, 分析」をまとめて
   // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
-  const isUnderHabits = useMemo(() => ['diagnosis','personality','habits','groups','records','analytics'].includes(view), [view]);
+  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','habits','groups','records','analytics'].includes(view), [view]);
 
   // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
-  const showDiagnosisTabs = view === 'diagnosis' || view === 'personality';
+  const showDiagnosisTabs = ['diagnosis','personality','purelife'].includes(view);
 
   const mainContainerClass = isView('notes')
     ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
@@ -1017,7 +1020,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               {[
                 { key: 'diagnosis', label: 'エネルギー診断', icon: <DiagnosisIcon className="w-5 h-5" /> },
                 { key: 'personality', label: 'パーソナリティ診断', icon: <UserIcon className="w-5 h-5" /> },
-                // 将来的に診断が増えたらここに追加
+                { key: 'purelife', label: 'PureLife診断', icon: <DiagnosisIcon className="w-5 h-5" /> },
               ].map(tab => {
                 const active = isView(tab.key as View);
                 return (
@@ -1213,7 +1216,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex justify-between items-center h-18 py-3">
               <button
                 onClick={() => setView('diagnosis')}
-                className={`flex flex-col items-center text-xs w-1/5 ${(view === 'diagnosis' || view === 'personality') ? 'text-indigo-600' : 'text-gray-500'}`}
+                className={`flex flex-col items-center text-xs w-1/5 ${(view === 'diagnosis' || view === 'personality' || view === 'purelife') ? 'text-indigo-600' : 'text-gray-500'}`}
               >
                 <DiagnosisIcon className="w-6 h-6 mb-1" />
                 <span className="text-sm">診断</span>

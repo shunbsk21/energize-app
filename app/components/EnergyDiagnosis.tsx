@@ -14,6 +14,7 @@ import {
 } from '../constants';
 
 import AddHabitModal from "./AddHabitModal";
+import FrequencyEditor from "./FrequencyEditor";
 
 const THRESHOLD = 16;
 const getTypeKey = (scores: EnergyScores) => {
@@ -211,62 +212,6 @@ const DatePickerModal: React.FC<{
         </div>
     );
 };
-
-const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-// (↓ FrequencyEditor は変更なし)
-const FrequencyEditor: React.FC<{
-    frequency: DiagnosisFrequency;
-    setFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>; // ここはローカルのuseStateを使うので変更なし
-}> = ({ frequency, setFrequency }) => {
-    return (
-        <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
-                <select 
-                  value={frequency.frequencyType} 
-                  onChange={e => setFrequency({frequencyType: e.target.value as FrequencyType, frequencyValue: []})}
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                >
-                  <option value="daily">毎日</option>
-                  <option value="weekly">週次</option>
-                  <option value="monthly">月次</option>
-                </select>
-            </div>
-            {frequency.frequencyType === 'weekly' && (
-                <div className="flex justify-center gap-1">
-                  {WEEK_DAYS.map((day, index) => (
-                    <button type="button" key={index}
-                      onClick={() => {
-                        const newValue = frequency.frequencyValue.includes(index)
-                          ? frequency.frequencyValue.filter(d => d !== index)
-                          : [...frequency.frequencyValue, index];
-                        setFrequency(prev => ({...prev, frequencyValue: newValue.sort()}));
-                      }}
-                      className={`w-10 h-10 rounded-full font-semibold transition-colors ${frequency.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >{day}</button>
-                  ))}
-                </div>
-            )}
-            {frequency.frequencyType === 'monthly' && (
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
-                    <input
-                        type="text"
-                        placeholder="例: 1, 15"
-                        defaultValue={frequency.frequencyValue.join(', ')}
-                        onChange={e => {
-                            const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
-                            setFrequency(prev => ({...prev, frequencyValue: value.sort((a,b) => a-b)}))
-                        }}
-                       className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                    />
-                 </div>
-            )}
-        </div>
-    );
-};
-
 
 const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   history,

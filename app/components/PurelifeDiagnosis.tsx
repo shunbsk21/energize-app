@@ -1,0 +1,574 @@
+"use client";
+import React, { useEffect, useMemo, useState } from "react";
+import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
+import FrequencyEditor from './FrequencyEditor';
+import AddHabitModal from './AddHabitModal';
+import { db, auth } from "../../lib/firebase";
+import { signInAnonymously } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+  setDoc,
+  doc,
+} from "firebase/firestore";
+
+type AnswersMap = Record<string, number>;
+type ResultRecord = {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  categories: Record<string, number>; // 0-50
+  overall: number; // 0-100
+  createdAt?: any;
+};
+
+// アイコン等（既存）
+const HelpIcon: React.FC<{className?: string}> = ({className}) => (/* ...existing svg... */ <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>);
+const CalendarIcon: React.FC<{className?: string}> = ({className}) => (/* ...existing svg... */ <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>);
+
+const defaultFrequency = { frequencyType: 'daily', frequencyValue: [] as any[] };
+
+const formatDateLabel = (iso: string) => {
+  try { return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return iso; }
+};
+
+interface PurelifeProps {
+  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
+}
+
+/* DatePickerModal and RecordsPickerModal unchanged from previous version */
+const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: ResultRecord | null) => void; history: ResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
+  if (!open) return null;
+  const items = [...history].sort((a,b) => (b.date).localeCompare(a.date)).slice(0, 50);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="bg-white rounded-xl p-4 z-10 w-full max-w-md shadow-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold">過去の診断</h3>
+          <button onClick={onClose} className="text-sm text-gray-500">閉じる</button>
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {items.length === 0 ? <div className="text-sm text-gray-500">過去の診断はありません。</div> : items.map(r => (
+            <button key={r.id} onClick={() => { onSelect(r); onClose(); }} className="w-full text-left p-3 bg-gray-50 rounded-lg flex items-center gap-3 hover:bg-gray-100">
+              <div className="flex-1">
+                <div className="font-medium">{formatDateLabel(r.date)}</div>
+                <div className="text-xs text-gray-500">総合: {r.overall}/100</div>
+              </div>
+              <div className="text-sm text-indigo-600">表示</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const recordDatesFromHistory = (history: ResultRecord[] = []) => {
+  return new Set(history.map(h => String(h.date)));
+};
+
+const DatePickerModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onDateSelect: (date: Date) => void;
+  initialDate: Date;
+  highlightedDates?: Set<string>;
+}> = ({ isOpen, onClose, onDateSelect, initialDate, highlightedDates }) => {
+  // ...copy existing DatePickerModal implementation...
+  const [displayDate, setDisplayDate] = useState<Date>(initialDate);
+  useEffect(() => setDisplayDate(initialDate), [initialDate, isOpen]);
+  if (!isOpen) return null;
+  const changeMonth = (amount: number) => setDisplayDate(d => {
+    const nd = new Date(d); nd.setMonth(nd.getMonth() + amount); return nd;
+  });
+  const generateCalendar = () => {
+    const year = displayDate.getFullYear();
+    const month = displayDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const nodes: React.ReactNode[] = [];
+    for (let i = 0; i < firstDay; i++) nodes.push(<div key={`e-${i}`} className="w-10 h-10"></div>);
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toLocaleDateString('sv-SE');
+      const hasRecord = highlightedDates?.has(dateStr);
+      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
+      nodes.push(
+        <div
+          key={day}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-50 relative"
+          onClick={() => onDateSelect(date)}
+        >
+          <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
+            {day}
+          </span>
+          {hasRecord && (
+            <div className="absolute bottom-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return nodes;
+  };
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="absolute inset-0" />
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4 z-10" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
+          <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
+          <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
+        </div>
+        <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
+          {['日','月','火','水','木','金','土'].map(d => <div key={d}>{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1 place-items-center">
+          {generateCalendar()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
+  handleAddHabit
+}) => {
+  // default answers
+  const defaultAnswers = useMemo(() => {
+    const m: AnswersMap = {};
+    PURELIFE_QUESTIONS.forEach(q => { m[q.id] = 3; });
+    return m;
+  }, []);
+
+  const [answers, setAnswers] = useState<AnswersMap>(defaultAnswers);
+  const [history, setHistory] = useState<ResultRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<ResultRecord | null>(null);
+  const [step, setStep] = useState<'idle'|'quiz'|'results'>('idle');
+  const [pageIndex, setPageIndex] = useState(0);
+  const PAGE_SIZE = 5;
+  const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
+  const [localFrequency, setLocalFrequency] = useState<any>(defaultFrequency);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [habitDraft, setHabitDraft] = useState<any>(null);
+  const [uid, setUid] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const recordDates = useMemo(() => recordDatesFromHistory(history), [history]);
+
+  const getCurrentUid = () => {
+    try { return auth?.currentUser?.uid ?? null; } catch { return null; }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      try {
+        // ensure anon auth if needed
+        if (!auth?.currentUser) {
+          await signInAnonymously(auth);
+        }
+        const myUid = getCurrentUid();
+        if (!mounted) return;
+        setUid(myUid);
+        if (!myUid) {
+          setLoading(false);
+          return;
+        }
+        // per-user subcollection: users/{uid}/purelifeHistory (matches your rules pattern)
+        const userHistCol = collection(db, 'users', myUid, 'purelifeHistory');
+        const q = query(userHistCol, orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        const items = snap.docs.map(d => {
+          const data: any = d.data();
+          return {
+            id: d.id,
+            date: data.date,
+            categories: data.categories || {},
+            overall: data.overall || 0,
+            createdAt: data.createdAt,
+          } as ResultRecord;
+        });
+        setHistory(items);
+        const todayIso = new Date().toISOString().slice(0,10);
+        const todayRec = items.find(r => r.date === todayIso) || null;
+        if (todayRec) {
+          setSelectedRecord(todayRec);
+          setStep('results');
+        } else {
+          setStep('idle');
+        }
+      } catch (e) {
+        console.error("fetch history error", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setAnswer = (id: string, val: number) => setAnswers(prev => ({ ...prev, [id]: val }));
+
+  const calcCategoryScore = (categoryKey: string, answersMap: AnswersMap) => {
+    const qs = PURELIFE_QUESTIONS.filter(q => q.category === categoryKey);
+    const sumInternal = qs.reduce((acc, q) => acc + ((answersMap[q.id] ?? 3) * 2), 0);
+    return sumInternal;
+  };
+
+  const categoryScoresForCurrentAnswers = useMemo(() => {
+    const obj: Record<string, number> = {};
+    PURELIFE_CATEGORIES.forEach(c => { obj[c.key] = calcCategoryScore(c.key, answers); });
+    return obj;
+  }, [answers]);
+
+  const overallScoreForCurrent = useMemo(() => {
+    const totalInternal = Object.values(categoryScoresForCurrentAnswers).reduce((a,b)=>a+b,0);
+    return Math.round(totalInternal / 2);
+  }, [categoryScoresForCurrentAnswers]);
+
+  const saveResult = async () => {
+    // ensure uid / auth
+    if (!uid) {
+      console.warn("no uid, cannot save");
+      return;
+    }
+    const todayIso = new Date().toISOString().slice(0,10);
+    const record = {
+      date: todayIso,
+      categories: categoryScoresForCurrentAnswers,
+      overall: overallScoreForCurrent,
+      createdAt: serverTimestamp(),
+    };
+    try {
+      // write to users/{uid}/purelifeHistory (one doc per push)
+      const userHistColRef = collection(db, 'users', uid, 'purelifeHistory');
+      await addDoc(userHistColRef, record);
+      // refresh local history
+      const q = query(userHistColRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      const items = snap.docs.map(d => {
+        const data: any = d.data();
+        return {
+          id: d.id,
+          date: data.date,
+          categories: data.categories || {},
+          overall: data.overall || 0,
+          createdAt: data.createdAt,
+        } as ResultRecord;
+      });
+      setHistory(items);
+      const newRec = items.find(i => i.date === todayIso) ?? null;
+      setSelectedRecord(newRec);
+      setStep('results');
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+    } catch (e) {
+      console.error("saveResult error", e);
+    }
+  };
+
+  const handleSaveFrequency = async () => {
+    if (!uid) {
+      setIsFrequencyModalOpen(false);
+      return;
+    }
+    try {
+      // save under users/{uid}/settings/main to match your Firestore rules pattern
+      await setDoc(doc(db, "users", uid, "settings", "main"), { frequency: localFrequency }, { merge: true });
+    } catch (e) {
+      console.error("save frequency error", e);
+    } finally {
+      setIsFrequencyModalOpen(false);
+    }
+  };
+
+  const lowCategories = (record: ResultRecord | null) => {
+    if (!record) return [];
+    return Object.entries(record.categories).filter(([k,v]) => v <= 30).map(([k]) => k);
+  };
+
+  const viewDetail = (rec: ResultRecord) => {
+    setSelectedRecord(rec);
+    setStep('results');
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  };
+
+  const totalPages = Math.ceil(PURELIFE_QUESTIONS.length / PAGE_SIZE);
+
+  const startQuiz = () => {
+    setAnswers(defaultAnswers);
+    setPageIndex(0);
+    setStep('quiz');
+    setSelectedRecord(null);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  };
+
+  const currentPageQuestions = PURELIFE_QUESTIONS.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE);
+
+  if (loading) {
+    return <div className="p-6 text-center text-sm text-gray-500">読み込み中...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800">PureLife診断</h2>
+          <button onClick={() => setIsHelpOpen?.(true)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+            <HelpIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsFrequencyModalOpen(true)}
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+            title="診断の頻度を設定"
+          >
+            頻度設定
+          </button>
+        </div>
+      </div>
+
+      {/* Top: if today's result exists show it, otherwise show no-result UI like other diagnoses */}
+      {step === 'idle' && (
+        <div className="bg-white rounded-xl p-6 shadow text-center">
+          <div className="flex items-center justify-center mb-3">
+            <div className="text-sm text-gray-500 mr-3">選択日：</div>
+            <div className="font-semibold">{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <button className="ml-3 p-2 bg-white border border-gray-200 rounded-lg shadow-sm" aria-label="カレンダー選択">
+              <CalendarIcon className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
+
+          <h3 className="text-lg font-semibold mb-2">本日の診断結果はまだありません。</h3>
+          <p className="text-sm text-gray-600 mb-6">診断を実行すると、カテゴリ別のスコアとおすすめアクションが表示されます。まずは気軽に始めてみましょう。</p>
+
+          <div className="flex items-center justify-center">
+            <button onClick={startQuiz} className="px-6 py-3 bg-indigo-600 text-white rounded-lg shadow">診断を開始する</button>
+          </div>
+        </div>
+      )}
+
+      {/* Quiz: 5問ずつページング（Energy診断と同系の見た目） */}
+      {step === 'quiz' && (
+        <div className="bg-white p-6 md:p-8 rounded-xl shadow-lg animate-fade-in">
+          <div className="mb-6">
+            <div className="text-sm text-gray-500">PureLife Check — 質問 {pageIndex * PAGE_SIZE + 1}〜{Math.min((pageIndex+1)*PAGE_SIZE, PURELIFE_QUESTIONS.length)}</div>
+            <div className="text-lg font-semibold">{`今の状態を直感で選んでください`}</div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${((pageIndex + 1) / totalPages) * 100}%` }}></div>
+            </div>
+          </div>
+
+          <div className="space-y-8">
+            {currentPageQuestions.map((q, qi) => (
+              <div key={q.id}>
+                <p className="font-semibold text-gray-700 mb-3 text-center">{pageIndex * PAGE_SIZE + qi + 1}. {q.text}</p>
+                <div className="flex justify-between items-end text-center max-w-2xl mx-auto">
+                  {['全く違う','ちょっと違う','どちらでもない','ややそう思う','強くそう思う'].map((label, idx) => {
+                    const val = idx + 1;
+                    const selected = answers[q.id] === val;
+                    return (
+                      <div key={val} className="flex flex-col items-center gap-2 w-1/5">
+                        <span className="text-xs text-gray-500 h-8 flex items-center">{label}</span>
+                        <button
+                          onClick={() => setAnswer(q.id, val)}
+                          className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full border-2 font-bold text-lg transition-all transform ${
+                            selected ? 'bg-indigo-600 border-indigo-600 text-white scale-110' : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400'
+                          }`}
+                          aria-pressed={selected}
+                        >
+                          {val}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 text-center flex items-center justify-between">
+            <button disabled={pageIndex===0} onClick={() => setPageIndex(p => Math.max(0, p-1))} className="px-4 py-2 border rounded-md text-sm disabled:opacity-50">前へ</button>
+            <div>
+              {pageIndex < totalPages - 1 ? (
+                <button onClick={() => setPageIndex(p => Math.min(totalPages-1, p+1))} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors">次へ</button>
+              ) : (
+                <button onClick={saveResult} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors">診断を完了する</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {step === 'results' && selectedRecord && (
+        <div className="bg-white rounded-xl p-4 shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-xs text-gray-500">{formatDateLabel(selectedRecord.date)}</div>
+              <div className="text-lg font-semibold">PureLife 結果 — {selectedRecord.overall}/100</div>
+            </div>
+            <div className="text-sm text-gray-600">総括</div>
+          </div>
+
+          <div className="mb-3">
+            <div className="flex flex-col md:flex-row gap-2 bg-gray-50 rounded p-2">
+              {Object.entries(selectedRecord.categories).map(([k,v]) => {
+                const catLabel = PURELIFE_CATEGORIES.find(c => c.key===k)?.label || k;
+                const pct = Math.round((v / 50) * 100);
+                const barColor = v >= 40 ? 'bg-green-500' : (v >= 30 ? 'bg-yellow-400' : 'bg-red-500');
+                return (
+                  <div key={k} className="w-full md:w-1/4 p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-sm font-medium text-gray-700">{catLabel}</div>
+                      <div className="text-lg font-bold">{v}/50</div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className={`${barColor} h-3 rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* アドバイスはスコア枠の外に、最も低い項目を優先してカード表示（＋で習慣追加） */}
+          <div className="mt-8">
+            {(() => {
+              const entries = Object.entries(selectedRecord.categories);
+              const lowEntries = entries.filter(([,v]) => v <= 30).sort((a,b) => a[1] - b[1]); // 小さい順
+              if (lowEntries.length === 0) {
+                return <div className="p-3 bg-green-50 rounded text-sm text-gray-700">全体的に良好です。引き続き同様の習慣を続けましょう。</div>;
+              }
+              const primaryKey = lowEntries[0][0];
+              const primaryAdvice = PURELIFE_ADVICE[primaryKey] || [];
+
+              return (
+                <div className="space-y-4">
+                  {/* フォーカス：最優先の低スコア項目（カードグリッド） */}
+                  <div className="">
+                    <div className="text-lg font-bold">{PURELIFE_CATEGORIES.find(c => c.key===primaryKey)?.label}</div>
+                    <div className="text-sm text-gray-600 mb-3">改善が最も求められます</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {primaryAdvice.map((a, idx) => (
+                        <div key={idx} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">{a.split('：')[0]}</div>
+                            <div className="text-sm text-gray-600 mt-1">{a.split('：')[1]}</div>
+                          </div>
+                          <div className="flex items-start">
+                            <button
+                              onClick={() => {
+                                // open AddHabitModal with draft (keeps same behavior as other diagnoses)
+                                setHabitDraft({ title: String(a).replace(/^\s*\d+\.\s*/, ''), detail: a });
+                                setIsHabitModalOpen(true);
+                              }}
+                              className="ml-2 inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white hover:bg-indigo-700"
+                              aria-label="習慣に追加"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* History (up to 5) */}
+      <div className="bg-white rounded-xl p-4 shadow">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold text-gray-800">過去の診断結果 <span className="text-sm text-gray-500">（最新）</span></h3>
+          <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsCalendarOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                aria-label="カレンダーで過去の診断を表示"
+              >
+                <CalendarIcon className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+        </div>
+
+        {history.length === 0 ? (
+          <div className="text-sm text-gray-500">診断履歴がありません。診断を開始してください。</div>
+        ) : (
+          <ul className="space-y-2">
+            {history.slice(0,5).map(rec => (
+              <li key={rec.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                <div className="text-sm">
+                  <div className="font-medium inline">{formatDateLabel(rec.date)}</div>
+                  <div className="ml-3 inline text-sm text-gray-500">総合: {rec.overall}/100</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => viewDetail(rec)} className="text-sm text-indigo-600">詳細</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+       </div>
+
+      {/* Frequency modal */}
+      {isFrequencyModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setIsFrequencyModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-3">診断の頻度設定</h3>
+            <FrequencyEditor frequency={localFrequency} setFrequency={setLocalFrequency} />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setIsFrequencyModalOpen(false)} className="px-4 py-2 rounded-lg bg-white border">キャンセル</button>
+              <button onClick={handleSaveFrequency} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar (DatePickerModal) / records picker */}
+      <DatePickerModal
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        initialDate={new Date()}
+        highlightedDates={recordDates}
+        onDateSelect={(date) => {
+          const dStr = date.toLocaleDateString('sv-SE');
+          const rec = history.find(h => String(h.date) === dStr) ?? null;
+          setSelectedRecord(rec);
+          setStep(rec ? 'results' : 'idle');
+          setIsCalendarOpen(false);
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+        }}
+      />
+      {/* 既存のリストモーダルも残す */}
+      <RecordsPickerModal open={false} onClose={() => {}} onSelect={() => {}} history={history} />
+
+      {/* AddHabitModal: opened when user taps + on advice cards */}
+      <AddHabitModal
+        isOpen={isHabitModalOpen}
+        onClose={() => { setIsHabitModalOpen(false); setHabitDraft(null); }}
+        initial={{
+          title: habitDraft?.title?.replace(/^\s*\d+\.\s*/, '') ?? '',
+          detail: habitDraft?.detail ?? ''
+        }}
+        onCreate={handleAddHabit}
+      />
+    </div>
+  );
+}
+
+export default PurelifeDiagnosis

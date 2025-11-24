@@ -12,71 +12,11 @@ import {
 } from "../constants";
 
 import AddHabitModal from "./AddHabitModal";
+import FrequencyEditor from "./FrequencyEditor";
 
 // Firestore
 import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
-
-// --- FrequencyEditor (EnergyDiagnosis と同等のUIをここでも利用) ---
-const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-const FrequencyEditor: React.FC<{
-  frequency: DiagnosisFrequency;
-  setFrequency: React.Dispatch<React.SetStateAction<DiagnosisFrequency>>;
-}> = ({ frequency, setFrequency }) => {
-  return (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
-        <select
-          value={frequency.frequencyType}
-          onChange={e => setFrequency({ frequencyType: e.target.value as FrequencyType, frequencyValue: [] })}
-          className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-        >
-          <option value="daily">毎日</option>
-          <option value="weekly">週次</option>
-          <option value="monthly">月次</option>
-        </select>
-      </div>
-
-      {frequency.frequencyType === 'weekly' && (
-        <div className="flex justify-center gap-1">
-          {WEEK_DAYS.map((day, index) => (
-            <button
-              type="button"
-              key={index}
-              onClick={() => {
-                const newValue = frequency.frequencyValue.includes(index)
-                  ? frequency.frequencyValue.filter(d => d !== index)
-                  : [...frequency.frequencyValue, index];
-                setFrequency(prev => ({ ...prev, frequencyValue: newValue.sort() }));
-              }}
-              className={`w-10 h-10 rounded-full font-semibold transition-colors text-sm md:text-base ${frequency.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              {day}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {frequency.frequencyType === 'monthly' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
-          <input
-            type="text"
-            placeholder="例: 1, 15"
-            defaultValue={frequency.frequencyValue.join(', ')}
-            onChange={e => {
-              const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
-              setFrequency(prev => ({ ...prev, frequencyValue: value.sort((a,b) => a-b) }));
-            }}
-            className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-          />
-        </div>
-      )}
-    </div>
-  );
-};
 
 type Dimension = "EI" | "SN" | "TF" | "JP";
 type AnswerValue = 1 | 2 | 3 | 4 | 5;
@@ -210,6 +150,77 @@ function RadarChart({ values }: { values: Record<Dimension, number> }) {
   );
 }
 
+// カレンダー用の highlightedDates と DatePickerModal を追加
+const recordDatesFromHistory = (history: any[]) => {
+  return new Set((history || []).map(h => String(h.date)));
+};
+
+const DatePickerModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onDateSelect: (date: Date) => void;
+  initialDate: Date;
+  highlightedDates?: Set<string>;
+}> = ({ isOpen, onClose, onDateSelect, initialDate, highlightedDates }) => {
+  const [displayDate, setDisplayDate] = useState<Date>(initialDate);
+  useEffect(() => setDisplayDate(initialDate), [initialDate, isOpen]);
+  if (!isOpen) return null;
+
+  const changeMonth = (amount: number) => setDisplayDate(d => {
+    const nd = new Date(d); nd.setMonth(nd.getMonth() + amount); return nd;
+  });
+
+  const generateCalendar = () => {
+    const year = displayDate.getFullYear();
+    const month = displayDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const nodes: React.ReactNode[] = [];
+    for (let i = 0; i < firstDay; i++) nodes.push(<div key={`e-${i}`} className="w-10 h-10"></div>);
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toLocaleDateString('sv-SE');
+      const hasRecord = highlightedDates?.has(dateStr);
+      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
+      nodes.push(
+        <div
+          key={day}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-50 relative"
+          onClick={() => onDateSelect(date)}
+        >
+          <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
+            {day}
+          </span>
+          {hasRecord && (
+            <div className="absolute bottom-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return nodes;
+  };
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="absolute inset-0" />
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4 z-10" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
+          <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
+          <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
+        </div>
+        <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
+          {['日','月','火','水','木','金','土'].map(d => <div key={d}>{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1 place-items-center">
+          {generateCalendar()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* --- Component --- */
 const DIMENSIONS: Dimension[] = ["EI", "SN", "TF", "JP"];
 
@@ -289,14 +300,18 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     return () => unsub();
   }, []);
 
-  // 履歴が更新されたら、最新を自動で表示にセット（今日の結果があれば見える）
+  // 履歴が更新されたら、まず「今日」の結果があれば表示する（なければ no-result のまま）
   useEffect(() => {
-    if ((!submittedResult || !submittedResult.type) && history && history.length > 0) {
-      // history[0] は orderBy(createdAt, desc) により最新
-      setSubmittedResult(history[0]);
-      setStep('results');
+    if (history && history.length > 0) {
+      const today = new Date().toLocaleDateString('sv-SE');
+      const todayRec = history.find(h => String(h.date) === today);
+      if (todayRec) {
+        setSubmittedResult(todayRec);
+        setStep('results');
+        return;
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 既に submittedResult が設定されている場合は触らない（ユーザーが手動で選んでいる可能性）
   }, [history]);
 
   useEffect(() => {
@@ -319,8 +334,13 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   };
 
   const openRecordDetail = (rec: any) => {
+    // その日の記録をメイン表示にセットして結果ページへ遷移、上部へスクロール
+    setSubmittedResult(rec);
+    setStep('results');
+    // クリーンアップしてモーダルは閉じる（もし開いていたら）
     setSelectedRecord(rec);
-    setIsDetailModalOpen(true);
+    setIsDetailModalOpen(false);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* noop */ }
   };
 
   const closeRecordDetail = () => {
@@ -408,20 +428,21 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
 
   const isCurrentStepAnswered = currentQuestions.length === 0 ? false : currentQuestions.every(q => answers[q.id] !== undefined);
 
-  // Past records list
+  // Past records list (最大5件、日付の横にタイプを一行で表示)
   const PastRecordsList: React.FC = () => {
     if (!history || history.length === 0) return <p className="text-sm text-gray-500">過去の診断はありません。</p>;
+    const items = history.slice(0, 5);
     return (
       <ul className="space-y-2 max-h-56 overflow-y-auto">
-        {history.map(h => {
-          const dateLabel = new Date(h.date + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
+        {items.map(h => {
+          const dateLabel = new Date((h.date || h.createdAt) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
           return (
-            <li key={h.date} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
-              <div>
-                <div className="font-medium text-gray-800">{dateLabel}</div>
-                <div className="text-xs text-gray-500">タイプ: {h.type}</div>
+            <li key={h.id ?? h.date} className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+              <div className="text-sm text-gray-800 truncate">
+                {dateLabel}
+                <span className="text-sm text-gray-500 ml-3">— {String(h.type || '-')}</span>
               </div>
-              <button onClick={() => openRecordDetail(h)} className="text-sm text-indigo-600">詳細</button>
+              <button onClick={() => openRecordDetail(h)} className="text-sm text-indigo-600 ml-4">詳細</button>
             </li>
           );
         })}
@@ -429,43 +450,8 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     );
   };
 
-  // Modal: 過去の診断（簡易カレンダー代替） — EnergyDiagnosis と同じ容量でリスト表示
-  const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: any) => void; }> = ({ open, onClose, onSelect }) => {
-    if (!open) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-        <div className="bg-white rounded-xl p-4 z-10 w-full max-w-md shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-lg font-semibold">過去の診断結果</div>
-            <button onClick={onClose} className="text-sm text-gray-500">閉じる</button>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {history.length === 0 ? (
-              <div className="text-sm text-gray-500">過去の診断はありません。</div>
-            ) : (
-              [...history].sort((a,b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date)).map(h => {
-                const dateLabel = new Date((h.date || h.createdAt) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
-                return (
-                  <button
-                    key={h.id ?? h.date}
-                    onClick={() => { onSelect(h); onClose(); }}
-                    className="w-full text-left p-3 bg-gray-50 rounded-lg flex items-center gap-3 hover:bg-gray-100"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">{dateLabel}</div>
-                      <div className="text-xs text-gray-500">タイプ: {h.type}</div>
-                    </div>
-                    <div className="text-sm text-indigo-600">表示</div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // カレンダー用のハイライト日集合
+  const recordDates = useMemo(() => recordDatesFromHistory(history), [history]);
 
   // --- Render ---
   if (step === 'start' || step === 'results') {
@@ -638,25 +624,65 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-xl shadow-md text-center">
-            <p className="text-lg font-semibold text-gray-800 mb-4">診断結果はありません。診断を開始してあなたのタイプを見つけましょう。</p>
-            <div className="flex items-center justify-center gap-3 mt-2">
+          <div className="bg-white p-8 rounded-xl shadow-md">
+            {/* 日付 + カレンダー */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">選択日：{dateLabelForTitle}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCalendarOpen(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                  aria-label="カレンダーで過去の診断を表示"
+                >
+                  <CalendarIcon className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+              <div className="text-gray-600">
+                <p className="mb-3 text-lg font-semibold text-gray-800">本日の診断結果はまだありません。</p>
+                <p className="text-sm text-gray-500">診断を実行すると、16タイプと詳細な結果（グラフ・おすすめの習慣など）が表示されます。</p>
+              </div>
+            </div>
+
+            <div className="mt-6 text-center">
               <button onClick={startQuiz} className="px-6 py-3 bg-indigo-600 text-white rounded-lg">診断を開始する</button>
             </div>
           </div>
         )}
 
-        {/* カレンダーモーダル: 過去の診断選択 */}
-        <RecordsPickerModal
-          open={isCalendarOpen}
+        {/* カレンダーモーダル: 過去の診断選択（カレンダー） */}
+        <DatePickerModal
+          isOpen={isCalendarOpen}
           onClose={() => setIsCalendarOpen(false)}
-          onSelect={(rec) => { setSubmittedResult(rec); setStep('results'); }}
+          initialDate={new Date()}
+          highlightedDates={recordDates}
+          onDateSelect={(date) => {
+            const dStr = date.toLocaleDateString('sv-SE');
+            const rec = history.find(h => String(h.date) === dStr) ?? null;
+            setSubmittedResult(rec);
+            setStep('results');
+            setIsCalendarOpen(false);
+            try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+          }}
         />
 
         {/* 過去の診断リスト（下部） */}
         <div className="bg-white p-6 rounded-xl shadow-md">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold text-gray-800">過去の診断結果 <span className="text-sm text-gray-500">（最新）</span></h3>
+            <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCalendarOpen(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                  aria-label="カレンダーで過去の診断を表示"
+                >
+                  <CalendarIcon className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
           </div>
           <PastRecordsList />
         </div>
