@@ -385,7 +385,7 @@ const GroupDetail: React.FC<{
         const msgs: Comment[] = docs
           .map(d => {
             const data = d.data() as any;
-            return {
+            const obj = {
               id: d.id,
               groupId: data.groupId,
               authorId: data.authorId,
@@ -393,7 +393,8 @@ const GroupDetail: React.FC<{
               text: data.text,
               timestamp: data.timestamp,
               authorImageUrl: data.authorImageUrl || null
-            } as Comment;
+            };
+            return obj as unknown as Comment;
           })
           .reverse();
         setMessages(msgs);
@@ -411,7 +412,7 @@ const GroupDetail: React.FC<{
               if (change.type === 'added') {
                 const d = change.doc;
                 const data = d.data() as any;
-                const newMsg: Comment = {
+                const obj = {
                   id: d.id,
                   groupId: data.groupId,
                   authorId: data.authorId,
@@ -420,6 +421,7 @@ const GroupDetail: React.FC<{
                   timestamp: data.timestamp,
                   authorImageUrl: data.authorImageUrl || null
                 };
+                const newMsg = obj as unknown as Comment;
                 setMessages(prev => {
                   // avoid duplicates
                   if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -440,7 +442,7 @@ const GroupDetail: React.FC<{
               if (change.type === 'added') {
                 const d = change.doc;
                 const data = d.data() as any;
-                const newMsg: Comment = {
+                const obj = {
                   id: d.id,
                   groupId: data.groupId,
                   authorId: data.authorId,
@@ -449,7 +451,9 @@ const GroupDetail: React.FC<{
                   timestamp: data.timestamp,
                   authorImageUrl: data.authorImageUrl || null
                 };
+                const newMsg = obj as unknown as Comment;
                 setMessages(prev => {
+                  // avoid duplicates
                   if (prev.find(m => m.id === newMsg.id)) return prev;
                   return [...prev, newMsg];
                 });
@@ -487,7 +491,7 @@ const GroupDetail: React.FC<{
       }
       const olderMsgs = docs.map(d => {
         const data = d.data() as any;
-        return {
+        const obj = {
           id: d.id,
           groupId: data.groupId,
           authorId: data.authorId,
@@ -495,8 +499,9 @@ const GroupDetail: React.FC<{
           text: data.text,
           timestamp: data.timestamp,
           authorImageUrl: data.authorImageUrl || null
-        } as Comment;
-      }).reverse(); // reverse to asc order when prepending
+        };
+        return obj as unknown as Comment;
+      }).reverse();
 
       // preserve scroll position: measure before/after
       const el = messagesContainerRef.current;
@@ -644,7 +649,7 @@ const GroupDetail: React.FC<{
     if (sharedHabits.length === 0) return 0;
     return calculateCompletionPercentForDate(today, sharedHabits);
   };
-  
+
   // 進捗モーダル（Group.tsx と同等の表示をここでも出す）
   const GroupProgressModalInline: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const today = new Date();

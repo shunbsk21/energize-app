@@ -160,9 +160,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       document.removeEventListener('keydown', onKey);
     };
   }, [isMenuOpen]);
-  
-  // 確認用: 実際のログインユーザーの email を一度出力してください（後で削除可）
-  useEffect(() => { console.info('profile:', profile); }, [profile]);
 
   // 既存の学習コンテンツを読み込む（簡易）
   useEffect(() => {
