@@ -46,6 +46,33 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     }
 };
 
+// --- HabitTracker と同等の達成率ロジック（Group 用） ---
+const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
+  const dateStr = date.toLocaleDateString('sv-SE');
+  const scheduled = (habitsList || []).filter(h => {
+    if (!isHabitScheduledForDate(h, date)) return false;
+    const skipped = ((h as any).skippedDates || []).map((s: string) => {
+      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+    });
+    return !skipped.includes(dateStr);
+  });
+  if (scheduled.length === 0) return 0;
+  const completedCount = scheduled.reduce((acc, h) => {
+    if ((h.type ?? 'binary') === 'amount') {
+      const val = ((h.completedAmounts || {})[dateStr] ?? 0);
+      const target = h.target ?? 0;
+      const ok = target > 0 ? val >= target : val > 0;
+      return acc + (ok ? 1 : 0);
+    } else {
+      const doneKeys = (h.completedDates || []).map(d => {
+        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+      });
+      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
+    }
+  }, 0);
+  return Math.round((completedCount / scheduled.length) * 100);
+};
+
 const PlusIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -525,23 +552,18 @@ const Group: React.FC<GroupProps> = ({
       const todayStr = today.toLocaleDateString('sv-SE');
 
       const getMemberProgress = (memberId: string) => {
+        const today = new Date();
         if (memberId === profile.id) {
-          const scheduled = habits.filter(h => isHabitScheduledForDateLocal(h, today));
-          if (scheduled.length === 0) return 0;
-          const completed = scheduled.filter(h => (h.completedDates || []).includes(todayStr)).length;
-          return Math.round((completed / scheduled.length) * 100);
+          return calculateCompletionPercentForDate(today, habits);
         }
-        const sharedForMember = (group as any).sharedByMember?.[memberId] || (group as any).sharedHabitIds || [];
+        const sharedForMember: string[] = (group as any).sharedByMember?.[memberId] || (group as any).sharedHabitIds || [];
         if (!sharedForMember || sharedForMember.length === 0) return null;
         const memberProfile = allUserProfiles.get(memberId) as any;
         const memberHabits: Habit[] = (memberProfile && memberProfile.habits) || [];
         if (!memberHabits || memberHabits.length === 0) return null;
         const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
         if (sharedHabits.length === 0) return 0;
-        const scheduledToday = sharedHabits.filter(h => isHabitScheduledForDateLocal(h, today));
-        if (scheduledToday.length === 0) return 0;
-        const completedToday = scheduledToday.filter(h => (h.completedDates || []).includes(todayStr)).length;
-        return Math.round((completedToday / scheduledToday.length) * 100);
+        return calculateCompletionPercentForDate(today, sharedHabits);
       };
 
       return (

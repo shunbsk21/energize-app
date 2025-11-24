@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 
@@ -39,6 +39,33 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     case 'monthly': return Array.isArray(habit.frequencyValue) && habit.frequencyValue.includes(targetDate.getDate());
     default: return false;
   }
+};
+
+// --- HabitTracker と同等の達成率ロジックを追加（ファイル内スコープ） ---
+const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
+  const dateStr = date.toLocaleDateString('sv-SE');
+  const scheduled = (habitsList || []).filter(h => {
+    if (!isHabitScheduledForDate(h, date)) return false;
+    const skipped = ((h as any).skippedDates || []).map((s: string) => {
+      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+    });
+    return !skipped.includes(dateStr);
+  });
+  if (scheduled.length === 0) return 0;
+  const completedCount = scheduled.reduce((acc, h) => {
+    if ((h.type ?? 'binary') === 'amount') {
+      const val = ((h.completedAmounts || {})[dateStr] ?? 0);
+      const target = h.target ?? 0;
+      const ok = target > 0 ? val >= target : val > 0;
+      return acc + (ok ? 1 : 0);
+    } else {
+      const doneKeys = (h.completedDates || []).map(d => {
+        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
+      });
+      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
+    }
+  }, 0);
+  return Math.round((completedCount / scheduled.length) * 100);
 };
 
 /* ConfirmRemoveModal, MemberHabitsModal, SharedHabitsModal, InviteMemberModal
@@ -334,41 +361,210 @@ const GroupDetail: React.FC<{
   const groupSharedByMember = (group as any).sharedByMember || {};
   const [memberSharedMap, setMemberSharedMap] = useState<Record<string, string[]>>({});
   const [memberHabitsMap, setMemberHabitsMap] = useState<Record<string, Habit[]>>({});
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const PAGE_SIZE = 30;
+  const [lastVisibleDoc, setLastVisibleDoc] = useState<any | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
+  // --- Pagination + realtime new messages ---
   useEffect(() => {
-    const q = query(collection(db, 'group_chats', group.id, 'messages'), orderBy('timestamp', 'asc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const loadedMessages: Comment[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        loadedMessages.push({
-          id: doc.id,
+    let unsubNew: (() => void) | null = null;
+    let cancelled = false;
+
+    const loadInitial = async () => {
+      setLoadingInitial(true);
+      try {
+        // get latest PAGE_SIZE messages (desc), then reverse for UI (asc)
+        const col = collection(db, 'group_chats', group.id, 'messages');
+        const q = query(col, orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
+        const snap = await getDocs(q);
+        if (cancelled) return;
+        const docs = snap.docs;
+        const msgs: Comment[] = docs
+          .map(d => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              groupId: data.groupId,
+              authorId: data.authorId,
+              authorName: data.authorName,
+              text: data.text,
+              timestamp: data.timestamp,
+              authorImageUrl: data.authorImageUrl || null
+            } as Comment;
+          })
+          .reverse();
+        setMessages(msgs);
+        // lastVisibleDoc will be the oldest doc in this page (docs[docs.length-1])
+        setLastVisibleDoc(docs[docs.length - 1] || null);
+        setHasMore(docs.length === PAGE_SIZE);
+        initialLoadRef.current = false;
+        // set up realtime listener for new messages after latest timestamp
+        const latestTimestamp = msgs.length ? msgs[msgs.length - 1].timestamp : null;
+        const colRef = collection(db, 'group_chats', group.id, 'messages');
+        if (latestTimestamp) {
+          const qNew = query(colRef, orderBy('timestamp', 'asc'), where('timestamp', '>', latestTimestamp));
+          unsubNew = onSnapshot(qNew, (snapNew) => {
+            snapNew.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const d = change.doc;
+                const data = d.data() as any;
+                const newMsg: Comment = {
+                  id: d.id,
+                  groupId: data.groupId,
+                  authorId: data.authorId,
+                  authorName: data.authorName,
+                  text: data.text,
+                  timestamp: data.timestamp,
+                  authorImageUrl: data.authorImageUrl || null
+                };
+                setMessages(prev => {
+                  // avoid duplicates
+                  if (prev.find(m => m.id === newMsg.id)) return prev;
+                  return [...prev, newMsg];
+                });
+                // toast for others' messages (preserve original behavior)
+                if (!initialLoadRef.current && newMsg.authorId !== profile.id) {
+                  toast(`${newMsg.authorName || '名無し'}: ${String(newMsg.text)}`, { duration: 4000 });
+                }
+              }
+            });
+          }, (err) => console.error('realtime new messages failed', err));
+        } else {
+          // no messages yet: listen for first new message
+          const qOne = query(colRef, orderBy('timestamp', 'asc'), limit(1));
+          unsubNew = onSnapshot(qOne, (snapNew) => {
+            snapNew.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const d = change.doc;
+                const data = d.data() as any;
+                const newMsg: Comment = {
+                  id: d.id,
+                  groupId: data.groupId,
+                  authorId: data.authorId,
+                  authorName: data.authorName,
+                  text: data.text,
+                  timestamp: data.timestamp,
+                  authorImageUrl: data.authorImageUrl || null
+                };
+                setMessages(prev => {
+                  if (prev.find(m => m.id === newMsg.id)) return prev;
+                  return [...prev, newMsg];
+                });
+              }
+            });
+          }, (err) => console.error('realtime first message listen failed', err));
+        }
+      } catch (err) {
+        console.error('[Group] initial messages load failed', err);
+      } finally {
+        if (!cancelled) setLoadingInitial(false);
+      }
+    };
+
+    loadInitial();
+    return () => {
+      cancelled = true;
+      if (unsubNew) unsubNew();
+    };
+  }, [group.id]);
+
+  // load older messages when scrolling to top
+  const loadMoreOlder = async () => {
+    if (!hasMore || loadingMore || !lastVisibleDoc) return;
+    setLoadingMore(true);
+    try {
+      const col = collection(db, 'group_chats', group.id, 'messages');
+      // we used desc order for pagination, startAfter(lastVisibleDoc) fetches older docs (next batch)
+      const q = query(col, orderBy('timestamp', 'desc'), startAfter(lastVisibleDoc), limit(PAGE_SIZE));
+      const snap = await getDocs(q);
+      const docs = snap.docs;
+      if (docs.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      const olderMsgs = docs.map(d => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
           groupId: data.groupId,
           authorId: data.authorId,
           authorName: data.authorName,
           text: data.text,
           timestamp: data.timestamp,
           authorImageUrl: data.authorImageUrl || null
-        } as Comment);
-      });
-      querySnapshot.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          const data = change.doc.data() as any;
-          if (!initialLoadRef.current && data && data.text) {
-            if (data.authorId !== profile.id) {
-              const authorLabel = data.authorName || '名無し';
-              toast(`${authorLabel}: ${String(data.text)}`, { duration: 4000 });
-            }
-          }
+        } as Comment;
+      }).reverse(); // reverse to asc order when prepending
+
+      // preserve scroll position: measure before/after
+      const el = messagesContainerRef.current;
+      const prevScrollHeight = el?.scrollHeight || 0;
+      const prevScrollTop = el?.scrollTop || 0;
+
+      setMessages(prev => [...olderMsgs, ...prev]);
+      // update lastVisibleDoc to last doc of this fetch (oldest)
+      setLastVisibleDoc(docs[docs.length - 1] || null);
+      setHasMore(docs.length === PAGE_SIZE);
+
+      // adjust scroll after DOM updates
+      requestAnimationFrame(() => {
+        const newScrollHeight = el?.scrollHeight || 0;
+        if (el) {
+          el.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
         }
       });
-      setMessages(loadedMessages);
-      if (initialLoadRef.current) initialLoadRef.current = false;
-    }, (error) => {
-      console.error("チャットの読み込みに失敗しました:", error);
-    });
-    return () => unsubscribe();
-  }, [group.id]);
+    } catch (err) {
+      console.error('[Group] load more older messages failed', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // attach scroll handler to trigger loadMore when near top
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      // when near top, load older messages
+      if (el.scrollTop < 150 && hasMore && !loadingMore) {
+        // debounce with rAF
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          loadMoreOlder();
+        });
+      }
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesContainerRef.current, hasMore, loadingMore, lastVisibleDoc]);
+  // auto-scroll behavior:
+  // - after initial load, jump to bottom
+  // - when new messages arrive, scroll to bottom only if user is near bottom
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    // if initial load just finished, go to bottom
+    if (!loadingInitial && messages.length > 0) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+      return;
+    }
+    // determine if user is near bottom
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 200) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [messages, loadingInitial]);
 
   useEffect(() => {
     if (!selectedMemberId) return;
@@ -429,28 +625,26 @@ const GroupDetail: React.FC<{
   };
 
   const getMemberProgress = (memberId: string): number | null => {
+    const today = new Date();
     if (memberId === profile.id) {
-      const today = new Date();
-      const todayStr = today.toLocaleDateString('sv-SE');
-      const scheduled = habits.filter(h => isHabitScheduledForDate(h, today));
-      if (scheduled.length === 0) return 0;
-      const completed = scheduled.filter(h => (h.completedDates || []).includes(todayStr)).length;
-      return Math.round((completed / scheduled.length) * 100);
+      // 自分の習慣リスト（props habits）
+      return calculateCompletionPercentForDate(today, habits);
     }
-    const sharedForMember = groupSharedByMember[memberId] || memberSharedMap[memberId] || [];
+    const sharedForMember: string[] = groupSharedByMember[memberId] || memberSharedMap[memberId] || [];
     if (!sharedForMember || sharedForMember.length === 0) return null;
-    const memberHabits = memberHabitsMap[memberId];
-    if (!memberHabits) return null;
+
+    // memberHabitsMap cache または allUserProfiles fallback
+    let memberHabits = memberHabitsMap[memberId];
+    if (!memberHabits) {
+      const mp = allUserProfiles.get(memberId) as any;
+      memberHabits = (mp && mp.habits) ? mp.habits as Habit[] : [];
+    }
+    if (!memberHabits || memberHabits.length === 0) return null;
     const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
     if (sharedHabits.length === 0) return 0;
-    const today = new Date();
-    const todayStr = today.toLocaleDateString('sv-SE');
-    const scheduledToday = sharedHabits.filter(h => isHabitScheduledForDate(h, today));
-    if (scheduledToday.length === 0) return 0;
-    const completedToday = scheduledToday.filter(h => (h.completedDates || []).includes(todayStr)).length;
-    return Math.round((completedToday / scheduledToday.length) * 100);
+    return calculateCompletionPercentForDate(today, sharedHabits);
   };
-
+  
   // 進捗モーダル（Group.tsx と同等の表示をここでも出す）
   const GroupProgressModalInline: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const today = new Date();
@@ -528,7 +722,9 @@ const GroupDetail: React.FC<{
   return (
     <>
       <div className="animate-fade-in flex flex-col h-full">
-        <div className="flex items-center gap-2 py-2 px-4 bg-white rounded-xl shadow">
+
+        {/* ヘッダー */}
+        <div className="fixed left-4 right-4 z-40 flex items-center gap-2 py-2 px-4 bg-white/90 border border-gray-200/30 rounded-xl shadow">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100">
             <ChevronLeftIcon className="w-6 h-6 text-gray-600"/>
           </button>
@@ -545,8 +741,8 @@ const GroupDetail: React.FC<{
         </div>
 
         {/* messages area: flexible scroll region */}
-        <div className="flex-1 p-2 overflow-hidden">
-          <div className="space-y-4 overflow-y-auto pr-4 pb-28 h-full">
+        <div className="flex-1 pt-16 p-2 overflow-hidden">
+          <div ref={messagesContainerRef} className="space-y-4 overflow-y-auto pr-4 pb-28 h-full">
             {groupedMessages.map(grouped => (
               <div key={grouped.date} className="mb-6">
                 <div className="flex items-center justify-center my-3">
