@@ -585,7 +585,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
                                     <div key={index} className="p-4 bg-gray-50 rounded-lg">
                                         <h4 className="font-semibold text-indigo-700 text-sm">{advice.title}</h4>
                                         <ul className="list-disc list-inside text-gray-600 space-y-1 mt-2">
-                                            {advice.points.map((point, pIndex) => <li key={pIndex}>{point}</li>)}
+                                            {advice.points.map((point: string, pIndex: number) => <li key={pIndex}>{point}</li>)}
                                         </ul>
                                     </div>
                                 ))}

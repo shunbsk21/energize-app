@@ -33,7 +33,7 @@ import Tasks from './components/Tasks';
 import Notes from './components/Notes';
 import Learnings from './components/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification } from './types'; 
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem } from './types'; 
 import PersonalityDiagnosis from './components/PersonalityDiagnosis';
 import PurelifeDiagnosis from './components/PurelifeDiagnosis';
 import ValueDiagnosis from './components/ValueDiagnosis';
@@ -114,8 +114,6 @@ interface MainAppProps {
 }
 
 const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
-  type LearningItem = { id?: string; title: string; url?: string; notes?: string; tags?: string[]; createdAt?: string; updatedAt?: string; createdBy?: string };
-
   const [view, setView] = useState<View>('habits');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -127,14 +125,14 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
 
   // 新規: チェックイン / チェックアウトの state
-  const [checkins, setCheckins] = useState<{ id: string; date: string; value: number; note?: string; createdAt?: string }[]>([]);
-  const [checkouts, setCheckouts] = useState<{ id: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[]>([]);
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [checkouts, setCheckouts] = useState<Checkout[]>([]);
   
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
   
   const [groups, setGroups] = useState<GroupType[]>([]);
-  const [tasks, setTasks] = useState<{ id: string; title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   
   // ★ コメントの state を削除
   // const [comments, setComments] = useState<Comment[]>([]);
@@ -214,7 +212,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     const load = async () => {
       try {
         const snap = await getDocs(collection(db, 'learnings'));
-        const items: LearningItem[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        const items: LearningItem[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<LearningItem, 'id'>) }));
         // createdAt/updatedAt を ISO 文字列に統一（Firestore タイムスタンプか文字列に対応）
         const normalized = items.map(i => ({
           ...i,
@@ -231,7 +229,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 管理者のみ学習コンテンツを追加（UID 判定）
   const handleCreateLearning = async (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => {
-    if ((profile as any)?.id !== ADMIN_ID) {
+    if (profile?.id !== ADMIN_ID) {
       console.warn('only admin can add learning content');
       return;
     }
@@ -339,8 +337,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         setEnergyHistory(loadedHistory);
 
         // checkins / checkouts を state に入れる
-        const loadedCheckins = checkinsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-        const loadedCheckouts = checkoutsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        const loadedCheckins = checkinsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Checkin, 'id'>) }));
+        const loadedCheckouts = checkoutsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Checkout, 'id'>) }));
         setCheckins(loadedCheckins.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
         setCheckouts(loadedCheckouts.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
         
@@ -415,7 +413,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         try {
           const tasksRef = collection(baseRef, 'tasks');
           const tasksSnap = await getDocs(tasksRef);
-          const loadedTasks = tasksSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+          const loadedTasks = tasksSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Task, 'id'>) }));
           setTasks(loadedTasks);
         } catch (err) {
           console.warn('tasks読み込みエラー', err);
@@ -442,7 +440,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loadedNotifications: Notification[] = snapshot.docs.map(d => ({
         id: d.id,
-        ...(d.data() as any)
+        ...(d.data() as Omit<Notification, 'id'>)
       }));
       setNotifications(loadedNotifications);
     });
@@ -465,7 +463,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             const notificationSnap = await getDoc(notificationRef);
             if (!notificationSnap.exists()) {
             // sanitize: do not send undefined fields to Firestore
-              const toSave: any = {
+              const toSave: Partial<Notification> = {
                 groupId: group.id,
                 groupName: group.name,
                 message: messageData.text,
@@ -835,7 +833,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       // local state を更新（UI に即時反映）
       setGroups(prev => prev.map(g => g.id === groupId ? { 
         ...g, 
-        sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
+        sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } 
       } : g));
       console.log('shared habits updated (local user copy)');
     } catch (err) {
@@ -845,7 +843,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         await setDoc(fallbackRef, { sharedByMember: { [memberId]: sharedIds } }, { merge: true });
         setGroups(prev => prev.map(g => g.id === groupId ? { 
           ...g, 
-          sharedByMember: { ...(g as any).sharedByMember, [memberId]: sharedIds } 
+          sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } 
         } : g));
         console.log('shared habits saved via setDoc merge fallback');
       } catch (err2) {
@@ -859,7 +857,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id) return;
     try {
       const ref = collection(db, 'users', profile.id, 'checkins');
-      const payload = {
+      const payload: Omit<Checkin, 'id'> = {
         date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
         value,
         note: note || '',
@@ -876,7 +874,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id) return;
     try {
       const ref = collection(db, 'users', profile.id, 'checkouts');
-      const payload = {
+      const payload: Omit<Checkout, 'id'> = {
         date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
         gratitude: gratitude || '',
         note: note || '',
@@ -895,7 +893,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = doc(db, 'users', profile.id, 'checkins', id);
       await updateDoc(ref, { value, note: note || '', updatedAt: new Date().toISOString() });
-      setCheckins(prev => prev.map(c => c.id === id ? { ...c, value, note } : c));
+      setCheckins(prev => prev.map(c => c.id === id ? { ...c, value, note: note || '' } : c));
     } catch (err) {
       console.error('チェックイン更新に失敗しました', err);
     }
@@ -906,7 +904,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = doc(db, 'users', profile.id, 'checkouts', id);
       await updateDoc(ref, { gratitude: gratitude || '', note: note || '', rating: rating ?? null, updatedAt: new Date().toISOString() });
-      setCheckouts(prev => prev.map(c => c.id === id ? { ...c, gratitude, note, rating } : c));
+      setCheckouts(prev => prev.map(c => c.id === id ? { ...c, gratitude: gratitude || '', note: note || '', rating: rating ?? null } : c));
     } catch (err) {
       console.error('チェックアウト更新に失敗しました', err);
     }
@@ -929,7 +927,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !taskId) return;
     try {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      const updatePayload: any = { done, updatedAt: new Date().toISOString() };
+      const updatePayload: Partial<Task> = { done, updatedAt: new Date().toISOString() };
       if (done) updatePayload.completedAt = new Date().toISOString();
       else updatePayload.completedAt = null;
       await updateDoc(taskRef, updatePayload);
@@ -947,12 +945,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
       // completedAt を追加する可能性があるため any にして型エラーを避ける
       // サーバに送る前に undefined フィールドを除去する
-      const base: any = { ...payload, updatedAt: new Date().toISOString() };
+      const base: Partial<Task> = { ...payload, updatedAt: new Date().toISOString() };
       if (payload.done === true) base.completedAt = new Date().toISOString();
       if (payload.done === false) base.completedAt = null;
       const updatePayload = Object.fromEntries(Object.entries(base).filter(([_, v]) => v !== undefined));
       await updateDoc(taskRef, updatePayload);
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload, updatedAt: updatePayload.updatedAt, completedAt: updatePayload.completedAt } : t));
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updatePayload } as Task : t));
     } catch (err) {
       console.error('handleUpdateTask error', err);
       throw err;

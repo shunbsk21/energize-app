@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
-import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
+import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord, Task, Checkin, Checkout } from '../types';
 import HabitDetail from './HabitDetail';
 
 // --- Propsの定義を変更 ---
@@ -16,23 +16,15 @@ interface HabitTrackerProps {
   setIsHelpOpen: (isOpen: boolean) => void;
   setView: (view: View) => void;
   diagnosisFrequency: DiagnosisFrequency;
-  checkins?: { id: string; date: string; value: number; note?: string; createdAt?: string }[];
-  checkouts?: { id: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[];
+  checkins?: Checkin[];
+  checkouts?: Checkout[];
   onAddCheckin?: (value: number, note?: string, dateStr?: string) => void | Promise<void>;
   onAddCheckout?: (gratitude?: string, note?: string, rating?: number | null, dateStr?: string) => void | Promise<void>;
   onUpdateCheckin?: (id: string, value: number, note?: string) => void | Promise<void>;
   onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number | null) => void | Promise<void>;
 
   // tasks (外部から渡される)
-  tasks?: {
-    id: string;
-    title: string;
-    details?: string;
-    dueDate?: string; // 'YYYY-MM-DD'
-    priority?: 'low'|'medium'|'high';
-    done?: boolean;
-    completedAt?: string;
-  }[];
+  tasks?: Task[];
   onAddTask?: (t: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => void | Promise<void>;
 
   // 追加: タスクの完了トグルを親に伝える
@@ -165,7 +157,7 @@ const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'parti
   // scheduled and not skipped
   const scheduledHabits = habits.filter(h => {
     if (!isHabitScheduledForDate(h, date)) return false;
-    const skipped = ((h as any).skippedDates || []).map((s:string) => {
+    const skipped = (h.skippedDates || []).map((s:string) => {
       const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
     });
     return !skipped.includes(dateStr);
@@ -199,7 +191,7 @@ const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
   const dateStr = date.toLocaleDateString('sv-SE');
   const scheduled = habitsList.filter(h => {
     if (!isHabitScheduledForDate(h, date)) return false;
-    const skipped = ((h as any).skippedDates || []).map((s:string) => {
+    const skipped = (h.skippedDates || []).map((s:string) => {
       const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
     });
     return !skipped.includes(dateStr);
@@ -946,16 +938,16 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const dragOffsetRef = useRef(0);
   
   // helper to avoid TS undefined since props names are in scope
-  function propsOrEmpty<T>(v?: T) { return v ?? [] as unknown as T; }
+  function propsOrEmpty<T>(v?: T): T { return v ?? [] as unknown as T; }
 
   // --- checkin/checkout lookup helpers (date format: sv-SE) ---
   const getCheckinForDate = (date: Date) => {
     const d = date.toLocaleDateString('sv-SE');
-    return (propsOrEmpty(checkins) || []).find((c:any) => c.date === d) || null;
+    return (propsOrEmpty(checkins) || []).find((c:Checkin) => c.date === d) || null;
   };
   const getCheckoutForDate = (date: Date) => {
     const d = date.toLocaleDateString('sv-SE');
-    return (propsOrEmpty(checkouts) || []).find((c:any) => c.date === d) || null;
+    return (propsOrEmpty(checkouts) || []).find((c:Checkout) => c.date === d) || null;
   };
 
   // --- モーダル用ドラフト state（open 時に既存値で初期化） ---
@@ -968,9 +960,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       const rec = getCheckinForDate(selectedDate);
       if (rec) {
         setCheckinDraft({ id: rec.id, value: rec.value, note: rec.note || '' });
-      } else {
-        setCheckinDraft({ value: 4, note: '' });
       }
+    } else {
+      setCheckinDraft({ value: 4, note: '' });
     }
   }, [isCheckInOpen, selectedDate, checkins]);
 
@@ -979,9 +971,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       const rec = getCheckoutForDate(selectedDate);
       if (rec) {
         setCheckoutDraft({ id: rec.id, rating: rec.rating ?? 4, gratitude: rec.gratitude || '', note: rec.note || '' });
-      } else {
-        setCheckoutDraft({ rating: 4, gratitude: '', note: '' });
       }
+    } else {
+      setCheckoutDraft({ rating: 4, gratitude: '', note: '' });
     }
   }, [isCheckOutOpen, selectedDate, checkouts]);
 
@@ -1150,7 +1142,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         const keys: string[] = [];
         Object.entries(amtMap).forEach(([rawKey, rawVal]) => {
           const key = normalizeKey(rawKey);
-          const v = Number(rawVal as any);
+          const v = Number(rawVal);
           if (Number.isNaN(v)) return;
           if (target > 0 ? v >= target : v > 0) keys.push(key);
         });
@@ -1164,7 +1156,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     const calculateStreak = (habit: Habit): number => {
       const doneSet = getDoneSetForHabit(habit);
       if (!doneSet || doneSet.size === 0) return 0;
-      const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+      const skipSet = new Set((habit.skippedDates || []).map(normalizeKey));
 
       // safe parser for keys like "YYYY-MM-DD" or Date strings
       const parseKeyToDate = (k: string): Date | null => {
@@ -1182,7 +1174,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       // determine start = min(habit.startDate, earliest recorded done/skip) if available
       const allKeys = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
       const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
-      let startFromHabit = parseKeyToDate(habit.startDate) || null;
+      let startFromHabit = parseKeyToDate(habit.startDate);
       if (startFromHabit) startFromHabit.setHours(0,0,0,0);
       let earliestRecorded: Date | null = null;
       if (parsedDates.length > 0) {
@@ -1353,7 +1345,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       return;
     }
 
-    const base: any = {
+    const base: Partial<Habit> = {
       name: newHabitName.trim(),
       details: newHabitDetails.trim() || undefined,
       type: newHabitType,
@@ -1381,7 +1373,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     try {
       if (onAddHabit) {
-        await onAddHabit(base);
+        await onAddHabit(base as Omit<Habit, 'id'>);
       } else {
         console.warn('onAddHabit prop is not provided');
       }

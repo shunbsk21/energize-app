@@ -42,6 +42,7 @@ export interface Habit {
   target?: number;
   completedDates?: string[];
   completedAmounts?: Record<string, number>;
+  skippedDates?: string[];
 }
 
 export interface EnergyScores {
@@ -85,4 +86,49 @@ export interface Notification {
   authorName?: string | null;
   createdAt?: any;
   isRead?: boolean;
+}
+
+export interface Advice {
+  title: string;
+  points: string[];
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  details?: string;
+  dueDate?: string;
+  priority?: 'low' | 'medium' | 'high';
+  done?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+}
+
+export interface Checkin {
+  id: string;
+  date: string;
+  value: number;
+  note?: string;
+  createdAt?: string;
+}
+
+export interface Checkout {
+  id: string;
+  date: string;
+  gratitude?: string;
+  note?: string;
+  rating?: number | null;
+  createdAt?: string;
+}
+
+export interface LearningItem {
+  id?: string;
+  title: string;
+  url?: string;
+  notes?: string;
+  tags?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
 }

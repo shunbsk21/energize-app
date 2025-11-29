@@ -132,7 +132,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
         const keys: string[] = [];
         Object.entries(amtMap).forEach(([rk, rv]) => {
           const k = normalizeKey(rk);
-          const v = Number(rv as any);
+          const v = Number(rv);
           if (Number.isNaN(v)) return;
           if (target > 0 ? v >= target : v > 0) keys.push(k);
         });
@@ -190,7 +190,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
     return result;
   }, [habits, period, filteredHistory]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGRectElement, MouseEvent>, dataPoints: any[], contentFn: (d: any) => React.ReactNode) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGRectElement, MouseEvent>, dataPoints: {x: number, y: number, data: any}[], contentFn: (d: any) => React.ReactNode) => {
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
     const pt = svg.createSVGPoint();
@@ -262,7 +262,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             {/* x labels */}
             {points.map((p, i) => ((i % Math.max(1, Math.floor(points.length / 7)) === 0) && (
               <text key={i} x={p.x} y={height - margin.bottom + 15} textAnchor="middle" fontSize="12" fill="#6B7281">
-                {new Date((p.data as any).date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                {new Date(p.data.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
               </text>
             )))}
 
@@ -278,7 +278,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
               width={width - margin.left - margin.right}
               height={height - margin.top - margin.bottom}
               fill="transparent"
-              onMouseMove={e => handleMouseMove(e, points, (d: any) => (
+              onMouseMove={e => handleMouseMove(e, points, (d: { date: string, total: number }) => (
                 <div className="text-xs">
                   <p className="font-bold mb-1">{new Date(d.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                   <p>合計: {(d.total ?? 0)}</p>
@@ -324,7 +324,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
 
             {points.map((p, i) => ((i % Math.max(1, Math.floor(points.length / 7)) === 0) && (
               <text key={i} x={p.x} y={height - margin.bottom + 15} textAnchor="middle" fontSize="12" fill="#6B7281">
-                {new Date((p.data as any).date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                {new Date(p.data.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
               </text>
             )))}
 
@@ -336,7 +336,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
               width={width - margin.left - margin.right}
               height={height - margin.top - margin.bottom}
               fill="transparent"
-              onMouseMove={e => handleMouseMove(e, points, (d: any) => (
+              onMouseMove={e => handleMouseMove(e, points, (d: EnergyRecord) => (
                 <div className="text-xs">
                   <p className="font-bold mb-1">{new Date(d.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                   <p>{ENERGY_CATEGORIES[cat].name}: {d[cat]}</p>
@@ -481,7 +481,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
           if (typeof window !== 'undefined') console.debug('[Analytics] checkouts sample:', co.slice(0,10));
 
           // 柔軟に数値を抽出（rating, value, score 等を試し、文字列数字も数値化）
-          const extractNumeric = (c: any) => {
+          const extractNumeric = (c: Record<string, any>) => {
             const cand = c.rating ?? c.value ?? c.score ?? c.rating_score ?? null;
             if (cand === null || cand === undefined) return null;
             if (typeof cand === 'number') return Number.isFinite(cand) ? cand : null;
@@ -547,7 +547,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
     // prepare series (sorted ascending)
     const ci = (checkins || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const co = (checkouts || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const extractNumeric = (c: any) => {
+    const extractNumeric = (c: Record<string, any>) => {
       const cand = c.rating ?? c.value ?? c.score ?? null;
       if (cand === null || cand === undefined) return null;
       if (typeof cand === 'number') return Number.isFinite(cand) ? cand : null;
@@ -582,8 +582,8 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       return { x: xScale(i), y: v !== null ? yScale(v) : null, date: d, v };
     });
 
-    const pathFor = (pts:any[]) => {
-      const existing = pts.filter(p=>p.y !== null).map(p=>({x:p.x,y:p.y}));
+    const pathFor = (pts: {x: number, y: number | null}[]) => {
+      const existing = pts.filter(p=>p.y !== null).map(p=>({x:p.x,y:p.y as number}));
       return existing.length > 0 ? createSpline(existing) : '';
     };
     const pathCo = pathFor(checkoutPoints);
@@ -632,7 +632,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
             width={width - margin.left - margin.right}
             height={height - margin.top - margin.bottom}
             fill="transparent"
-            onMouseMove={e => handleMouseMove(e as any, combinedPoints, (d: any) => (
+            onMouseMove={e => handleMouseMove(e, combinedPoints, (d: { date: string, checkin: number | null, checkout: number | null }) => (
               <div className="text-xs">
                 <p className="font-bold mb-1">{new Date(d.date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 <p className="text-sm">{`チェックイン: ${d.checkin ?? '—'}`}</p>
