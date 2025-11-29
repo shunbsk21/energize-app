@@ -357,7 +357,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   }, [displayedRecord]);
 
   const currentQuestions = (step !== 'start' && step !== 'results') ? QUESTIONS[step as EnergyCategory] : [];
-  const isCurrentStepAnswered = currentQuestions.every(q => answers[q.id] !== undefined);
+  const isCurrentStepAnswered = currentQuestions.every((q: { id: string | number }) => answers[q.id] !== undefined);
 
   // Past records list component (simple)
   const PastRecordsList: React.FC = () => {
