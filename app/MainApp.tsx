@@ -449,6 +449,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
     // 2. 各グループのチャットをリッスンして、新しいメッセージがあれば通知を作成・保存する
     const chatUnsubscribers = groups.map(group => {
+      if (!group.id) return () => {}; // group.id がなければ何もしない
       const messagesRef = collection(db, 'group_chats', group.id, 'messages');
       return onSnapshot(messagesRef, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
