@@ -44,6 +44,9 @@ const categoryOrder: EnergyCategory[] = ['physical', 'mental', 'emotional', 'int
 
 // (↓ isHabitScheduledForDate は変更なし)
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
+    // startDate が未設定ならスケジュールされていないものとみなす
+    if (!habit?.startDate) return false;
+
     const habitStartDate = new Date(habit.startDate);
     habitStartDate.setHours(0,0,0,0);
     const targetDate = new Date(date);
@@ -51,13 +54,14 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
 
     if (targetDate < habitStartDate) return false;
 
+    const fv: number[] = habit.frequencyValue ?? [];
     switch (habit.frequencyType) {
         case 'daily':
             return true;
         case 'weekly':
-            return habit.frequencyValue.includes(targetDate.getDay());
+            return fv.includes(targetDate.getDay());
         case 'monthly':
-            return habit.frequencyValue.includes(targetDate.getDate());
+            return fv.includes(targetDate.getDate());
         default:
             return false;
     }
