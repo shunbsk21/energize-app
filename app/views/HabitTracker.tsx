@@ -5,6 +5,24 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDocs
 import { db, auth } from '../../lib/firebase';
 import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord, Task, Checkin, Checkout } from '../types';
 import HabitDetail from './HabitDetail';
+import CheckInModal from '../components/CheckInModal';
+import CheckOutModal from '../components/CheckOutModal';
+import {
+  PlusIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CalendarIcon,
+  HelpIcon,
+  DiagnosisIcon,
+  ListBulletIcon,
+  EditIcon,
+  CheckCircleIcon,
+  BrainIcon,
+  MoodIcon,
+  SunIcon,
+  MoonIcon,
+  ScholarIconSmall
+} from '../components/Icons';
 
 // --- Propsの定義を変更 ---
 interface HabitTrackerProps {
@@ -50,84 +68,6 @@ interface HabitTrackerProps {
 
 // 優先度ソート用
 const prioritySortValue = (p?: 'low'|'medium'|'high') => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
-
-// --- Icon Components Start (★ CheckCircleIcon を追加) ---
-
-const PlusIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-    </svg>
-);
-
-const ChevronLeftIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-);
-
-const ChevronRightIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-);
-
-const CalendarIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-);
-
-const HelpIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-    </svg>
-);
-
-const DiagnosisIcon: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
-
-const ListBulletIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-    </svg>
-);
-
-const EditIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-    </svg>
-);
-
-// ★ 完了を示すチェックアイコンを追加
-const CheckCircleIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-);
-
-const BrainIcon: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c1.657 0 3 1.343 3 3v1h2a2 2 0 012 2v1.5M9 6V5a3 3 0 013-2" />
-    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5V9a2 2 0 01-2 2H3v2a2 2 0 002 2h1v1a3 3 0 003 3h4a3 3 0 003-3v-1h1a2 2 0 002-2v-2h-2a2 2 0 01-2-2v-.5" />
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 13.5c0-1.5 1.5-2.5 3-2.5s3 1 3 2.5" />
-  </svg>
-);
-
-const MoodIcon = ({ level }: { level: number }) => {
-  // 簡易アイコン: emoji を利用（スタイルは調整可能）
-  const map = {
-    5: '⚡️',
-    4: '😊',
-    3: '😐',
-    2: '😴',
-    1: '🥀'
-  } as any;
-  return <span className="text-xl">{map[level]}</span>;
-};
-// --- Icon Components End ---
 
 
 // --- Helper Functions Start (変更なし) ---
@@ -374,203 +314,6 @@ function autoGrowTextArea(el?: HTMLTextAreaElement | null) {
   el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
 }
 
-const CheckInModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (value: number, note?: string) => void; initial?: { value:number; note?:string } }> = ({ isOpen, onClose, onSave, initial }) => {
-  const [value, setValue] = useState<number>(initial?.value ?? 4);
-  const [note, setNote] = useState<string>(initial?.note ?? '');
-  const noteRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setValue(initial?.value ?? 4);
-      setNote(initial?.note ?? '');
-      setTimeout(() => autoGrowTextArea(noteRef.current), 0);
-    }
-  }, [isOpen, initial]);
-
-  const DESCRIPTIONS: { [k: number]: { short: string; full: string } } = {
-    5: { short: 'エネルギー満タン', full: '活力が最大限で、集中力・やる気ともに高い状態。' },
-    4: { short: '元気', full: '通常のレベルより調子が良く、前向きに取り組める状態。' },
-    3: { short: '普通', full: '可もなく不可もなく、日常の業務をこなせる安定した状態。' },
-    2: { short: '疲労気味', full: '集中力が切れやすく、休息やリフレッシュが必要な状態。' },
-    1: { short: 'エネルギー枯渇', full: '意欲や体力がなく、十分な回復を最優先すべき危険な状態。' },
-  };
-
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="bg-white rounded-lg p-3 w-full max-w-md max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-2">チェックイン: 今日のエネルギー</h3>
-
-        {/* モーダル内部スクロール領域 */}
-        <div className="max-h-[60vh] overflow-auto pr-2">
-          {/* 短い表示のみ縦並び（降順）。各行をコンパクトに */}
-          <div className="space-y-2 mb-3">
-            {[5,4,3,2,1].map(v => (
-              <button
-                key={v}
-                onClick={() => setValue(v)}
-                aria-pressed={value === v}
-                className={`w-full text-left rounded-md border transition flex items-center gap-3 py-2 px-3 ${value === v ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-              >
-                {/* 数字を左に */}
-                <div className="w-6 flex-shrink-0 text-sm font-medium text-gray-600">{v}.</div>
-
-                {/* アイコンは中央寄せ */}
-                <div className="w-8 flex items-center justify-center flex-shrink-0">
-                  <MoodIcon level={v} />
-                </div>
-
-                {/* テキストは中央揃え（縦中央） */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-800 leading-tight">{DESCRIPTIONS[v].short}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* 選択したものの詳細説明は選択欄下にコンパクトに表示 */}
-          <div className="mb-3 text-sm text-gray-700">
-            <div className="text-xs text-gray-500 mb-1">選択: <span className="font-medium">{DESCRIPTIONS[value].short}</span></div>
-            <div className="p-2 bg-gray-50 rounded text-sm text-gray-600 leading-relaxed">{DESCRIPTIONS[value].full}</div>
-          </div>
-
-          <textarea
-            ref={noteRef}
-            value={note}
-            onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-            onChange={e => setNote(e.target.value)}
-            placeholder="メモ（任意）"
-            rows={3}
-            className="w-full p-2 border border-gray-200 rounded-md mb-3 resize-none text-sm"
-          />
-        </div>
-
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-md bg-white border text-sm">キャンセル</button>
-          <button onClick={() => { onSave(value, note); onClose(); }} className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm">保存</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- CheckOutModal (差し替え) ---
-const CheckOutModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (gratitude?: string, note?: string, rating?: number) => void; initial?: { rating:number; gratitude?:string; note?:string } }> = ({ isOpen, onClose, onSave, initial }) => {
-  const [rating, setRating] = useState<number>(initial?.rating ?? 4);
-  const [gratitude, setGratitude] = useState<string>(initial?.gratitude ?? '');
-  const [note, setNote] = useState<string>(initial?.note ?? '');
-  const gratitudeRef = useRef<HTMLTextAreaElement | null>(null);
-  const noteRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setRating(initial?.rating ?? 4);
-      setGratitude(initial?.gratitude ?? '');
-      setNote(initial?.note ?? '');
-      setTimeout(() => { autoGrowTextArea(gratitudeRef.current); autoGrowTextArea(noteRef.current); }, 0);
-    }
-  }, [isOpen, initial]);
-
-  const SAT_DESCRIPTIONS: { [k: number]: { short: string; full: string } } = {
-    5: { short: '今日は最高だった', full: '非常に満足しており、達成感や喜びを感じる充実した一日。' },
-    4: { short: '今日は良かった', full: '概ね満足しており、良い出来事が多かった一日。' },
-    3: { short: '今日は普通', full: '特に大きな出来事もなく、平穏に過ごした一日。' },
-    2: { short: 'ちょっと残念', full: 'ストレスや小さな失敗があり、気分が沈んだ一日。' },
-    1: { short: '今日は最悪だった', full: '予期せぬ大きな問題や、強い不満を感じた一日。' },
-  };
-
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="bg-white rounded-lg p-3 w-full max-w-lg max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-2">チェックアウト: 感謝・日記</h3>
-
-        <div className="max-h-[64vh] overflow-auto pr-2">
-          <div className="text-sm text-gray-700 mb-2">今日の気分を選択してください</div>
-
-          {/* 短い表示のみ縦並び（降順）・コンパクト */}
-          <div className="space-y-2 mb-3">
-            {[5,4,3,2,1].map(v => (
-              <button
-                key={v}
-                onClick={() => setRating(v)}
-                aria-pressed={rating === v}
-                className={`w-full text-left rounded-md border transition flex items-center gap-3 py-2 px-3 ${rating === v ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-              >
-                {/* 数字を左 */}
-                <div className="w-6 flex-shrink-0 text-sm font-medium text-gray-600">{v}.</div>
-
-                {/* アイコン */}
-                <div className="w-8 flex items-center justify-center flex-shrink-0">
-                  <MoodIcon level={v} />
-                </div>
-
-                {/* テキスト */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-800 leading-tight">{SAT_DESCRIPTIONS[v].short}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* 選択したものの詳細説明 */}
-          <div className="mb-4 text-sm text-gray-700">
-            <div className="text-xs text-gray-500 mb-1">選択: <span className="font-medium">{SAT_DESCRIPTIONS[rating].short}</span></div>
-            <div className="p-2 bg-gray-50 rounded text-sm text-gray-600 leading-relaxed">{SAT_DESCRIPTIONS[rating].full}</div>
-          </div>
-
-          <div className="mb-3">
-            <label className="text-sm text-gray-600">今日の感謝</label>
-            <textarea
-              ref={gratitudeRef}
-              value={gratitude}
-              onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-              onChange={e => setGratitude(e.target.value)}
-              placeholder="例: 一緒にランチしてくれた同僚に感謝"
-              rows={1}
-              className="w-full p-3 border border-gray-200 rounded-md mt-1 mb-2 resize-none text-sm"
-            />
-            <label className="text-sm text-gray-600">日記（任意・詳細）</label>
-            <textarea
-              ref={noteRef}
-              value={note}
-              onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-              onChange={e => setNote(e.target.value)}
-              placeholder="今日の出来事や振り返りを書き留めましょう"
-              rows={3}
-              className="w-full p-3 border border-gray-200 rounded-md mt-1 resize-none text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-md bg-white border text-sm">キャンセル</button>
-          <button onClick={() => { onSave(gratitude, note, rating); onClose(); }} className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm">保存</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Icon Components: add Sun/Moon (for check-in/check-out) ---
-const SunIcon: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2M12 19v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 7a5 5 0 100 10 5 5 0 000-10z"/>
-  </svg>
-);
-const MoonIcon: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-  </svg>
-);
-
-// Scholar icon (small) for FAB
-const ScholarIconSmall: React.FC<{className?: string}> = ({className}) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="7" r="3" />
-    <path d="M5 21c2-4 6-6 7-6s5 2 7 6" />
-  </svg>
-);
 
 // --- HabitTracker Component Start ---
 
