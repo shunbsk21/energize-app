@@ -161,13 +161,14 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
             {frequency.frequencyType === "weekly" && (
               <div className="flex justify-center gap-1 mt-3">
                 {WEEK_DAYS.map((d, idx) => {
-                  const active = frequency.frequencyValue.includes(idx);
+                  const fv = frequency.frequencyValue ?? [];
+                  const active = fv.includes(idx);
                   return (
                     <button
                       key={d}
                       type="button"
                       onClick={() => {
-                        const newVal = active ? frequency.frequencyValue.filter(v => v !== idx) : [...frequency.frequencyValue, idx];
+                        const newVal = active ? fv.filter(v => v !== idx) : [...fv, idx];
                         setFrequency(prev => ({ ...prev, frequencyValue: newVal.sort() }));
                       }}
                       className={`w-10 h-10 rounded-full font-semibold transition-colors text-sm md:text-base ${active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
