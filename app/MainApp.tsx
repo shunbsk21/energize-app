@@ -497,13 +497,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         try {
           const unread = notifications.filter(n => !n.isRead);
           if (unread.length === 0) return;
-          await Promise.all(unread.map(n => {
+          const promises = unread.map(n => {
+            // 型安全に string を渡す（存在確認）
+            if (!n.id || !profile.id) return Promise.resolve();
             const ref = doc(db, 'users', profile.id, 'notifications', n.id);
             return updateDoc(ref, { isRead: true }).catch(err => {
               // updateDoc fail (doc missing) -> fallback setDoc merge
               return setDoc(ref, { isRead: true }, { merge: true });
             });
-          }));
+          });
+          await Promise.all(promises);
         } catch (e) {
           console.error('failed to mark notifications read', e);
         }
