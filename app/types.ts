@@ -32,6 +32,7 @@ export interface Habit {
   title: string;
   detail?: string;
   createdAt?: string;
+  startDate?: string;
 }
 
 export interface EnergyScores {
