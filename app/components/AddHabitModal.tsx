@@ -150,7 +150,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
             <select
               value={frequency.frequencyType}
-              onChange={e => setFrequency({ frequencyType: e.target.value as DiagnosisFrequency['frequencyType'], value: [] })}
+              onChange={e => setFrequency(prev => ({ ...prev, frequencyType: e.target.value as DiagnosisFrequency['frequencyType'], frequencyValue: [] }))}
               className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             >
               <option value="daily">毎日</option>
