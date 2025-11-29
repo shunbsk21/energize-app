@@ -809,9 +809,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
       // completedAt を追加する可能性があるため any にして型エラーを避ける
-      const updatePayload: any = { ...payload, updatedAt: new Date().toISOString() };
-      if (payload.done === true) updatePayload.completedAt = new Date().toISOString();
-      if (payload.done === false) updatePayload.completedAt = null;
+      // サーバに送る前に undefined フィールドを除去する
+      const base: any = { ...payload, updatedAt: new Date().toISOString() };
+      if (payload.done === true) base.completedAt = new Date().toISOString();
+      if (payload.done === false) base.completedAt = null;
+      const updatePayload = Object.fromEntries(Object.entries(base).filter(([_, v]) => v !== undefined));
       await updateDoc(taskRef, updatePayload);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload, updatedAt: updatePayload.updatedAt, completedAt: updatePayload.completedAt } : t));
     } catch (err) {

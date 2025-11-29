@@ -14,7 +14,8 @@ import {
   serverTimestamp,
   deleteField,
 } from 'firebase/firestore';
-import { db, auth } from '../../lib/firebase'; // adjust path if needed
+import { db, auth } from '../../lib/firebase';
+import TaskDetail from './TaskDetail';
 
 interface TaskItem {
   id: string;
@@ -205,6 +206,7 @@ const Tasks: React.FC = () => {
   const [details, setDetails] = useState('');
   const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<TaskItem['priority']>(defaultPriority);
+  const [isDone, setIsDone] = useState(false);
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -259,15 +261,7 @@ const Tasks: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!editingId) return;
-    const t = tasks.find(x => x.id === editingId);
-    if (t) {
-      setTitle(t.title);
-      setDetails(t.details || '');
-      setDueDate(t.dueDate || undefined);
-      setPriority(t.priority || defaultPriority);
-      setIsCreateOpen(true);
-    }
+    // 編集モードは TaskDetail へ移譲するため Tasks 側ではフィルや自動オープンは行わない
   }, [editingId, tasks]);
 
   // sorting: dueDate asc (empty last), priority desc
@@ -330,7 +324,7 @@ const Tasks: React.FC = () => {
   const submit = async () => {
     if (!title.trim()) return;
     if (editingId) {
-      await updateTask({ id: editingId, title: title.trim(), details, dueDate: dueDate || undefined, priority, done: !!tasks.find(t => t.id === editingId)?.done });
+      await updateTask({ id: editingId, title: title.trim(), details, dueDate: dueDate || undefined, priority, done: isDone });
     } else {
       await createTask({ title: title.trim(), details, dueDate: dueDate || undefined, priority });
     }
@@ -379,6 +373,8 @@ const Tasks: React.FC = () => {
           ) : (
             visible.map((t, idx) => {
               const stableKey = t.id ? t.id : `task-${idx}`;
+              const todayIso = toLocalISO(new Date());
+              const isOverdue = t.dueDate ? (t.dueDate < todayIso && !t.done) : false;
               return (
                 <div key={stableKey} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg shadow-sm hover:shadow-md">
                   <input
@@ -391,12 +387,16 @@ const Tasks: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="truncate">
-                        <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</div>
+                        <div className={`text-sm font-medium ${t.done ? 'line-through text-gray-400' : isOverdue ? 'text-red-700 font-semibold' : 'text-gray-900'}`}>{t.title}</div>
                         {t.details ? <div className="text-xs text-gray-500 truncate mt-1">{t.details}</div> : null}
                       </div>
 
                       <div className="flex items-center gap-2 ml-3">
-                        {t.dueDate ? <div className="text-xs text-gray-500">{formatMMDD(t.dueDate)}</div> : null}
+                        {t.dueDate ? (
+                          <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isOverdue ? 'bg-red-100 text-red-700' : 'text-gray-500 bg-white'}`}>
+                            {isOverdue ? `期限切れ ${formatMMDD(t.dueDate)}` : formatMMDD(t.dueDate)}
+                          </div>
+                        ) : null}
                         <div className={`text-xs px-2 py-0.5 rounded-full ${t.priority === 'high' ? 'bg-red-100 text-red-700' : t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                           {priorityLabel(t.priority)}
                         </div>
@@ -445,7 +445,7 @@ const Tasks: React.FC = () => {
           </div>
         )}
       </div>
-      
+
       {/* Floating + button */}
      <button onClick={() => { setEditingId(null); setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsCreateOpen(true); }} className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700">
        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -467,15 +467,44 @@ const Tasks: React.FC = () => {
                 <div className="flex gap-2 items-center">
                   <CalendarPicker value={dueDate} onChange={setDueDate} />
                   <PrioritySelect value={priority} onChange={setPriority} />
+                  <label className="inline-flex items-center gap-2 ml-2">
+                    <input type="checkbox" checked={isDone} onChange={e => setIsDone(e.target.checked)} />
+                    <span className="text-sm">完了</span>
+                  </label>
                   <div className="flex-1" />
                   <button onClick={submit} className="px-4 py-2 bg-indigo-600 text-white rounded">{editingId ? '更新' : '追加'}</button>
                 </div>
               </div>
+              {/* 編集中は削除ボタンを表示 */}
+              {editingId && (
+                <div className="mt-4 flex justify-between">
+                  <button
+                    onClick={async () => {
+                      if (!editingId) return;
+                      try {
+                        await removeTask(editingId);
+                      } catch (e) { console.error(e); }
+                      setIsCreateOpen(false);
+                      setEditingId(null);
+                      setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsDone(false);
+                    }}
+                    className="px-4 py-2 text-sm text-red-600 border border-red-100 rounded"
+                  >
+                    削除
+                  </button>
+                  <div />
+                </div>
+              )}
             </div>
           </div>
         </Portal>
      )}
-
+    {/* 編集用詳細モーダル（HabitTracker と同等の編集 UI） */}
+    {editingId && (() => {
+      const t = tasks.find(x => x.id === editingId);
+      if (!t) return null;
+      return <TaskDetail task={t} onClose={() => setEditingId(null)} updateTask={updateTask} toggleTask={toggleTask} removeTask={removeTask} />;
+    })()}
     </>
   );
 };

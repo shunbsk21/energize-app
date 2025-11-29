@@ -216,6 +216,17 @@ const calculateCurrentStreak = (habit: Habit): number => {
 
   // lastRecordedScheduled を基点に遡る（done は +1、skip は継続だがカウントしない）
   let streak = 0;
+  // 追加チェック：lastRecordedScheduled より最近の scheduled 日で「未実施かつ未スキップ」がある場合は
+  // 「丸1日空けた」とみなし現在の連続記録を 0 にする
+  for (let d = new Date(lastRecordedScheduled); d <= new Date(); d.setDate(d.getDate() + 1)) {
+    if (d.getTime() === lastRecordedScheduled.getTime()) continue; // 基点自身は除外
+    if (!isScheduled(d)) continue;
+    const k = d.toLocaleDateString('sv-SE');
+    if (!doneSet.has(k) && !skipSet.has(k)) {
+      return 0;
+    }
+  }
+
   for (let cur = new Date(lastRecordedScheduled); cur >= start; cur.setDate(cur.getDate() - 1)) {
     if (!isScheduled(cur)) continue;
     const key = cur.toLocaleDateString('sv-SE');

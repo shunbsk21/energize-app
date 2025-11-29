@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-// ★ EnergyRecord をインポートし、パスを修正
+import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '../../lib/firebase';
 import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
 import HabitDetail from './HabitDetail';
 
@@ -758,7 +759,17 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (!taskTitle.trim()) return;
     const payload = { title: taskTitle.trim(), details: taskDetails.trim() || undefined, dueDate: taskDueDate || selectedDateISO, priority: taskPriority };
     try {
-      await onAddTask?.(payload);
+      if (onAddTask) {
+        await onAddTask(payload);
+      } else {
+        // fallback: write directly to Firestore
+        const uid = auth?.currentUser?.uid ?? null;
+        if (db && uid) {
+          await addDoc(collection(db, 'users', uid, 'tasks'), { ...payload, done: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        } else {
+          console.warn('onAddTask not provided and no auth/db available');
+        }
+      }
     } catch (err) {
       console.error('onAddTask error', err);
     }
@@ -772,7 +783,20 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const handleToggleTaskLocal = async (taskId: string, nextDone: boolean) => {
     setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, done: nextDone, completedAt: nextDone ? new Date().toISOString() : undefined } : t));
     try {
-      await onToggleTask?.(taskId, nextDone);
+      if (onToggleTask) {
+        await onToggleTask(taskId, nextDone);
+      } else {
+        // fallback: update firestore directly
+        const uid = auth?.currentUser?.uid ?? null;
+        if (db && uid) {
+          const ref = doc(db, 'users', uid, 'tasks', taskId);
+          if (nextDone) {
+            await updateDoc(ref, { done: true, completedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          } else {
+            await updateDoc(ref, { done: false, completedAt: null, updatedAt: serverTimestamp() });
+          }
+        }
+      }
     } catch (err) {
       console.error('onToggleTask error', err);
     }
@@ -794,7 +818,16 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       if (onUpdateTask) {
         await onUpdateTask(selectedTask.id, payload);
       } else {
-        console.warn('onUpdateTask prop not provided');
+        // fallback to firestore update — undefined を含まないようにフィルタ
+        const uid = auth?.currentUser?.uid ?? null;
+        if (db && uid) {
+          const ref = doc(db, 'users', uid, 'tasks', selectedTask.id);
+          const base: any = { ...payload, updatedAt: serverTimestamp() };
+          const safePayload = Object.fromEntries(Object.entries(base).filter(([_, v]) => v !== undefined));
+          await updateDoc(ref, safePayload);
+        } else {
+          console.warn('onUpdateTask not provided and no auth/db available');
+        }
       }
     } catch (err) {
       console.error('onUpdateTask error', err);
@@ -807,8 +840,17 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     const id = selectedTask.id;
     setLocalTasks(prev => prev.filter(t => t.id !== id));
     try {
-      if (onDeleteTask) await onDeleteTask(id);
-      else console.warn('onDeleteTask prop not provided');
+      if (onDeleteTask) {
+        await onDeleteTask(id);
+      } else {
+        const uid = auth?.currentUser?.uid ?? null;
+        if (db && uid) {
+          const ref = doc(db, 'users', uid, 'tasks', id);
+          await deleteDoc(ref);
+        } else {
+          console.warn('onDeleteTask not provided and no auth/db available');
+        }
+      }
     } catch (err) {
       console.error('onDeleteTask error', err);
     }
@@ -1118,6 +1160,17 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         if (doneSet.has(k) || skipSet.has(k)) { lastRecordedScheduled = new Date(d); break; }
       }
       if (!lastRecordedScheduled) return 0;
+
+      // 追加チェック：lastRecordedScheduled より最近の scheduled 日で未実施（done/skip でない）の日があれば
+      // 「丸1日空けた」とみなし現在の連続記録を 0 にする
+      for (let d = new Date(lastRecordedScheduled); d <= today; d.setDate(d.getDate() + 1)) {
+        if (d.getTime() === lastRecordedScheduled.getTime()) continue;
+        if (!isScheduled(d)) continue;
+        const key = d.toLocaleDateString('sv-SE');
+        if (!doneSet.has(key) && !skipSet.has(key)) {
+          return 0;
+        }
+      }
 
       // count streak backwards from that recorded scheduled date (done -> +1, skip -> continue)
       let streak = 0;
