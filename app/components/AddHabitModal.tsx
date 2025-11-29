@@ -41,7 +41,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
   const [name, setName] = useState(initial?.title ?? "");
   const [details, setDetails] = useState(initial?.detail ?? "");
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
-  const [frequency, setFrequency] = useState<DiagnosisFrequency>({ frequencyType: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
+  const [frequency, setFrequency] = useState<DiagnosisFrequency>({ frequencyType: initial?.frequencyType ?? "daily", frequencyValue: initial?.frequencyValue ?? [] });
   const [type, setType] = useState<"binary" | "amount">(initial?.type ?? "binary");
   const [target, setTarget] = useState<number | undefined>(initial?.target ?? undefined);
   const [unit, setUnit] = useState<string>(initial?.unit ?? "");
@@ -55,7 +55,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
     setType(initial?.type ?? "binary");
     setTarget(initial?.target ?? undefined);
     setUnit(initial?.unit ?? "");
-    setFrequency({ type: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
+    setFrequency({ frequencyType: initial?.frequencyType ?? "daily", frequencyValue: initial?.frequencyValue ?? [] });
     setTimeout(() => autoGrowTextArea(detailsRef.current), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initial]);
@@ -68,8 +68,8 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
       details: (details || "").trim() || undefined,
       type,
       startDate: startDate || new Date().toLocaleDateString("sv-SE"),
-      frequencyType: frequency.type,
-      frequencyValue: Array.isArray(frequency.value) ? frequency.value : (frequency.value ? [frequency.value] : []),
+      frequencyType: frequency.frequencyType,
+      frequencyValue: Array.isArray(frequency.frequencyValue) ? frequency.frequencyValue : (frequency.frequencyValue ? [frequency.frequencyValue] : []),
       skippedDates: [],
       createdAt: new Date().toISOString(),
     };
@@ -149,7 +149,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
             <select
-              value={frequency.type}
+              value={frequency.frequencyType}
               onChange={e => setFrequency({ frequencyType: e.target.value as DiagnosisFrequency['frequencyType'], value: [] })}
               className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             >
@@ -158,17 +158,17 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
               <option value="monthly">月次</option>
             </select>
 
-            {frequency.type === "weekly" && (
+            {frequency.frequencyType === "weekly" && (
               <div className="flex justify-center gap-1 mt-3">
                 {WEEK_DAYS.map((d, idx) => {
-                  const active = frequency.value.includes(idx);
+                  const active = frequency.frequencyValue.includes(idx);
                   return (
                     <button
                       key={d}
                       type="button"
                       onClick={() => {
-                        const newVal = active ? frequency.value.filter(v => v !== idx) : [...frequency.value, idx];
-                        setFrequency(prev => ({ ...prev, value: newVal.sort() }));
+                        const newVal = active ? frequency.frequencyValue.filter(v => v !== idx) : [...frequency.frequencyValue, idx];
+                        setFrequency(prev => ({ ...prev, frequencyValue: newVal.sort() }));
                       }}
                       className={`w-10 h-10 rounded-full font-semibold transition-colors text-sm md:text-base ${active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                     >
@@ -179,16 +179,16 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
               </div>
             )}
 
-            {frequency.type === "monthly" && (
+            {frequency.frequencyType === "monthly" && (
               <div className="mt-3">
                 <label className="block text-sm text-gray-600 mb-1">日付を選択 (カンマ区切り)</label>
                 <input
                   type="text"
                   placeholder="例: 1, 15"
-                  defaultValue={frequency.value.join(', ')}
+                  defaultValue={frequency.frequencyValue.join(', ')}
                   onChange={e => {
                     const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
-                    setFrequency(prev => ({ ...prev, value: value.sort((a,b) => a - b) }));
+                    setFrequency(prev => ({ ...prev, frequencyValue: value.sort((a,b) => a - b) }));
                   }}
                   className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                 />
