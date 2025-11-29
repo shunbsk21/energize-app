@@ -16,7 +16,9 @@ import {
   setDoc,
   doc,
   getDoc,
+  updateDoc,
 } from "firebase/firestore";
+import { arrayUnion } from "firebase/firestore";
 
 type AnswersMap = Record<string, number>;
 type ResultRecord = {
@@ -36,6 +38,14 @@ const defaultFrequency = { frequencyType: 'daily', frequencyValue: [] as any[] }
 const formatDateLabel = (iso: string) => {
   try { return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch { return iso; }
+};
+
+// ローカルの YYYY-MM-DD を生成するユーティリティ（タイムゾーン差を排除）
+const formatLocalISO = (d: Date = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 interface PurelifeProps {
@@ -202,7 +212,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
           } as ResultRecord;
         });
         setHistory(items);
-        const todayIso = new Date().toISOString().slice(0,10);
+        const todayIso = formatLocalISO(new Date());
         const todayRec = items.find(r => r.date === todayIso) || null;
         if (todayRec) {
           setSelectedRecord(todayRec);
@@ -263,7 +273,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       console.warn("no uid, cannot save");
       return;
     }
-    const todayIso = new Date().toISOString().slice(0,10);
+    const todayIso = formatLocalISO(new Date());
     const record = {
       date: todayIso,
       categories: categoryScoresForCurrentAnswers,
@@ -291,6 +301,23 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       const newRec = items.find(i => i.date === todayIso) ?? null;
       setSelectedRecord(newRec);
       setStep('results');
+
+      // append completion date into users/{uid}/settings/main.purelifeCompletedDates (setDoc merge で堅牢化)
+      try {
+        const settingsRef = doc(db, 'users', uid, 'settings', 'main');
+        // setDoc with merge:true + arrayUnion is safe even if doc missing
+        // use local ISO (YYYY-MM-DD) to match HabitTracker / selectedDateISO
+        await setDoc(settingsRef, { purelifeCompletedDates: arrayUnion(todayIso) }, { merge: true });
+      } catch (e) {
+        console.warn("[Purelife] failed to append completion date to settings:", e);
+      }
+
+      // dispatch global event so other components (MainApp/HabitTracker) update immediately
+      try {
+        // dispatch same local-ISO date so HabitTracker/MainApp event handler と一致する
+        window.dispatchEvent(new CustomEvent('purelife-diagnosis-saved', { detail: { date: todayIso } }));
+      } catch (e) { /* noop */ }
+
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
     } catch (e) {
       console.error("saveResult error", e);

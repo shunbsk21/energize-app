@@ -24,6 +24,8 @@ interface GroupProps {
     setIsHelpOpen: (isOpen: boolean) => void;
     allUserProfiles: Map<string, Profile | Friend>;
     onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
+    selectedGroupId: string | null;
+    onClearSelectedGroup: () => void;
 }
 
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
@@ -521,7 +523,9 @@ const Group: React.FC<GroupProps> = ({
     habits, 
     setIsHelpOpen,
     allUserProfiles,
-    onUpdateGroupSharedHabits
+    onUpdateGroupSharedHabits,
+    selectedGroupId,
+    onClearSelectedGroup
 }) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null);
@@ -529,6 +533,19 @@ const Group: React.FC<GroupProps> = ({
     const [isFriendsPage, setIsFriendsPage] = useState(false);
     // 友達候補（候補リストはモーダルで表示）
     const [isCandidatesOpen, setIsCandidatesOpen] = useState(false);
+
+    // ★ 通知クリックからの遷移処理
+    useEffect(() => {
+        // selectedGroupId が渡され、グループリストが読み込み済みの場合に実行
+        if (selectedGroupId && groups.length > 0) {
+            const groupToSelect = groups.find(g => g.id === selectedGroupId);
+            if (groupToSelect) {
+                setSelectedGroup(groupToSelect);
+            }
+            // 処理が終わったら親コンポーネントのIDをクリアする
+            onClearSelectedGroup();
+        }
+    }, [selectedGroupId, groups, onClearSelectedGroup]);
 
     // 進捗モーダル（Group コンポーネント側で管理）
     const [isProgressOpen, setIsProgressOpen] = useState(false);

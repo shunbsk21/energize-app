@@ -7,7 +7,7 @@ export type EnergyCategory = 'physical' | 'mental' | 'emotional' | 'intellectual
 
 export type FrequencyType = 'daily' | 'weekly' | 'monthly';
 
-export type View = 'diagnosis' | 'personality' | 'purelife' | 'habits' | 'analytics' | 'records' | 'groups' | 'tasks' | 'notes' | 'learnings';
+export type View = 'diagnosis' | 'personality' | 'purelife' | 'habits' | 'analytics' | 'records' | 'groups' | 'tasks' | 'notes' | 'learnings' | 'notifications';
 
 export interface Question {
   id: string;
@@ -84,4 +84,14 @@ export interface Comment {
     authorName: string;
     text: string;
     timestamp: string;
+}
+
+export interface Notification {
+  id: string;
+  groupId: string;
+  groupName: string;
+  message: string;
+  authorName: string;
+  createdAt: any; // FirestoreのTimestamp型を想定
+  isRead: boolean;
 }

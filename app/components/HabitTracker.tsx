@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import { Habit, View, FrequencyType, DiagnosisFrequency, EnergyRecord } from '../types'; 
 import HabitDetail from './HabitDetail';
@@ -47,7 +47,7 @@ interface HabitTrackerProps {
   isAdmin?: boolean;
   // optional: purelife scheduling/completion data and open handler
   purelifeFrequency?: DiagnosisFrequency;
-  purelifeCompletedDates?: string[]; // ISO 'YYYY-MM-DD' strings
+  localPurelifeCompletedDates?: string[]; // ISO 'YYYY-MM-DD' strings
   onOpenPurelife?: () => void;
 }
 
@@ -598,7 +598,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onDeleteTask,
   onAddLearning,
   purelifeFrequency,
-  purelifeCompletedDates,
+  localPurelifeCompletedDates,
   onOpenPurelife,
   isAdmin = false
 }) => {
@@ -656,6 +656,70 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     }
   });
 
+  // --- purelife の完了日をローカルで保持し、グローバルイベントで即時更新する ---
+  const [localPurelifeCompletedDatesState, setLocalPurelifeCompletedDatesState] = useState<string[]>(localPurelifeCompletedDates ?? []);
+
+  // prop が更新されたら同期する（親から渡された値で上書き）
+  useEffect(() => {
+    setLocalPurelifeCompletedDatesState(localPurelifeCompletedDates ?? []);
+  }, [localPurelifeCompletedDates]);
+
+  // グローバルイベントで完了が伝播されたら即時に追加
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try {
+        const ce = ev as CustomEvent;
+        const date: string | undefined = ce?.detail?.date;
+        if (!date) return;
+        setLocalPurelifeCompletedDatesState(prev => prev.includes(date) ? prev : [date, ...prev]);
+      } catch (e) { /* noop */ }
+    };
+    window.addEventListener('purelife-diagnosis-saved', handler as EventListener);
+    return () => window.removeEventListener('purelife-diagnosis-saved', handler as EventListener);
+  }, []);
+
+  // selectedDate をローカル日の ISO (YYYY-MM-DD) で使う（タイムゾーン差で日付がずれる問題を防ぐ）
+  const formatLocalISO = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const selectedDateISO = formatLocalISO(selectedDate);
+  
+  // --- purelife の表示制御（props の頻度 / 完了日を使う） ---
+  const hasPurelifeConfig = Boolean(purelifeFrequency);
+  const isPurelifeDay = useMemo(() => {
+    if (!purelifeFrequency) return false;
+    return isDiagnosisScheduledForDate(purelifeFrequency, selectedDate);
+  }, [purelifeFrequency, selectedDate]);
+
+  // Firestore に保存された purelifeHistory を参照して selectedDate が実施済みか確認する
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      // only check when there's a purelife schedule for the day
+      if (!hasPurelifeConfig) return;
+      if (!isPurelifeDay) return;
+      try {
+        const uid = auth?.currentUser?.uid ?? null;
+        if (!uid) return;
+        // query users/{uid}/purelifeHistory where date == selectedDateISO
+        const colRef = collection(db, 'users', uid, 'purelifeHistory');
+        const q = query(colRef, where('date', '==', selectedDateISO));
+        const snap = await getDocs(q);
+        if (!mounted) return;
+        if (!snap.empty) {
+          setLocalPurelifeCompletedDatesState(prev => prev.includes(selectedDateISO) ? prev : [selectedDateISO, ...prev]);
+        }
+      } catch (e) {
+        // ignore - non-fatal
+        console.warn('[HabitTracker] failed to check purelifeHistory', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [selectedDateISO, hasPurelifeConfig, isPurelifeDay]);
+  
   useEffect(() => {
     // listen storage events (other tabs) to keep in sync
     const onStorage = (e: StorageEvent) => {
@@ -722,15 +786,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [fabOpen]);
-  
-  // selectedDate をローカル日の ISO (YYYY-MM-DD) で使う（タイムゾーン差で日付がずれる問題を防ぐ）
-  const formatLocalISO = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-  const selectedDateISO = formatLocalISO(selectedDate);
 
   useEffect(() => {
     if (selectedTask) {
@@ -1250,17 +1305,35 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     return personalityCompletedDates.includes(selectedDateISO);
   }, [personalityCompletedDates, selectedDateISO]);
 
-  // --- purelife の表示制御（props の頻度 / 完了日を使う） ---
-  const hasPurelifeConfig = Boolean(purelifeFrequency);
-  const isPurelifeDay = useMemo(() => {
-    if (!purelifeFrequency) return false;
-    return isDiagnosisScheduledForDate(purelifeFrequency, selectedDate);
-  }, [purelifeFrequency, selectedDate]);
+  // Firestore に保存された purelifeHistory を参照して selectedDate が実施済みか確認する
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      // only check when there's a purelife schedule for the day
+      if (!hasPurelifeConfig) return;
+      if (!isPurelifeDay) return;
+      try {
+        const uid = auth?.currentUser?.uid ?? null;
+        if (!uid) return;
+        // query users/{uid}/purelifeHistory where date == selectedDateISO
+        const colRef = collection(db, 'users', uid, 'purelifeHistory');
+        const q = query(colRef, where('date', '==', selectedDateISO));
+        const snap = await getDocs(q);
+        if (!mounted) return;
+        if (!snap.empty) {
+          setLocalPurelifeCompletedDatesState(prev => prev.includes(selectedDateISO) ? prev : [selectedDateISO, ...prev]);
+        }
+      } catch (e) {
+        // ignore - non-fatal
+        console.warn('[HabitTracker] failed to check purelifeHistory', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [selectedDateISO, hasPurelifeConfig, isPurelifeDay]);
 
   const isPurelifeCompleted = useMemo(() => {
-    if (!purelifeCompletedDates) return false;
-    return purelifeCompletedDates.includes(selectedDateISO);
-  }, [purelifeCompletedDates, selectedDateISO]);
+    return (localPurelifeCompletedDatesState || []).includes(selectedDateISO);
+  }, [localPurelifeCompletedDatesState, selectedDateISO]);
 
 
   // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)

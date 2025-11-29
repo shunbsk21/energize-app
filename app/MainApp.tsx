@@ -12,7 +12,8 @@ import {
   setDoc,
   addDoc,
   deleteDoc,
-  updateDoc
+  updateDoc,
+  onSnapshot
 } from 'firebase/firestore';
 
 // ★ db (データベース本体) をインポート
@@ -30,7 +31,7 @@ import Tasks from './components/Tasks';
 import Notes from './components/Notes';
 import Learnings from './components/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment } from './types'; 
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification } from './types'; 
 import PersonalityDiagnosis from './components/PersonalityDiagnosis';
 import PurelifeDiagnosis from './components/PurelifeDiagnosis';
 
@@ -93,6 +94,12 @@ const ScholarIcon: React.FC<{className?: string}> = ({className}) => (
   </svg>
 );
 
+const BellIcon: React.FC<{className?: string}> = ({className}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-5-5.917V5a2 2 0 10-4 0v.083A6 6 0 004 11v3.159c0 .538-.214 1.055-.595 1.436L2 17h5m8 0v1a3 3 0 11-6 0v-1m6 0H9" />
+  </svg>
+);
+
 // --- Icon Components End ---
 
 
@@ -108,6 +115,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [view, setView] = useState<View>('habits');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationIdsRef = useRef(new Set<string>());
   
   const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -134,9 +143,34 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // ★ 通知から遷移するための選択されたグループID
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
   // --- Purelife 設定を保持して HabitTracker に渡す ---
   const [purelifeFrequency, setPurelifeFrequency] = useState<DiagnosisFrequency | null>(null);
   const [purelifeCompletedDates, setPurelifeCompletedDates] = useState<string[]>([]);
+  const [localPurelifeCompletedDates, setLocalPurelifeCompletedDates] = useState<string[]>(purelifeCompletedDates ?? []);
+
+  // sync incoming prop -> local state
+  useEffect(() => {
+    setLocalPurelifeCompletedDates(purelifeCompletedDates ?? []);
+  }, [purelifeCompletedDates]);
+ 
+  // listen for purelife completion events dispatched by PurelifeDiagnosis and update local list
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try {
+        const ce = ev as CustomEvent;
+        const date: string | undefined = ce?.detail?.date;
+        if (!date) return;
+        setLocalPurelifeCompletedDates(prev => prev.includes(date) ? prev : [date, ...prev]);
+      } catch {}
+    };
+    window.addEventListener('purelife-diagnosis-saved', handler as EventListener);
+    return () => window.removeEventListener('purelife-diagnosis-saved', handler as EventListener);
+  }, []);
 
   // add learnings state
   const [learnings, setLearnings] = useState<LearningItem[]>([]);
@@ -378,6 +412,52 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     loadData();
     
   }, [profile.id, setProfile, profile, fetchUserProfiles]);
+
+  // ★★★ 通知リスナーの設置 ★★★
+  useEffect(() => {
+    if (!profile.id || groups.length === 0) return;
+
+    const unsubscribers = groups.map(group => {      
+      const q = collection(db, 'group_chats', group.id, 'messages');
+      return onSnapshot(q, (snapshot) => {
+        const newNotifications: Notification[] = [];
+        snapshot.docChanges().forEach((change) => {
+          const messageId = change.doc.id;
+          // 新規メッセージ、自分以外の投稿、かつ未処理(refで管理)の通知のみを対象
+          if (change.type === "added" && !notificationIdsRef.current.has(messageId)) {
+            const messageData = change.doc.data();
+            if (messageData.authorId !== profile.id) {
+              notificationIdsRef.current.add(messageId); // 処理済みとしてIDを追加
+              newNotifications.push({
+                id: messageId,
+                groupId: group.id,
+                groupName: group.name,
+                message: messageData.text,
+                authorName: messageData.authorName || '名無しさん',
+                createdAt: messageData.createdAt,
+                isRead: false,
+              });
+            }
+          }
+        });
+
+        if (newNotifications.length > 0) {
+          setNotifications(prev => [...newNotifications, ...prev]);
+        }
+      });
+    });
+
+    // クリーンアップ関数
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, [groups, profile.id]); // groups, profile.id が変更されたら再実行
+
+  // 通知画面を開いたら既読にする
+  useEffect(() => {
+    if (view === 'notifications') {
+      // 少し遅延させて、UIの描画を優先する
+      setTimeout(() => setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))), 100);
+    }
+  }, [view]);
 
   // --- helper: VAPID 公開鍵を env か runtime で渡す ---
   // 環境に応じて置き換えてください（例: NEXT_PUBLIC_VAPID_KEYを設定）
@@ -860,6 +940,47 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (isLoading) {
       return <div className="text-center p-10">データを読み込んでいます...</div>;
     }
+
+    // ★★★ 通知画面のレンダリング ★★★
+    if (view === 'notifications') {
+      return (
+        <div className="bg-white"> {/* メインコンテンツ領域を白背景に */}
+          {/* フルスクリーン用のヘッダー */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+            <button onClick={() => setView('habits')} className="p-2 rounded-full hover:bg-gray-100">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 className="text-lg font-bold">通知</h2>
+            <div className="w-10"></div> {/* 中央揃えのためのスペーサー */}
+          </div>
+
+          {/* 通知リスト */}
+          <div className="max-h-[calc(100vh-120px)] overflow-y-auto bg-white">
+            {notifications.length === 0 ? (
+              <p className="text-center text-gray-500 py-12">通知はありません</p>
+            ) : (
+              notifications.map(n => (
+                <div 
+                  key={n.id} 
+                  onClick={() => {
+                    setSelectedGroupId(n.groupId);
+                    setView('groups');
+                  }}
+                  className="p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer bg-white"
+                >
+                  <p className="font-semibold">{n.groupName}</p>
+                  <p className="text-sm text-gray-700 truncate">{n.authorName}: {n.message}</p>
+                  {/* TODO: 日付のフォーマット */}
+                  {/* <p className="text-xs text-gray-400 mt-1">{new Date(n.createdAt?.toDate()).toLocaleString()}</p> */}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
   
     switch (view) {
       case 'diagnosis':
@@ -894,7 +1015,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   diagnosisFrequency={diagnosisFrequency}
                   // pass purelife configuration so HabitTracker can show the card on scheduled days
                   purelifeFrequency={purelifeFrequency ?? undefined}
-                  purelifeCompletedDates={purelifeCompletedDates}
+                  localPurelifeCompletedDates={localPurelifeCompletedDates}
                   onOpenPurelife={() => setView('purelife')}
                   onAddCheckin={handleAddCheckin}
                   onAddCheckout={handleAddCheckout}
@@ -936,6 +1057,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   setIsHelpOpen={setIsHelpOpen}
                   allUserProfiles={allUserProfiles}
                   onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
+                  selectedGroupId={selectedGroupId}
+                  onClearSelectedGroup={() => setSelectedGroupId(null)}
                 />;
       case 'records':
         return (
@@ -968,7 +1091,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 「診断, 習慣, グループ, 記録, 分析」をまとめて
   // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
-  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','habits','groups','records','analytics'].includes(view), [view]);
+  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','habits','groups','records','analytics', 'notifications'].includes(view), [view]);
 
   // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
   const showDiagnosisTabs = ['diagnosis','personality','purelife'].includes(view);
@@ -980,7 +1103,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // --- JSX (変更なし) ---
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-28"> {/* pb-28: 下部タブ分の余白 */}
+    <div className={`min-h-screen bg-gray-100 font-sans text-gray-800 ${view !== 'notifications' ? 'pb-28' : ''}`}>
       <header className={`bg-white sticky top-0 z-40 ${showDiagnosisTabs ? '' : 'shadow-sm'}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">
@@ -1020,15 +1143,30 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   </div>
                 </div>
 
-                {/* 右: プロフィール */}
-                <div className="flex items-center">
-                  <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
-                    {profile.imageUrl ? (
-                        <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
-                    ) : (
-                        <UserIcon className="w-6 h-6"/>
-                    )}
-                  </button>
+                {/* 右: 通知アイコン + プロフィール */}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      aria-label="通知"
+                      onClick={() => setView('notifications')}
+                      className="p-2 rounded-full hover:bg-gray-100 relative"
+                    >
+                      <BellIcon className="w-6 h-6 text-gray-600" />
+                      {notifications.filter(n => !n.isRead).length > 0 && (
+                        <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white" />
+                      )}
+                    </button>
+                  </div>
+                  {/* 右: プロフィール */}
+                  <div className="flex items-center">
+                    <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
+                      {profile.imageUrl ? (
+                          <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                      ) : (
+                          <UserIcon className="w-6 h-6"/>
+                      )}
+                    </button>
+                  </div>
                 </div>
             </div>
         </div>
@@ -1036,7 +1174,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       {/* 上部固定タブ（診断カテゴリ一覧） - アイコン＋ラベルで横に並ぶタブ */}
       {showDiagnosisTabs && (
-        <div className="bg-white shadow-sm sticky top-15 z-40">
+        <div className="bg-white shadow-sm sticky top-16 z-40">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <div className="flex items-center gap-2 overflow-x-auto">
               {[
@@ -1066,11 +1204,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       )}
 
-      {/* /* ===========================
-      グローバルメニュー（ヘッダーとは別の場所に固定表示）
-      - モバイル: 画面左から全高で被せる
-      - デスクトップ: ヘッダー下に小さなパネルを表示
-      =========================== */ }
+      {/*
+        ===========================
+        グローバルメニュー（ヘッダーとは別の場所に固定表示）
+        - モバイル: 画面左から全高で被せる
+        - デスクトップ: ヘッダー下に小さなパネルを表示
+        ===========================
+      */}
       {isMenuOpen && (
         <>
           {/* backdrop to cover bottom tabs and put menu topmost */}
@@ -1232,7 +1372,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       </main>
 
       {/* 下部固定タブバー */}
-      {isUnderHabits && (
+      {isUnderHabits && view !== 'notifications' && (
         <nav className="fixed left-0 right-0 bottom-0 z-50 bg-white border-t border-gray-100 safe-bottom">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-18 py-3">
