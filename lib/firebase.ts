@@ -21,9 +21,9 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 他のファイルで使えるように、Firebaseの各機能をエクスポートする
 export const auth = getAuth(app);
+// force long-polling to avoid QUIC/WebChannel issues in some networks/browsers
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  useFetchStreams: false,
 });
 
 // アナリティクスは必要に応じて有効化してください
