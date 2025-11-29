@@ -1,7 +1,16 @@
 // ...existing code...
 "use client";
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { View, DiagnosisFrequency, FrequencyType } from "../types";
+import {
+  View,
+  DiagnosisFrequency,
+  FrequencyType,
+  PersonalityDimension,
+  PersonalityAnswerValue,
+  PersonalityQuestion,
+  PersonalityHistoryRecord,
+  RecommendedHabit
+} from "../types";
 import {
   PERSONALITY_QUESTIONS,
   PERSONALITY_RATING_OPTIONS,
@@ -15,34 +24,8 @@ import AddHabitModal from "../components/AddHabitModal";
 import FrequencyEditor from "../components/FrequencyEditor";
 
 // Firestore
-import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot, FirestoreError } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
-
-type Dimension = "EI" | "SN" | "TF" | "JP";
-type AnswerValue = 1 | 2 | 3 | 4 | 5;
-
-interface Question {
-  id: number;
-  text: string;
-  dimension: Dimension;
-  direction: "positive" | "negative";
-}
-
-interface PersonalityHistoryRecord {
-  id: string;
-  date?: string;
-  type?: string;
-  percents?: Record<Dimension, number>;
-  strength?: Record<Dimension, number>;
-  answers?: Record<number, AnswerValue>;
-  createdAt?: string;
-}
-
-interface RecommendedHabit {
-  energy: 'physical'|'mental'|'emotional'|'intellectual';
-  title: string;
-  detail: string;
-}
 
 interface PersonalityProps {
   onComplete?: (result: any) => void;
@@ -76,7 +59,7 @@ const CalendarIcon: React.FC<{className?: string}> = ({className}) => (
   </svg>
 );
 
-function calcScores(answers: Record<number, AnswerValue>) {
+function calcScores(answers: Record<number, PersonalityAnswerValue>) {
   const sums: Record<Dimension, number> = { EI: 0, SN: 0, TF: 0, JP: 0 };
   const counts: Record<Dimension, number> = { EI: 0, SN: 0, TF: 0, JP: 0 };
 
@@ -238,7 +221,7 @@ const DatePickerModal: React.FC<{
 };
 
 /* --- Component --- */
-const DIMENSIONS: Dimension[] = ["EI", "SN", "TF", "JP"];
+const DIMENSIONS: PersonalityDimension[] = ["EI", "SN", "TF", "JP"];
 
 const getCurrentUid = () => {
   try {
@@ -310,7 +293,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
         } as PersonalityHistoryRecord;
       });
       setHistory(items);
-    }, (err) => {
+    }, (err: FirestoreError) => {
       console.error('personalityHistory snapshot error', err);
     });
     return () => unsub();
@@ -364,7 +347,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     setIsDetailModalOpen(false);
   };
 
-  const setAnswer = (id: number, v: AnswerValue) => {
+  const setAnswer = (id: number, v: PersonalityAnswerValue) => {
     setAnswers(prev => ({ ...prev, [id]: v }));
   };
 
@@ -376,7 +359,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   };
 
   const handleNext = async () => {
-    const idx = DIMENSIONS.indexOf(step as Dimension);
+    const idx = DIMENSIONS.indexOf(step as PersonalityDimension);
     if (idx < DIMENSIONS.length - 1) {
       setStep(DIMENSIONS[idx + 1]);
     } else {

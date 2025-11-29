@@ -3,11 +3,11 @@ import { Profile, Habit, Group as GroupType } from '../types';
 
 interface AppContextType {
   profile: Profile | null;
-  setProfile: (profile: Profile | null) => void;
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
   habits: Habit[];
-  setHabits: (habits: Habit[]) => void;
+  setHabits: React.Dispatch<React.SetStateAction<Habit[]>>;
   groups: GroupType[];
-  setGroups: (groups: GroupType[]) => void;
+  setGroups: React.Dispatch<React.SetStateAction<GroupType[]>>;
   // 他のグローバルな状態もここに追加できます
 }
 

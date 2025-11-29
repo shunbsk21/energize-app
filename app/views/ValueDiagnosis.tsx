@@ -1,7 +1,7 @@
 // ...existing code...
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { DriverKey, Habit, DiagnosisFrequency } from "../types"; // Habit をインポート
+import { DriverKey, Habit, DiagnosisFrequency, ValueAnswersMap, ValueResultRecord } from "../types"; // Habit をインポート
 import { CATEGORIES, TYPE_INFO } from "../constants";
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth"; // signInAnonymously をインポート
@@ -30,16 +30,6 @@ const VALUE_QUESTIONS = CATEGORIES.flatMap(category =>
   }))
 );
 
-type AnswersMap = Record<string, number>;
-type ResultRecord = {
-  id: string;
-  date: string; // ISO yyyy-mm-dd
-  scores: Record<DriverKey, number>;
-  type: string;
-  top1: DriverKey;
-  top2: DriverKey;
-  createdAt?: any;
-};
 // ...existing code...
 const formatDateLabel = (iso: string) => {
   try { return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }); }
@@ -188,9 +178,9 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
     return m;
   }, []);
 
-  const [answers, setAnswers] = useState<AnswersMap>(defaultAnswers);
-  const [history, setHistory] = useState<ResultRecord[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<ResultRecord | null>(null);
+  const [answers, setAnswers] = useState<ValueAnswersMap>(defaultAnswers);
+  const [history, setHistory] = useState<ValueResultRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<ValueResultRecord | null>(null);
   const [step, setStep] = useState<'idle'|'quiz'|'results'>('idle');
   const [pageIndex, setPageIndex] = useState(0);
   const PAGE_SIZE = 6;
@@ -235,7 +225,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
             top1: data.top1,
             top2: data.top2,
             createdAt: data.createdAt,
-          } as ResultRecord;
+          } as ValueResultRecord;
         });
         setHistory(items);
         const todayIso = formatLocalISO(new Date());
@@ -267,7 +257,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
   
   const setAnswer = (id: number, val: number) => setAnswers(prev => ({ ...prev, [String(id)]: val })); // ★ 修正: id を string に変換
 
-  const calculateResult = (currentAnswers: AnswersMap) => {
+  const calculateResult = (currentAnswers: ValueAnswersMap) => {
     const scores: Record<DriverKey, number> = { ACH: 0, CRE: 0, CON: 0, SEC: 0, TRU: 0, JOY: 0 };
     CATEGORIES.forEach(cat => { // ★ 修正: VALUE_QUESTIONS.filter を削除し、直接 CATEGORIES を使用
       const categoryQuestions = VALUE_QUESTIONS.filter(q => q.category === cat.key);
@@ -310,7 +300,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
       await addDoc(userHistColRef, record);
       const q = query(userHistColRef, orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ResultRecord));
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ValueResultRecord));
       setHistory(items);
       const newRec = items.find(i => i.date === todayIso) ?? null;
       setSelectedRecord(newRec);

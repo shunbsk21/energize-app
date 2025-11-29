@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
+import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE, PurelifeAnswersMap, PurelifeResultRecord } from '../constants';
 import FrequencyEditor from '../components/FrequencyEditor';
 import AddHabitModal from '../components/AddHabitModal';
 import { db, auth } from "../../lib/firebase";
@@ -19,15 +19,6 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { arrayUnion } from "firebase/firestore";
-
-type AnswersMap = Record<string, number>;
-type ResultRecord = {
-  id: string;
-  date: string; // ISO yyyy-mm-dd
-  categories: Record<string, number>; // 0-50
-  overall: number; // 0-100
-  createdAt?: any;
-};
 
 // アイコン等（既存）
 const HelpIcon: React.FC<{className?: string}> = ({className}) => (/* ...existing svg... */ <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>);
@@ -54,7 +45,7 @@ interface PurelifeProps {
 }
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
-const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: ResultRecord | null) => void; history: ResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
+const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
   if (!open) return null;
   const items = [...history].sort((a,b) => (b.date).localeCompare(a.date)).slice(0, 50);
   return (
@@ -81,7 +72,7 @@ const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelec
   );
 };
 
-const recordDatesFromHistory = (history: ResultRecord[] = []) => {
+const recordDatesFromHistory = (history: PurelifeResultRecord[] = []) => {
   return new Set(history.map(h => String(h.date)));
 };
 
@@ -161,9 +152,9 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
     return m;
   }, []);
 
-  const [answers, setAnswers] = useState<AnswersMap>(defaultAnswers);
-  const [history, setHistory] = useState<ResultRecord[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<ResultRecord | null>(null);
+  const [answers, setAnswers] = useState<PurelifeAnswersMap>(defaultAnswers);
+  const [history, setHistory] = useState<PurelifeResultRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<PurelifeResultRecord | null>(null);
   const [step, setStep] = useState<'idle'|'quiz'|'results'>('idle');
   const [pageIndex, setPageIndex] = useState(0);
   const PAGE_SIZE = 5;
@@ -209,7 +200,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
             categories: data.categories || {},
             overall: data.overall || 0,
             createdAt: data.createdAt,
-          } as ResultRecord;
+        } as PurelifeResultRecord;
         });
         setHistory(items);
         const todayIso = formatLocalISO(new Date());
@@ -250,7 +241,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
 
   const setAnswer = (id: string, val: number) => setAnswers(prev => ({ ...prev, [id]: val }));
 
-  const calcCategoryScore = (categoryKey: string, answersMap: AnswersMap) => {
+  const calcCategoryScore = (categoryKey: string, answersMap: PurelifeAnswersMap) => {
     const qs = PURELIFE_QUESTIONS.filter(q => q.category === categoryKey);
     const sumInternal = qs.reduce((acc, q) => acc + ((answersMap[q.id] ?? 3) * 2), 0);
     return sumInternal;
@@ -295,7 +286,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
           categories: data.categories || {},
           overall: data.overall || 0,
           createdAt: data.createdAt,
-        } as ResultRecord;
+        } as PurelifeResultRecord;
       });
       setHistory(items);
       const newRec = items.find(i => i.date === todayIso) ?? null;
@@ -348,12 +339,12 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
     }
   };
 
-  const lowCategories = (record: ResultRecord | null) => {
+  const lowCategories = (record: PurelifeResultRecord | null) => {
     if (!record) return [];
     return Object.entries(record.categories).filter(([k,v]) => v <= 30).map(([k]) => k);
   };
 
-  const viewDetail = (rec: ResultRecord) => {
+  const viewDetail = (rec: PurelifeResultRecord) => {
     setSelectedRecord(rec);
     setStep('results');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}

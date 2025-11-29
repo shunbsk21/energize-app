@@ -23,7 +23,7 @@ import {
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useAppContext } from './context/AppContext';
-import { useFirestoreCollection } from './hooks/useFirectore';
+import { useFirestoreCollection } from './hooks/useFirestore';
 
 // (↓ 既存のコンポーネントインポート)
 import EnergyDiagnosis from './views/EnergyDiagnosis';
