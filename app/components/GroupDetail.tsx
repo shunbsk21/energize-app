@@ -110,7 +110,8 @@ const MemberHabitsModal: React.FC<{
   onClose: () => void;
   onFollowUser: (friendId: string) => void;
   onEditMySharedHabits?: () => void;
-}> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits }) => {
+  isLoading: boolean; // isLoading prop を追加
+}> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
   const habits: Habit[] = memberHabits || (memberProfile && (memberProfile as any).habits) || [];
   const todayStr = new Date().toLocaleDateString('sv-SE');
   const sharedHabits = habits.filter(h => groupSharedHabitIds.includes(h.id));
@@ -137,6 +138,9 @@ const MemberHabitsModal: React.FC<{
     return h.title || h.name || h.label || '無題の習慣';
   };
 
+  // ★ 今日の達成率を計算
+  const completionPercent = useMemo(() => calculateCompletionPercentForDate(new Date(), sharedHabits), [sharedHabits]);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative" onClick={e => e.stopPropagation()}>
@@ -148,14 +152,27 @@ const MemberHabitsModal: React.FC<{
           <h3 className="text-lg font-bold">
             {memberProfile?.displayName || 'ユーザー'} の共有習慣
           </h3>
-          <p className="text-xs text-gray-400 mt-1">{`共有済みの習慣： ${sharedHabits.length} 件`}</p>
-          {sharedHabits.length === 0 && <p className="text-sm text-red-600 font-semibold mt-2">習慣の共有設定をしてください</p>}
+          {/* ★ ローディング状態と達成率表示 */}
+          {!isLoading && (
+            <div className="flex items-baseline gap-4 mt-1">
+              <p className="text-xs text-gray-400">{`共有中の習慣: ${sharedHabits.length}件`}</p>
+              <p className="text-xs text-gray-500">
+                今日の達成率: <span className="text-lg font-bold text-indigo-600">{completionPercent}%</span>
+              </p>
+            </div>
+          )}
         </div>
 
-        {sharedHabits.length === 0 ? (
-          <div className="py-6 text-sm text-gray-500">このメンバーは、グループと共有している習慣がありません。</div>
+        {/* ★ ローディング表示 */}
+        {isLoading ? (
+          <div className="py-10 flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-3 text-gray-600">データを読み込み中...</span>
+          </div>
+        ) : sharedHabits.length === 0 ? (
+          <div className="py-6 text-sm text-gray-500 text-center">このメンバーは、グループと共有している習慣がありません。</div>
         ) : (
-          <ul className="space-y-3 mb-4">
+          <ul className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2">
             {sharedHabits.map(habit => {
               const scheduled = isHabitScheduledForDate(habit, new Date());
               const completed = (habit.completedDates || []).includes(todayStr);
@@ -355,7 +372,6 @@ const GroupDetail: React.FC<{
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
-  const openProgress = () => setIsProgressOpen(true);
   const closeProgress = () => setIsProgressOpen(false);
   const groupSharedIds: string[] = (group as any).sharedHabitIds || (group as any).sharedHabits || [];
   const groupSharedByMember = (group as any).sharedByMember || {};
@@ -367,7 +383,49 @@ const GroupDetail: React.FC<{
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
 
+  // ★ 進捗モーダルを開く処理
+  const openProgress = async () => {
+    setIsProgressOpen(true);
+    setIsLoadingProgress(true);
+    // メンバーの習慣データと共有設定を並行して取得
+    const promises = group.members
+      .filter(id => id !== profile.id) // 自分以外
+      .map(async (memberId) => {
+        const habitPromise = !memberHabitsMap[memberId]
+          ? getDocs(query(collection(db, 'users', memberId, 'habits')))
+          : Promise.resolve(null);
+
+        const sharedSettingPromise = !memberSharedMap[memberId]
+          ? getDoc(firestoreDoc(db, 'users', memberId, 'groups', group.id))
+          : Promise.resolve(null);
+
+        try {
+          const [habitsSnap, sharedSnap] = await Promise.all([habitPromise, sharedSettingPromise]);
+
+          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) : memberHabitsMap[memberId] || [];
+          const sharedIds = sharedSnap?.exists() ? (sharedSnap.data() as any).sharedByMember?.[memberId] || [] : memberSharedMap[memberId] || [];
+
+          return { memberId, habits, sharedIds };
+        } catch (err) {
+          console.error(`[Progress] メンバー(${memberId})のデータ取得に失敗:`, err);
+          return { memberId, habits: [], sharedIds: [] }; // エラー時は空配列
+        }
+      });
+
+    const results = await Promise.all(promises);
+    // 取得したデータをまとめてstateに反映
+    const newHabitsMap = { ...memberHabitsMap };
+    const newSharedMap = { ...memberSharedMap };
+    results.forEach(r => {
+      newHabitsMap[r.memberId] = r.habits;
+      newSharedMap[r.memberId] = r.sharedIds;
+    });
+    setMemberHabitsMap(newHabitsMap);
+    setMemberSharedMap(newSharedMap);
+    setIsLoadingProgress(false);
+  };
   // --- Pagination + realtime new messages ---
   useEffect(() => {
     let unsubNew: (() => void) | null = null;
@@ -660,26 +718,33 @@ const GroupDetail: React.FC<{
             <h3 className="text-lg font-bold">{group.name} の今日の進捗</h3>
             <button onClick={onClose} className="text-gray-500">閉じる</button>
           </div>
-          <div className="space-y-3">
-            {group.members.map(memberId => {
-              const member = getMemberProfile(memberId);
-              const progress = getMemberProgress(memberId);
-              const isSelf = memberId === profile.id;
-              return (
-                <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <img src={member.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
-                    <div>
-                      <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
+          {isLoadingProgress ? (
+            <div className="py-10 flex justify-center items-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              <span className="ml-3 text-gray-600">達成率を計算中...</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {group.members.map(memberId => {
+                const member = getMemberProfile(memberId);
+                const progress = getMemberProgress(memberId);
+                const isSelf = memberId === profile.id;
+                return (
+                  <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <img src={member.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                      <div>
+                        <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="w-28 text-right">
+                      {progress === null ? <span className="text-sm text-gray-400">-</span> : <span className="font-bold text-indigo-600">{progress}%</span>}
                     </div>
                   </div>
-                  <div className="w-28 text-right">
-                    {progress === null ? <span className="text-sm text-gray-400">-</span> : <span className="font-bold text-indigo-600">{progress}%</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -746,7 +811,7 @@ const GroupDetail: React.FC<{
         </div>
 
         {/* messages area: flexible scroll region */}
-        <div className="flex-1 pt-16 p-2 overflow-hidden">
+        <div className="flex-1 pt-24 p-2 overflow-hidden">
           <div ref={messagesContainerRef} className="space-y-4 overflow-y-auto pr-4 pb-28 h-full">
             {groupedMessages.map(grouped => (
               <div key={grouped.date} className="mb-6">
@@ -767,7 +832,12 @@ const GroupDetail: React.FC<{
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                         {!isAuthor && (
-                          <img src={authorImageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} alt={message.authorName} className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1" />
+                          <img
+                            src={authorImageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
+                            alt={message.authorName}
+                            className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
+                            onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
+                          />
                         )}
                         <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}>
                           {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName || '名無しのさん'}</p>}
@@ -785,18 +855,25 @@ const GroupDetail: React.FC<{
           </div>
         </div>
 
+
         {isMemberModalOpen && selectedMemberId && (
-          <MemberHabitsModal
-            memberId={selectedMemberId}
-            memberProfile={(allUserProfiles.get(selectedMemberId) as Profile | Friend) || null}
-            memberHabits={memberHabitsMap[selectedMemberId]}
-            groupSharedHabitIds={memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []}
-            currentUserId={profile.id}
-            isFollowing={followingIds.has(selectedMemberId)}
-            onClose={() => { setIsMemberModalOpen(false); setSelectedMemberId(null); }}
-            onFollowUser={(id) => { onFollowUser(id); }}
-            onEditMySharedHabits={() => { setIsMemberModalOpen(false); setIsSharedHabitsOpen(true); }}
-          />
+          (() => {
+            const isLoadingData = memberHabitsMap[selectedMemberId] === undefined || memberSharedMap[selectedMemberId] === undefined;
+            return (
+              <MemberHabitsModal
+                memberId={selectedMemberId}
+                memberProfile={(allUserProfiles.get(selectedMemberId) as Profile | Friend) || null}
+                memberHabits={memberHabitsMap[selectedMemberId]}
+                groupSharedHabitIds={memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []}
+                currentUserId={profile.id}
+                isFollowing={followingIds.has(selectedMemberId)}
+                onClose={() => { setIsMemberModalOpen(false); setSelectedMemberId(null); }}
+                onFollowUser={(id) => { onFollowUser(id); }}
+                onEditMySharedHabits={() => { setIsMemberModalOpen(false); setIsSharedHabitsOpen(true); }}
+                isLoading={isLoadingData}
+              />
+            );
+          })()
         )}
 
         {isSharedHabitsOpen && (

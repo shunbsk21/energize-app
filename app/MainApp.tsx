@@ -13,7 +13,9 @@ import {
   addDoc,
   deleteDoc,
   updateDoc,
-  onSnapshot
+  onSnapshot,
+  query,
+  orderBy,
 } from 'firebase/firestore';
 
 // ★ db (データベース本体) をインポート
@@ -415,49 +417,83 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // ★★★ 通知リスナーの設置 ★★★
   useEffect(() => {
-    if (!profile.id || groups.length === 0) return;
+    if (!profile.id) return;
 
-    const unsubscribers = groups.map(group => {      
-      const q = collection(db, 'group_chats', group.id, 'messages');
-      return onSnapshot(q, (snapshot) => {
-        const newNotifications: Notification[] = [];
-        snapshot.docChanges().forEach((change) => {
+    // 1. 自分の通知コレクションをリッスンし、UIに反映する
+    const notificationsRef = collection(db, 'users', profile.id, 'notifications');
+    const q = query(notificationsRef, orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loadedNotifications: Notification[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as any)
+      }));
+      setNotifications(loadedNotifications);
+    });
+
+    // 2. 各グループのチャットをリッスンして、新しいメッセージがあれば通知を作成・保存する
+    const chatUnsubscribers = groups.map(group => {
+      const messagesRef = collection(db, 'group_chats', group.id, 'messages');
+      return onSnapshot(messagesRef, (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          if (change.type !== "added") return;
+
+          const messageData = change.doc.data();
           const messageId = change.doc.id;
-          // 新規メッセージ、自分以外の投稿、かつ未処理(refで管理)の通知のみを対象
-          if (change.type === "added" && !notificationIdsRef.current.has(messageId)) {
-            const messageData = change.doc.data();
-            if (messageData.authorId !== profile.id) {
-              notificationIdsRef.current.add(messageId); // 処理済みとしてIDを追加
-              newNotifications.push({
-                id: messageId,
+
+          // 自分以外のメッセージの場合、通知を作成
+          if (messageData.authorId !== profile.id) {
+            const notificationRef = doc(db, 'users', profile.id, 'notifications', messageId);
+            // 既に同じ通知が存在しないか確認してから作成
+            const notificationSnap = await getDoc(notificationRef);
+            if (!notificationSnap.exists()) {
+            // sanitize: do not send undefined fields to Firestore
+              const toSave: any = {
                 groupId: group.id,
                 groupName: group.name,
                 message: messageData.text,
                 authorName: messageData.authorName || '名無しさん',
-                createdAt: messageData.createdAt,
+                // fallback to ISO string when createdAt is missing
+                createdAt: messageData.createdAt ?? new Date().toISOString(),
                 isRead: false,
-              });
+              };
+              const safe = Object.fromEntries(Object.entries(toSave).filter(([_, v]) => v !== undefined));
+              await setDoc(notificationRef, safe);
             }
           }
         });
-
-        if (newNotifications.length > 0) {
-          setNotifications(prev => [...newNotifications, ...prev]);
-        }
       });
     });
 
     // クリーンアップ関数
-    return () => unsubscribers.forEach(unsub => unsub());
-  }, [groups, profile.id]); // groups, profile.id が変更されたら再実行
+    return () => {
+      unsubscribe();
+      chatUnsubscribers.forEach(unsub => unsub());
+    };
+  }, [groups, profile.id]);
 
   // 通知画面を開いたら既読にする
   useEffect(() => {
-    if (view === 'notifications') {
-      // 少し遅延させて、UIの描画を優先する
-      setTimeout(() => setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))), 100);
+    if (view === 'notifications' && profile.id) {
+      // 画面を開いたら未読通知を全て isRead=true に更新する
+      const markRead = async () => {
+        try {
+          const unread = notifications.filter(n => !n.isRead);
+          if (unread.length === 0) return;
+          await Promise.all(unread.map(n => {
+            const ref = doc(db, 'users', profile.id, 'notifications', n.id);
+            return updateDoc(ref, { isRead: true }).catch(err => {
+              // updateDoc fail (doc missing) -> fallback setDoc merge
+              return setDoc(ref, { isRead: true }, { merge: true });
+            });
+          }));
+        } catch (e) {
+          console.error('failed to mark notifications read', e);
+        }
+      };
+      // 少し遅延して UI を優先
+      setTimeout(markRead, 150);
     }
-  }, [view]);
+  }, [view, notifications, profile.id]);
 
   // --- helper: VAPID 公開鍵を env か runtime で渡す ---
   // 環境に応じて置き換えてください（例: NEXT_PUBLIC_VAPID_KEYを設定）

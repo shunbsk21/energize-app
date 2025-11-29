@@ -2,8 +2,7 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-// import { getAnalytics } from "firebase/analytics";
+import { initializeFirestore } from "firebase/firestore";// import { getAnalytics } from "firebase/analytics";
 
 // .env.local から環境変数を読み込む
 const firebaseConfig = {
@@ -22,7 +21,10 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 他のファイルで使えるように、Firebaseの各機能をエクスポートする
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+});
 
 // アナリティクスは必要に応じて有効化してください
 // export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
