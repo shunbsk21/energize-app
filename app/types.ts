@@ -20,6 +20,8 @@ export interface Profile {
   imageUrl?: string | null;
 }
 
+export type EnergyCategory = string;
+
 export interface EnergyRecord {
   date: string;
   [k: string]: any;
