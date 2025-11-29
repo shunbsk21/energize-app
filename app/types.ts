@@ -24,12 +24,8 @@ export interface Profile {
 
 export type EnergyCategory = 'physical' | 'mental' | 'emotional' | 'intellectual';
 
-export interface EnergyRecord {
+export interface EnergyRecord extends EnergyScores {
   date: string;
-  physical: number;
-  mental: number;
-  emotional: number;
-  intellectual: number;
 }
 
 export interface Habit {
@@ -49,7 +45,10 @@ export interface Habit {
 }
 
 export interface EnergyScores {
-  [k: string]: number;
+  physical: number;
+  mental: number;
+  emotional: number;
+  intellectual: number;
 }
 
 export interface DiagnosisFrequency {
