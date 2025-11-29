@@ -12,13 +12,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CalendarIcon,
-  HelpIcon,
   DiagnosisIcon,
   ListBulletIcon,
   EditIcon,
   CheckCircleIcon,
   BrainIcon,
-  MoodIcon,
   SunIcon,
   MoonIcon,
   ScholarIconSmall
