@@ -6,6 +6,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import Login from './views/Login';
 import MainApp from './MainApp';
 // types.ts が page.tsx と同じ app/ フォルダにあるため、パスを ./types にします
+import { AppProvider } from './context/AppContext';
 import { Profile } from './types'; 
 
 const App: React.FC = () => {
@@ -59,7 +60,11 @@ const App: React.FC = () => {
   }
 
   // profile があればメインアプリ画面
-  return <MainApp profile={profile} setProfile={setProfile} />;
+  return (
+    <AppProvider>
+      <MainApp profile={profile} setProfile={setProfile} />
+    </AppProvider>
+  );
 };
 
 export default App;

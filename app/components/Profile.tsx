@@ -138,7 +138,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   
   // (↓ handleSave は変更なし)
   const handleSave = () => {
-    onSave(displayName, imageData);
+    onSave(displayName || profile.displayName || '', imageData);
     onClose();
   }
 
@@ -177,7 +177,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
              <div className="relative">
                  <img
                      src={imagePreview || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='}
-                     alt="プロフィール画像"
+                     alt={displayName ?? ''}
                      className="w-28 h-28 rounded-full object-cover bg-gray-200 ring-4 ring-white"
                  />
                  <button

@@ -202,7 +202,7 @@ const CreateGroupModal: React.FC<{
                             {following.length > 0 ? following.map(friend => (
                                 <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                     <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                    <img src={friend.imageUrl || 'data:image/svgxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
+                                    <img src={friend.imageUrl ?? 'data:image/svgxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName ?? ''} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
                                     <span className="ml-2 text-gray-800">{friend.displayName}</span>
                                 </div>
                             )) : <p className="text-center text-sm text-gray-500 py-4">まず友達をフォローしましょう</p>}
@@ -255,7 +255,7 @@ const InviteMemberModal: React.FC<{
                         {availableFriends.length > 0 ? availableFriends.map(friend => (
                             <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                                 <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                                <img src={friend.imageUrl || 'data:image/svgxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
+                                <img src={friend.imageUrl ?? 'data:image/svgxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName ?? ''} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
                                 <span className="ml-2 text-gray-800">{friend.displayName}</span>
                             </div>
                         )) : (
@@ -600,7 +600,7 @@ const Group: React.FC<GroupProps> = ({
                 return (
                   <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <img src={member.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                      <img src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
                       <div>
                         <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
                       </div>
@@ -677,7 +677,7 @@ const Group: React.FC<GroupProps> = ({
                         ) : (
                             following.map(f => (
                                 <div key={f.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
-                                    <img src={f.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={f.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                    <img src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={f.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
                                     <div className="flex-1">
                                         <div className="font-medium text-gray-800">{f.displayName}</div>
                                         {/* ID は個人情報のため表示しない */}
@@ -703,7 +703,7 @@ const Group: React.FC<GroupProps> = ({
                                 ) : (
                                     candidates.map(c => (
                                         <div key={c.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-50">
-                                            <img src={c.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={c.displayName} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                            <img src={c.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={c.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
                                             <div className="flex-1">
                                                 <div className="font-medium text-gray-800">{c.displayName}</div>
                                                 <div className="text-xs text-gray-500">{c.id}</div>
@@ -731,10 +731,7 @@ const Group: React.FC<GroupProps> = ({
                 <div className="flex items-center gap-3">
                     <div className="flex -space-x-2">
                         {following.slice(0, 8).map(f => (
-                            <img key={f.id}
-                                 src={f.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
-                                 alt={f.displayName}
-                                 className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
+                            <img key={f.id} src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} alt={f.displayName ?? ''} className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
                         ))}
                         {following.length > 8 && (
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-600 ring-2 ring-white">+{following.length - 8}</div>
@@ -803,11 +800,7 @@ const Group: React.FC<GroupProps> = ({
                                   {group.members.slice(0,5).map(memberId => {
                                       const member = allUserProfiles.get(memberId);
                                       return (
-                                        <img key={memberId} 
-                                          src={member?.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} 
-                                          alt={member?.displayName || 'member'} 
-                                          className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200"
-                                        />
+                                        <img key={memberId} src={member?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} alt={member?.displayName ?? 'member'} className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
                                       );
                                   })}
                               </div>

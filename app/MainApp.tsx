@@ -22,6 +22,8 @@ import {
 // ★ db (データベース本体) をインポート
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import { useAppContext } from './context/AppContext';
+import { useFirestoreCollection } from './hooks/useFirectore';
 
 // (↓ 既存のコンポーネントインポート)
 import EnergyDiagnosis from './views/EnergyDiagnosis';
@@ -121,8 +123,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationIdsRef = useRef(new Set<string>());
   
-  const [energyHistory, setEnergyHistory] = useState<EnergyRecord[]>([]);
-  const [habits, setHabits] = useState<Habit[]>([]);
+  const { habits, setHabits, groups, setGroups, profile: contextProfile, setProfile: setContextProfile } = useAppContext();
+  const { data: energyHistory, loading: energyHistoryLoading } = useFirestoreCollection<EnergyRecord>(`users/${profile.id}/energyHistory`);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
 
   // 新規: チェックイン / チェックアウトの state
@@ -132,7 +134,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
   
-  const [groups, setGroups] = useState<GroupType[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   
   // ★ コメントの state を削除
@@ -142,7 +143,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   const [allUserProfiles, setAllUserProfiles] = useState<Map<string, Profile | Friend>>(new Map());
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // useFirestoreCollection がローディングを管理
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -183,6 +184,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // add learnings state
   const [learnings, setLearnings] = useState<LearningItem[]>([]);
 
+  // Firestoreからのデータ取得をカスタムフックに置き換え
+  const { data: firestoreHabits, loading: habitsLoading } = useFirestoreCollection<Habit>(`users/${profile.id}/habits`);
+  const { data: firestoreGroups, loading: groupsLoading } = useFirestoreCollection<GroupType>(`users/${profile.id}/groups`);
+
+  useEffect(() => {
+    setHabits(firestoreHabits);
+  }, [firestoreHabits, setHabits]);
+
+  useEffect(() => {
+    setGroups(firestoreGroups);
+  }, [firestoreGroups, setGroups]);
   // Admin判定
   const isAdmin = Boolean(profile && profile.id === ADMIN_ID);
 
@@ -295,14 +307,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // ★★★ データの「読み込み」処理 (Firestore) (★コメント読み込みを削除★) ★★★
   useEffect(() => {
     if (!profile.id) {
-      setIsLoading(false);
       return;
     }
     
     const loadData = async () => {
       try {
         const baseRef = doc(db, 'users', profile.id);
-        const habitsRef = collection(baseRef, 'habits');
         const historyRef = collection(baseRef, 'energyHistory');
         const checkinsRef = collection(baseRef, 'checkins');
         const checkoutsRef = collection(baseRef, 'checkouts');
@@ -310,32 +320,22 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         
         const followingRef = collection(baseRef, 'following');
         const followersRef = collection(baseRef, 'followers');
-        const groupsRef = collection(baseRef, 'groups');
         const groupInvitesRef = collection(baseRef, 'group_invites');
 
         const [
-            settingsSnap, habitsSnap, historySnap,
-            followingSnap, followersSnap, groupsSnap, groupInvitesSnap,
+            settingsSnap,
+            followingSnap, followersSnap, groupInvitesSnap,
             checkinsSnap, checkoutsSnap
         ] = await Promise.all([
             getDoc(settingsRef),
-            getDocs(habitsRef),
-            getDocs(historyRef),
             getDocs(followingRef),
             getDocs(followersRef),
-            getDocs(groupsRef),
             getDocs(groupInvitesRef),
             getDocs(checkinsRef),
             getDocs(checkoutsRef)
         ]);
 
         // --- 読み込んだデータを state にセット ---
-        
-        const loadedHabits = habitsSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Habit, 'id'>, id: d.id }));
-        setHabits(loadedHabits);
-
-        const loadedHistory = historySnap.docs.map((d: QueryDocumentSnapshot) => d.data() as EnergyRecord);
-        setEnergyHistory(loadedHistory);
 
         // checkins / checkouts を state に入れる
         const loadedCheckins = checkinsSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Checkin, 'id'>) }));
@@ -345,8 +345,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         
         const loadedFollowing = followingSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         const loadedFollowers = followersSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
-        
-        const loadedGroups = groupsSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
         const loadedGroupInvites = groupInvitesSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
         setGroupInvites(loadedGroupInvites);
 
@@ -390,7 +388,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         // --- 4. 全員のプロフィール情報を取得 ---
         const followingIds = loadedFollowing.map(f => f.id);
         const followersIds = loadedFollowers.map(f => f.id);
-        const memberIds = loadedGroups.flatMap(g => g.members);
+        const memberIds = groups.flatMap(g => g.members);
         const inviteMemberIds = loadedGroupInvites.flatMap(g => g.members);
         
         const allUserIds = Array.from(new Set([...followingIds, ...followersIds, ...memberIds, ...inviteMemberIds]));
@@ -408,7 +406,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         
         setFollowing(updatedFollowing);
         setFollowers(updatedFollowers);
-        setGroups(loadedGroups);
 
         // --- tasks の読み込み (users/{uid}/tasks) ---
         try {
@@ -422,14 +419,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       } catch (error) {
         console.error("データの読み込みに失敗しました:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
     loadData();
     
-  }, [profile.id, setProfile, profile, fetchUserProfiles]);
+  }, [profile.id, setProfile, profile, fetchUserProfiles, groups]);
 
   // ★★★ 通知リスナーの設置 ★★★
   useEffect(() => {
@@ -543,15 +538,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   // (1) 診断履歴 (変更なし)
   const handleDiagnosisComplete = async (scores: EnergyScores) => {
     if (!profile.id) return;
-    const today = new Date().toLocaleDateString('sv-SE');
-    const newRecord: EnergyRecord = { date: today, ...scores };
     try {
-      const historyRef = doc(db, 'users', profile.id, 'energyHistory', today);
-      await setDoc(historyRef, newRecord);
-      setEnergyHistory(prev => {
-          const otherDays = prev.filter(r => r.date !== today);
-          return [...otherDays, newRecord].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      });
       setView('diagnosis');
     } catch (error) {
       console.error("診断履歴の保存に失敗しました:", error);
@@ -993,7 +980,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // ★★★ ビューのレンダリング (★修正あり★) ★★★
   const renderView = () => {
-    if (isLoading) {
+    if (isLoading || habitsLoading || groupsLoading || energyHistoryLoading) {
       return <div className="text-center p-10">データを読み込んでいます...</div>;
     }
 
@@ -1223,7 +1210,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   <div className="flex items-center">
                     <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
                       {profile.imageUrl ? (
-                          <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                          <img src={profile.imageUrl ?? ''} alt={profile.displayName || ''} className="w-full h-full object-cover" />
                       ) : (
                           <UserIcon className="w-6 h-6"/>
                       )}
@@ -1302,7 +1289,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex items-center gap-3 px-2 py-3 bg-white rounded-lg shadow-sm mb-4">
               <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
                 {profile.imageUrl ? (
-                  <img src={profile.imageUrl} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                  <img src={profile.imageUrl ?? ''} alt={profile.displayName || ''} className="w-full h-full object-cover" />
                 ) : (
                   <UserIcon className="w-6 h-6 text-gray-500" />
                 )}
@@ -1362,7 +1349,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               </div>
               <div className="flex items-center gap-3 px-2 py-2 bg-gray-50 rounded mb-3">
                 <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-                  {profile.imageUrl ? <img src={profile.imageUrl} className="w-full h-full object-cover" alt="" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
+                  {profile.imageUrl ? <img src={profile.imageUrl ?? ''} className="w-full h-full object-cover" alt="" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>

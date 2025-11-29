@@ -497,11 +497,14 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
                         {personalityResult && (
                           <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
                             {personalityResult.imageSrc ? (
-                              <img
-                                src={personalityResult.imageSrc}
-                                alt={personalityResult.data.name}
-                                className="w-full h-44 md:h-56 object-cover block"
-                              />
+                              <div className="relative w-full h-44 md:h-56">
+                                <Image
+                                  src={personalityResult.imageSrc ?? ''}
+                                  alt={personalityResult.data.name ?? ''}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </div>
                             ) : (
                               <div className="w-full h-44 md:h-56 bg-gray-100 flex items-center justify-center text-gray-400">画像なし</div>
                             )}

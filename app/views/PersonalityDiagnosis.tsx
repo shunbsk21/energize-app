@@ -501,7 +501,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {/* 画像を横いっぱいに表示 */}
             {resultImageSrc ? (
-              <img src={resultImageSrc} alt={TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type} className="w-full h-44 md:h-56 object-cover block" />
+              <img src={resultImageSrc ?? ''} alt={TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type} className="w-full h-44 md:h-56 object-cover block" />
             ) : (
               <div className="w-full h-44 md:h-56 bg-gray-100 flex items-center justify-center text-gray-400">画像なし</div>
             )}
