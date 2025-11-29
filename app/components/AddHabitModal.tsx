@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { FrequencyType } from "../types";
+import { DiagnosisFrequency } from "../types";
 
 // simple textarea auto grow helper (copied from tracker)
 function autoGrowTextArea(el?: HTMLTextAreaElement | null) {
@@ -15,7 +15,7 @@ interface InitialDraft {
   detail?: string;
   startDate?: string;
   // 追加: 初期頻度 / 型 / 目標値 / 単位 を受け取る
-  frequencyType?: FrequencyType;
+  frequencyType?: DiagnosisFrequency['frequencyType'];
   frequencyValue?: number[];
   type?: "binary" | "amount";
   target?: number;
@@ -41,7 +41,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
   const [name, setName] = useState(initial?.title ?? "");
   const [details, setDetails] = useState(initial?.detail ?? "");
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
-  const [frequency, setFrequency] = useState<{ type: FrequencyType; value: number[] }>({ type: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
+  const [frequency, setFrequency] = useState<DiagnosisFrequency>({ frequencyType: initial?.frequencyType ?? "daily", value: initial?.frequencyValue ?? [] });
   const [type, setType] = useState<"binary" | "amount">(initial?.type ?? "binary");
   const [target, setTarget] = useState<number | undefined>(initial?.target ?? undefined);
   const [unit, setUnit] = useState<string>(initial?.unit ?? "");
@@ -150,7 +150,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
             <select
               value={frequency.type}
-              onChange={e => setFrequency({ type: e.target.value as FrequencyType, value: [] })}
+              onChange={e => setFrequency({ frequencyType: e.target.value as DiagnosisFrequency['frequencyType'], value: [] })}
               className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             >
               <option value="daily">毎日</option>

@@ -1,7 +1,7 @@
 // ...existing code...
 "use client";
 import React from "react";
-import { DiagnosisFrequency, FrequencyType } from "../types";
+import { DiagnosisFrequency } from "../types";
 
 const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -15,7 +15,7 @@ const FrequencyEditor: React.FC<{
         <label className="block text-sm font-medium text-gray-700 mb-1">頻度</label>
         <select
           value={frequency.frequencyType}
-          onChange={e => setFrequency({ frequencyType: e.target.value as FrequencyType, frequencyValue: [] })}
+          onChange={e => setFrequency({ frequencyType: e.target.value as DiagnosisFrequency['frequencyType'], frequencyValue: [] })}
           className="w-full p-3 text-base border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
         >
           <option value="daily">毎日</option>
@@ -29,18 +29,18 @@ const FrequencyEditor: React.FC<{
           <div className="text-sm text-gray-600 mb-2">曜日を選択（複数可）</div>
           <div className="flex justify-center gap-1">
             {WEEK_DAYS.map((day, index) => {
-              const active = frequency.frequencyValue.includes(index);
               return (
                 <button
                   type="button"
                   key={index}
                   onClick={() => {
-                    const newValue = frequency.frequencyValue.includes(index)
-                      ? frequency.frequencyValue.filter((d: number) => d !== index)
-                      : [...frequency.frequencyValue, index];
-                    setFrequency(prev => ({ ...prev, frequencyValue: newValue.sort((a:any,b:any)=>a-b) }));
+                    const currentValues = (frequency.frequencyValue || []) as number[];
+                    const newValue = currentValues.includes(index)
+                      ? currentValues.filter((d: number) => d !== index)
+                      : [...currentValues, index];
+                    setFrequency(prev => ({ ...prev, frequencyValue: newValue.sort((a, b) => a - b) }));
                   }}
-                  className={`w-10 h-10 rounded-full font-semibold transition-colors ${frequency.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  className={`w-10 h-10 rounded-full font-semibold transition-colors ${((frequency.frequencyValue || []) as number[]).includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                 >
                   {day}
                 </button>
