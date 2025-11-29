@@ -37,6 +37,9 @@ export interface Habit {
   frequencyValue?: any[];
   type?: 'amount' | 'boolean';
   targetAmount?: number;
+  target?: number;
+  completedDates?: string[];
+  completedAmounts?: Record<string, number>;
 }
 
 export interface EnergyScores {
