@@ -116,8 +116,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     onSave
 }) => {
   const [displayName, setDisplayName] = useState(profile.displayName);
-  const [imagePreview, setImagePreview] = useState<string | null>(profile.imageUrl);
-  const [imageData, setImageData] = useState<string | null>(profile.imageUrl);
+  const [imagePreview, setImagePreview] = useState<string | null>(profile.imageUrl ?? null);
+  const [imageData, setImageData] = useState<string | null>(profile.imageUrl ?? null);
   const [copySuccess, setCopySuccess] = useState('');
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
