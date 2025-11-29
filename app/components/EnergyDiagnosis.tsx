@@ -76,7 +76,7 @@ const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'parti
         return 'none';
     }
 
-    const completedCount = scheduledHabits.filter(h => h.completedDates.includes(dateStr)).length;
+    const completedCount = scheduledHabits.filter(h => (h.completedDates ?? []).includes(dateStr)).length;
 
     if (completedCount === 0) {
         return 'none';
