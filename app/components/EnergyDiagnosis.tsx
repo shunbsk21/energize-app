@@ -282,7 +282,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
       const scores: EnergyScores = { physical: 0, mental: 0, emotional: 0, intellectual: 0 };
       for (const category of categoryOrder) {
         let categoryScore = 0;
-        QUESTIONS[category].forEach(q => {
+        QUESTIONS[category].forEach((q: { id: string | number; isReversed?: boolean }) => {
           const answer = answers[q.id] ?? 0;
           categoryScore += q.isReversed ? 4 - answer : answer;
         });
