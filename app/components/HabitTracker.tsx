@@ -49,6 +49,11 @@ interface HabitTrackerProps {
   purelifeFrequency?: DiagnosisFrequency;
   localPurelifeCompletedDates?: string[]; // ISO 'YYYY-MM-DD' strings
   onOpenPurelife?: () => void;
+
+  // ★ Value Diagnosis の props を追加
+  valueDiagnosisFrequency?: DiagnosisFrequency;
+  valueDiagnosisCompletedDates?: string[];
+  onOpenValueDiagnosis?: () => void;
 }
 
 // 優先度ソート用
@@ -600,6 +605,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   purelifeFrequency,
   localPurelifeCompletedDates,
   onOpenPurelife,
+  valueDiagnosisFrequency,
+  valueDiagnosisCompletedDates,
+  onOpenValueDiagnosis,
   isAdmin = false
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
@@ -1745,6 +1753,23 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                       purelife診断を実施する
                     </span>
                     {!isPurelifeCompleted && <ChevronRightIcon className="w-6 h-6 text-teal-600" />}
+                  </div>
+                )}
+
+                {/* ★ Value Diagnosis カード */}
+                {valueDiagnosisFrequency && isDiagnosisScheduledForDate(valueDiagnosisFrequency, selectedDate) && (
+                  <div
+                    onClick={() => {
+                      if (valueDiagnosisCompletedDates?.includes(selectedDateISO)) return;
+                      onOpenValueDiagnosis?.();
+                    }}
+                    className={`mt-2 flex items-center p-4 shadow-sm rounded-lg transition ${valueDiagnosisCompletedDates?.includes(selectedDateISO) ? 'bg-green-50 hover:bg-green-100 cursor-default' : 'bg-blue-50 hover:bg-blue-100 cursor-pointer'}`}
+                  >
+                    {valueDiagnosisCompletedDates?.includes(selectedDateISO) ? <CheckCircleIcon className="w-6 h-6 text-green-600" /> : <BrainIcon className="w-6 h-6 text-blue-600" />}
+                    <span className={`flex-grow mx-4 text-lg font-semibold ${valueDiagnosisCompletedDates?.includes(selectedDateISO) ? 'line-through text-gray-500' : 'text-blue-800'}`}>
+                      価値観を診断する
+                    </span>
+                    {!valueDiagnosisCompletedDates?.includes(selectedDateISO) && <ChevronRightIcon className="w-6 h-6 text-blue-600" />}
                   </div>
                 )}
                 

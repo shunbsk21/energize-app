@@ -36,6 +36,8 @@ import Learnings from './components/Learnings';
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification } from './types'; 
 import PersonalityDiagnosis from './components/PersonalityDiagnosis';
 import PurelifeDiagnosis from './components/PurelifeDiagnosis';
+import ValueDiagnosis from './components/ValueDiagnosis';
+
 
 // --- Icon Components Start (コード変更なし) ---
 
@@ -154,6 +156,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [purelifeFrequency, setPurelifeFrequency] = useState<DiagnosisFrequency | null>(null);
   const [purelifeCompletedDates, setPurelifeCompletedDates] = useState<string[]>([]);
   const [localPurelifeCompletedDates, setLocalPurelifeCompletedDates] = useState<string[]>(purelifeCompletedDates ?? []);
+
+  // ★ Value Diagnosis の設定と完了履歴
+  const [valueDiagnosisFrequency, setValueDiagnosisFrequency] = useState<DiagnosisFrequency | null>(null);
+  const [valueDiagnosisCompletedDates, setValueDiagnosisCompletedDates] = useState<string[]>([]);
+
 
   // sync incoming prop -> local state
   useEffect(() => {
@@ -369,6 +376,16 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           }
           const completed = settingsData.purelifeCompletedDates ?? settingsData.purelife_completed_dates ?? settingsData.purelifeCompleted ?? [];
           if (Array.isArray(completed)) setPurelifeCompletedDates(completed);
+
+          // ★ Value Diagnosis の頻度設定を読み込む
+          if (settingsData.valueDiagnosisFrequency) {
+            setValueDiagnosisFrequency(settingsData.valueDiagnosisFrequency);
+          }
+        }
+        // ★ Value Diagnosis の完了履歴を読み込む
+        const valueHistorySnap = await getDocs(collection(baseRef, 'valueHistory'));
+        if (!valueHistorySnap.empty) {
+          setValueDiagnosisCompletedDates(valueHistorySnap.docs.map(d => d.data().date as string));
         }
 
         // --- 4. 全員のプロフィール情報を取得 ---
@@ -1039,6 +1056,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           setIsHelpOpen={setIsHelpOpen}
           handleAddHabit={handleAddHabit}
         />;
+      case 'value':
+        return <ValueDiagnosis />;
       case 'habits':
         return <HabitTracker 
                   habits={habits} 
@@ -1052,6 +1071,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   // pass purelife configuration so HabitTracker can show the card on scheduled days
                   purelifeFrequency={purelifeFrequency ?? undefined}
                   localPurelifeCompletedDates={localPurelifeCompletedDates}
+                  // ★ Value Diagnosis の設定と完了履歴を渡す
+                  valueDiagnosisFrequency={valueDiagnosisFrequency ?? undefined}
+                  valueDiagnosisCompletedDates={valueDiagnosisCompletedDates}
+                  onOpenValueDiagnosis={() => setView('value')}
                   onOpenPurelife={() => setView('purelife')}
                   onAddCheckin={handleAddCheckin}
                   onAddCheckout={handleAddCheckout}
@@ -1130,7 +1153,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','habits','groups','records','analytics', 'notifications'].includes(view), [view]);
 
   // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
-  const showDiagnosisTabs = ['diagnosis','personality','purelife'].includes(view);
+  const showDiagnosisTabs = ['diagnosis','personality','purelife','value'].includes(view);
 
   const mainContainerClass = isView('notes')
     ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
@@ -1217,6 +1240,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                 { key: 'diagnosis', label: 'エネルギー診断', icon: <DiagnosisIcon className="w-5 h-5" /> },
                 { key: 'personality', label: 'パーソナリティ診断', icon: <UserIcon className="w-5 h-5" /> },
                 { key: 'purelife', label: 'PureLife診断', icon: <DiagnosisIcon className="w-5 h-5" /> },
+                { key: 'value', label: '価値観診断', icon: <UserIcon className="w-5 h-5" /> },
               ].map(tab => {
                 const active = isView(tab.key as View);
                 return (
