@@ -1022,7 +1022,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                 <div 
                   key={n.id} 
                   onClick={() => {
-                    setSelectedGroupId(n.groupId);
+                    setSelectedGroupId(n.groupId ?? null);
                     setView('groups');
                   }}
                   className="p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer bg-white"
