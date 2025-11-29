@@ -14,6 +14,8 @@ export type View =
 
 export type DriverKey = 'ACH' | 'CRE' | 'CON' | 'SEC' | 'TRU' | 'JOY';
 
+export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'custom';
+
 export interface Profile {
   id: string;
   displayName?: string;
@@ -33,7 +35,7 @@ export interface Habit {
   detail?: string;
   createdAt?: string;
   startDate?: string;
-  frequencyType?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  frequencyType?: FrequencyType;
   frequencyValue?: any[];
   type?: 'amount' | 'boolean';
   targetAmount?: number;
@@ -47,7 +49,7 @@ export interface EnergyScores {
 }
 
 export interface DiagnosisFrequency {
-  frequencyType: 'daily' | 'weekly' | 'monthly' | 'custom';
+  frequencyType: FrequencyType;
   frequencyValue?: any[];
 }
 
