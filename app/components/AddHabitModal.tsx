@@ -186,7 +186,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
                 <input
                   type="text"
                   placeholder="例: 1, 15"
-                  defaultValue={frequency.frequencyValue.join(', ')}
+                  defaultValue={(frequency.frequencyValue ?? []).join(', ')}
                   onChange={e => {
                     const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
                     setFrequency(prev => ({ ...prev, frequencyValue: value.sort((a,b) => a - b) }));
