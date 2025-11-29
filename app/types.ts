@@ -33,6 +33,7 @@ export interface Habit {
   detail?: string;
   createdAt?: string;
   startDate?: string;
+  frequencyType?: 'daily' | 'weekly' | 'monthly' | 'custom';
 }
 
 export interface EnergyScores {
