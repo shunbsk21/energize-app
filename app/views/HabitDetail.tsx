@@ -238,6 +238,7 @@ const calculateCurrentStreak = (habit: Habit): number => {
 };
 
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
+  if (!habit.startDate) return false;
   const habitStartDate = new Date(habit.startDate);
   habitStartDate.setHours(0,0,0,0);
   const targetDate = new Date(date);

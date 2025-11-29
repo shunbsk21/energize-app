@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
-import GroupDetail from './GroupDetail';
+import GroupDetail from '../views/GroupDetail';
 
 interface GroupProps {
     profile: Profile;
@@ -29,6 +29,7 @@ interface GroupProps {
 }
 
 const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
+    if (!habit.startDate) return false;
     const habitStartDate = new Date(habit.startDate);
     habitStartDate.setHours(0,0,0,0);
     const targetDate = new Date(date);
@@ -557,8 +558,9 @@ const Group: React.FC<GroupProps> = ({
       const weekdayNames = ['日','月','火','水','木','金','土'];
       const getMemberProfile = (memberId: string) => allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
       const isHabitScheduledForDateLocal = (habit: Habit, date: Date) => {
+        if (!habit.startDate) return false;
         const d = new Date(date); d.setHours(0,0,0,0);
-        const s = new Date((habit as any).startDate || habit.startDate); s.setHours(0,0,0,0);
+        const s = new Date(habit.startDate); s.setHours(0,0,0,0);
         if (d < s) return false;
         if ((habit as any).frequencyType === 'daily') return true;
         if ((habit as any).frequencyType === 'weekly') return Array.isArray((habit as any).frequencyValue) && (habit as any).frequencyValue.includes(d.getDay());

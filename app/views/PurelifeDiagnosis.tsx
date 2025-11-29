@@ -1,8 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
-import FrequencyEditor from './FrequencyEditor';
-import AddHabitModal from './AddHabitModal';
+import FrequencyEditor from '../components/FrequencyEditor';
+import AddHabitModal from '../components/AddHabitModal';
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth";
 import {

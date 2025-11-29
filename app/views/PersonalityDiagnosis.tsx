@@ -11,8 +11,8 @@ import {
   ENERGY_CATEGORIES,
 } from "../constants";
 
-import AddHabitModal from "./AddHabitModal";
-import FrequencyEditor from "./FrequencyEditor";
+import AddHabitModal from "../components/AddHabitModal";
+import FrequencyEditor from "../components/FrequencyEditor";
 
 // Firestore
 import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot } from "firebase/firestore";

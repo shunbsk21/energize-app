@@ -24,20 +24,20 @@ import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 
 // (↓ 既存のコンポーネントインポート)
-import EnergyDiagnosis from './components/EnergyDiagnosis';
-import HabitTracker from './components/HabitTracker';
-import Analytics from './components/Analytics';
-import Group from './components/Group';
-import Records from './components/Records';
+import EnergyDiagnosis from './views/EnergyDiagnosis';
+import HabitTracker from './views/HabitTracker';
+import Analytics from './views/Analytics';
+import Group from './views/Group';
+import Records from './views/Records';
 import ProfileModal from './components/Profile';
-import Tasks from './components/Tasks';
-import Notes from './components/Notes';
-import Learnings from './components/Learnings';
+import Tasks from './views/Tasks';
+import Notes from './views/Notes';
+import Learnings from './views/Learnings';
 // ★ types.ts のパスを修正 (app/ 直下にあるため)
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem } from './types'; 
-import PersonalityDiagnosis from './components/PersonalityDiagnosis';
-import PurelifeDiagnosis from './components/PurelifeDiagnosis';
-import ValueDiagnosis from './components/ValueDiagnosis';
+import PersonalityDiagnosis from './views/PersonalityDiagnosis';
+import PurelifeDiagnosis from './views/PurelifeDiagnosis';
+import ValueDiagnosis from './views/ValueDiagnosis';
 
 
 // --- Icon Components Start (コード変更なし) ---

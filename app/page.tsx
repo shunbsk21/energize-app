@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from 'firebase/auth';
-import Login from './components/Login';
+import Login from './views/Login';
 import MainApp from './MainApp';
 // types.ts が page.tsx と同じ app/ フォルダにあるため、パスを ./types にします
 import { Profile } from './types'; 

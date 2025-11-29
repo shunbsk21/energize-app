@@ -13,8 +13,8 @@ import {
   ENERGY_PERSONALITY_HABITS
 } from '../constants';
 
-import AddHabitModal from "./AddHabitModal";
-import FrequencyEditor from "./FrequencyEditor";
+import AddHabitModal from "../components/AddHabitModal";
+import FrequencyEditor from "../components/FrequencyEditor";
 
 const THRESHOLD = 16;
 const getTypeKey = (scores: EnergyScores) => {
