@@ -16,6 +16,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  QueryDocumentSnapshot,
 } from 'firebase/firestore';
 
 // ★ db (データベース本体) をインポート
@@ -212,7 +213,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     const load = async () => {
       try {
         const snap = await getDocs(collection(db, 'learnings'));
-        const items: LearningItem[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<LearningItem, 'id'>) }));
+        const items: LearningItem[] = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<LearningItem, 'id'>) }));
         // createdAt/updatedAt を ISO 文字列に統一（Firestore タイムスタンプか文字列に対応）
         const normalized = items.map(i => ({
           ...i,
@@ -330,23 +331,23 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
         // --- 読み込んだデータを state にセット ---
         
-        const loadedHabits = habitsSnap.docs.map(d => ({ ...d.data() as Omit<Habit, 'id'>, id: d.id }));
+        const loadedHabits = habitsSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Habit, 'id'>, id: d.id }));
         setHabits(loadedHabits);
 
-        const loadedHistory = historySnap.docs.map(d => d.data() as EnergyRecord);
+        const loadedHistory = historySnap.docs.map((d: QueryDocumentSnapshot) => d.data() as EnergyRecord);
         setEnergyHistory(loadedHistory);
 
         // checkins / checkouts を state に入れる
-        const loadedCheckins = checkinsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Checkin, 'id'>) }));
-        const loadedCheckouts = checkoutsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Checkout, 'id'>) }));
+        const loadedCheckins = checkinsSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Checkin, 'id'>) }));
+        const loadedCheckouts = checkoutsSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Checkout, 'id'>) }));
         setCheckins(loadedCheckins.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
         setCheckouts(loadedCheckouts.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
         
-        const loadedFollowing = followingSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
-        const loadedFollowers = followersSnap.docs.map(d => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        const loadedFollowing = followingSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
+        const loadedFollowers = followersSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         
-        const loadedGroups = groupsSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
-        const loadedGroupInvites = groupInvitesSnap.docs.map(d => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
+        const loadedGroups = groupsSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
+        const loadedGroupInvites = groupInvitesSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
         setGroupInvites(loadedGroupInvites);
 
         // 設定 (診断頻度 + プロフィール)
@@ -383,7 +384,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         // ★ Value Diagnosis の完了履歴を読み込む
         const valueHistorySnap = await getDocs(collection(baseRef, 'valueHistory'));
         if (!valueHistorySnap.empty) {
-          setValueDiagnosisCompletedDates(valueHistorySnap.docs.map(d => d.data().date as string));
+          setValueDiagnosisCompletedDates(valueHistorySnap.docs.map((d: QueryDocumentSnapshot) => d.data().date as string));
         }
 
         // --- 4. 全員のプロフィール情報を取得 ---
@@ -413,7 +414,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         try {
           const tasksRef = collection(baseRef, 'tasks');
           const tasksSnap = await getDocs(tasksRef);
-          const loadedTasks = tasksSnap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Task, 'id'>) }));
+          const loadedTasks = tasksSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Task, 'id'>) }));
           setTasks(loadedTasks);
         } catch (err) {
           console.warn('tasks読み込みエラー', err);
@@ -438,7 +439,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     const notificationsRef = collection(db, 'users', profile.id, 'notifications');
     const q = query(notificationsRef, orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedNotifications: Notification[] = snapshot.docs.map(d => ({
+      const loadedNotifications: Notification[] = snapshot.docs.map((d: QueryDocumentSnapshot) => ({
         id: d.id,
         ...(d.data() as Omit<Notification, 'id'>)
       }));
@@ -1152,7 +1153,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 「診断, 習慣, グループ, 記録, 分析」をまとめて
   // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
-  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','habits','groups','records','analytics', 'notifications'].includes(view), [view]);
+  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','value','habits','groups','records','analytics', 'notifications'].includes(view), [view]);
 
   // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
   const showDiagnosisTabs = ['diagnosis','personality','purelife','value'].includes(view);

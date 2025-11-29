@@ -174,7 +174,7 @@ const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'parti
       const satisfied = target > 0 ? val >= target : val > 0;
       return acc + (satisfied ? 1 : 0);
     } else {
-      const doneKeys = (h.completedDates || []).map(d => {
+      const doneKeys = (h.completedDates || []).map((d: string) => {
         const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
       });
       return acc + (doneKeys.includes(dateStr) ? 1 : 0);
@@ -204,7 +204,7 @@ const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
       const ok = target > 0 ? val >= target : val > 0;
       return acc + (ok ? 1 : 0);
     } else {
-      const doneKeys = (h.completedDates || []).map(d => {
+      const doneKeys = (h.completedDates || []).map((d: string) => {
         const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
       });
       return acc + (doneKeys.includes(dateStr) ? 1 : 0);

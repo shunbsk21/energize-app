@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { Checkin, Checkout } from '../types';
 
 // アイコンマップ（value / rating に応じた簡易アイコン）
 const ICON_MAP: Record<number, string> = {
@@ -9,7 +10,7 @@ const ICON_MAP: Record<number, string> = {
   1: '🥀',
 };
 
-const pickIcon = (v: any) => {
+const pickIcon = (v: number | string | null | undefined) => {
   const n = Number(v);
   if (!Number.isNaN(n) && ICON_MAP[n]) return ICON_MAP[n];
   // 数値でない・範囲外は既定のアイコン（中立）
@@ -39,26 +40,9 @@ const RatingTag: React.FC<{ value: string | number | undefined | null }> = ({ va
   );
 };
 
-export interface CheckoutRecord {
-  id: string;
-  date: string;
-  gratitude?: string;
-  note?: string;
-  createdAt?: string;
-}
-
-export interface CheckinRecord {
-  id: string;
-  date: string;
-  // Firestore 側では note フィールドで保存しているため note を使う
-  note?: string;
-  text?: string;
-  createdAt?: string;
-}
-
 interface RecordsProps {
-  checkouts?: CheckoutRecord[];
-  checkins?: CheckinRecord[];
+  checkouts?: Checkout[];
+  checkins?: Checkin[];
 }
 
 const formatDate = (d?: string) => {
@@ -67,7 +51,7 @@ const formatDate = (d?: string) => {
   return dt.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-const parseDateValue = (r: any) => {
+const parseDateValue = (r: Checkin | Checkout) => {
   return r.date ?? r.createdAt ?? '';
 };
 
@@ -80,7 +64,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
   // 入力データのばらつきに備えて正規化する（note / text の両対応、いろんなネストや型に対応）
   const normalizedCheckins = useMemo(() => {
-    return (checkins || []).map((c: any) => {
+    return (checkins || []).map((c: Checkin) => {
       // note を取り出すために考えられるパスを列挙し、文字列に変換して trim する
       const rawNote =
         c?.note ??
@@ -113,9 +97,9 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
   }, [checkins]);
 
   const normalizedCheckouts = useMemo(() => {
-    return (checkouts || []).map((c: any) => {
-      const gratitude = c.gratitude ?? (c.data && c.data.gratitude) ?? undefined;
-      const note = c.note ?? (c.data && c.data.note) ?? undefined;
+    return (checkouts || []).map((c: Checkout) => {
+      const gratitude = c.gratitude ?? (c as any).data?.gratitude ?? undefined;
+      const note = c.note ?? (c as any).data?.note ?? undefined;
       const date = c.date ?? (typeof c.createdAt === 'string' ? c.createdAt.slice(0, 10) : undefined);
       return { ...c, gratitude, note, date };
     });
@@ -137,34 +121,34 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
     let preFiltered = sorted;
     if (view === 'checkout' && checkoutFilter !== 'all') {
       if (checkoutFilter === 'gratitude') {
-        preFiltered = sorted.filter((r: any) => !!(r.gratitude && String(r.gratitude).trim()));
+        preFiltered = sorted.filter((r: Checkout) => !!(r.gratitude && String(r.gratitude).trim()));
       } else if (checkoutFilter === 'note') {
-        preFiltered = sorted.filter((r: any) => !!(r.note && String(r.note).trim()));
+        preFiltered = sorted.filter((r: Checkout) => !!(r.note && String(r.note).trim()));
       }
     }
 
     // 検索フィルタ
-    let afterSearch: any[] = preFiltered;
+    let afterSearch: (Checkin | Checkout)[] = preFiltered;
     if (search && search.trim() !== '') {
       const q = search.trim().toLowerCase();
       afterSearch = preFiltered.filter(r => {
         if (view === 'checkout') {
-          const co = r as CheckoutRecord;
+          const co = r as Checkout;
           const fields = [
             (co.gratitude ?? '').toLowerCase(),
             (co.note ?? '').toLowerCase(),
           ].join(' ');
           return fields.includes(q);
         } else {
-          const ci = r as CheckinRecord;
-          return ((ci.note ?? ci.text ?? '').toLowerCase()).includes(q);
+          const ci = r as Checkin;
+          return ((ci.note ?? (ci as any).text ?? '').toLowerCase()).includes(q);
         }
       });
     }
     // チェックイン表示時は本文が空のレコードを一覧から除外する
     if (view === 'checkin') {
-      return afterSearch.filter((r: any) => {
-        const content = String(r.note ?? r.text ?? '').trim();
+      return afterSearch.filter((r: Checkin) => {
+        const content = String(r.note ?? (r as any).text ?? '').trim();
         return content.length > 0;
       });
     }
@@ -240,7 +224,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
             <p className="text-sm text-gray-500">表示する記録がありません。</p>
           ) : (
             <div className="space-y-3">
-              {paged.map((r: any) => (
+              {paged.map((r: Checkin | Checkout) => (
                 <div key={r.id} className="p-3 bg-white rounded-lg">
                   <div className="flex items-start justify-between">
                     {/* 日付 + 値/レーティングをアイコン付きで表示 */}

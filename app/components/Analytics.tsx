@@ -1,7 +1,7 @@
 "use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
 
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { EnergyRecord, Habit, EnergyCategory } from '../types';
+import { EnergyRecord, Habit, EnergyCategory, Checkin, Checkout } from '../types';
 import { ENERGY_CATEGORIES } from '../constants';
 
 interface AnalyticsProps {
@@ -9,9 +9,9 @@ interface AnalyticsProps {
   habits: Habit[];
   setIsHelpOpen: (isOpen: boolean) => void;
   // 追加: checkins を受け取ってチャート表示
-  checkins?: { id?: string; date: string; value: number; createdAt?: string }[];
+  checkins?: Checkin[];
   // 追加: チェックアウトの推移（オプション） -> rating を利用
-  checkouts?: { id?: string; date: string; gratitude?: string; note?: string; rating?: number | null; createdAt?: string }[];
+  checkouts?: Checkout[];
 }
 
 type Period = 7 | 30 | 'all';
@@ -130,7 +130,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
         const amtMap = habit.completedAmounts || {};
         const target = habit.target ?? 0;
         const keys: string[] = [];
-        Object.entries(amtMap).forEach(([rk, rv]) => {
+        Object.entries(amtMap).forEach(([rk, rv]: [string, number]) => {
           const k = normalizeKey(rk);
           const v = Number(rv);
           if (Number.isNaN(v)) return;
@@ -139,7 +139,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
         (habit.completedDates || []).forEach(d => keys.push(normalizeKey(d)));
         return new Set(keys);
       }
-      return new Set((habit.completedDates || []).map(d => normalizeKey(d)));
+      return new Set((habit.completedDates || []).map((d: string) => normalizeKey(d)));
     };
 
     // determine date range (start..end)

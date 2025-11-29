@@ -40,7 +40,7 @@ const getDoneSetForHabit = (habit: Habit): Set<string> => {
     const amtMap = habit.completedAmounts || {};
     const target = habit.target ?? 0;
     const keys: string[] = [];
-    Object.entries(amtMap).forEach(([rawKey, rawVal]) => {
+    Object.entries(amtMap).forEach(([rawKey, rawVal]: [string, number]) => {
       const key = normalizeKey(rawKey);
       const v = Number(rawVal as any);
       if (Number.isNaN(v)) return;
@@ -51,12 +51,12 @@ const getDoneSetForHabit = (habit: Habit): Set<string> => {
     return new Set(keys);
   }
   // binary タイプ
-  return new Set((habit.completedDates || []).map(normalizeKey));
+  return new Set((habit.completedDates || []).map((d: string) => normalizeKey(d)));
 };
 
 const calculateLongestStreak = (habit: Habit): number => {
   const doneSet = getDoneSetForHabit(habit);
-  const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+  const skipSet = new Set((habit.skippedDates || []).map(normalizeKey));
   if (!doneSet || doneSet.size === 0) return 0;
 
   // safe parser: "YYYY-MM-DD" -> local Date, fallback to Date()
@@ -154,7 +154,7 @@ const calculateCurrentStreak = (habit: Habit): number => {
   const doneSet = getDoneSetForHabit(habit);
   if (!doneSet || doneSet.size === 0) return 0;
 
-  const skipSet = new Set(((habit as any).skippedDates || []).map(normalizeKey));
+  const skipSet = new Set((habit.skippedDates || []).map(normalizeKey));
   // start: habit.startDate (正規化) か、done/skip の最古日、最終的に今日より前の最小日を起点にする
   const parseKeyToDate = (k: string): Date | null => {
     const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -244,7 +244,7 @@ const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
   targetDate.setHours(0,0,0,0);
   if (targetDate < habitStartDate) return false;
 
-  const skipDates: string[] = (habit as any).skippedDates ?? [];
+  const skipDates: string[] = habit.skippedDates ?? [];
   const dkey = targetDate.toLocaleDateString('sv-SE');
   if (skipDates.includes(dkey)) return false;
 

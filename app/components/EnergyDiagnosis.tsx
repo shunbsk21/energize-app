@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View } from '../types'; 
+import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View, Question } from '../types'; 
 import {
   ENERGY_CATEGORIES,
   QUESTIONS,
@@ -282,7 +282,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
       const scores: EnergyScores = { physical: 0, mental: 0, emotional: 0, intellectual: 0 };
       for (const category of categoryOrder) {
         let categoryScore = 0;
-        QUESTIONS[category].forEach((q: { id: string | number; isReversed?: boolean }) => {
+        QUESTIONS[category].forEach((q: Question) => {
           const answer = answers[q.id] ?? 0;
           categoryScore += q.isReversed ? 4 - answer : answer;
         });
@@ -357,7 +357,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   }, [displayedRecord]);
 
   const currentQuestions = (step !== 'start' && step !== 'results') ? QUESTIONS[step as EnergyCategory] : [];
-  const isCurrentStepAnswered = currentQuestions.every((q: { id: string | number }) => answers[q.id] !== undefined);
+  const isCurrentStepAnswered = currentQuestions.every((q: Question) => answers[q.id] !== undefined);
 
   // Past records list component (simple)
   const PastRecordsList: React.FC = () => {
@@ -750,7 +750,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
             </div>
         </div>
       <div className="space-y-8">
-        {currentQuestions.map((q, index) => (
+        {currentQuestions.map((q: Question, index) => (
           <div key={q.id}>
             <p className="font-semibold text-gray-700 mb-3 text-center">{index + 1}. {q.text}</p>
             <div className="flex justify-between items-end text-center max-w-sm mx-auto">

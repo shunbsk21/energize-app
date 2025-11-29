@@ -15,7 +15,7 @@ import AddHabitModal from "./AddHabitModal";
 import FrequencyEditor from "./FrequencyEditor";
 
 // Firestore
-import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
 
 type Dimension = "EI" | "SN" | "TF" | "JP";
@@ -26,6 +26,22 @@ interface Question {
   text: string;
   dimension: Dimension;
   direction: "positive" | "negative";
+}
+
+interface PersonalityHistoryRecord {
+  id: string;
+  date?: string;
+  type?: string;
+  percents?: Record<Dimension, number>;
+  strength?: Record<Dimension, number>;
+  answers?: Record<number, AnswerValue>;
+  createdAt?: string;
+}
+
+interface RecommendedHabit {
+  energy: 'physical'|'mental'|'emotional'|'intellectual';
+  title: string;
+  detail: string;
 }
 
 interface PersonalityProps {
@@ -151,7 +167,7 @@ function RadarChart({ values }: { values: Record<Dimension, number> }) {
 }
 
 // カレンダー用の highlightedDates と DatePickerModal を追加
-const recordDatesFromHistory = (history: any[]) => {
+const recordDatesFromHistory = (history: PersonalityHistoryRecord[]) => {
   return new Set((history || []).map(h => String(h.date)));
 };
 
@@ -239,8 +255,8 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
 }) => {
   const [step, setStep] = useState<Dimension | 'start' | 'results'>('start');
   const [answers, setAnswers] = useState<Record<number, AnswerValue>>({});
-  const [submittedResult, setSubmittedResult] = useState<any | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [submittedResult, setSubmittedResult] = useState<PersonalityHistoryRecord | null>(null);
+  const [history, setHistory] = useState<PersonalityHistoryRecord[]>([]);
 
   // 頻度設定用モーダル制御（EnergyDiagnosis と同様の見た目に合わせる）
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
@@ -269,7 +285,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   }, [submittedResult]);
   
   // 選択中の過去履歴詳細モーダル制御
-  const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<PersonalityHistoryRecord | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // Firestore: subscribe to user's personality history
@@ -281,8 +297,8 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     if (!db || !uid) return;
     const q = query(collection(db, 'users', uid, 'personalityHistory'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, snap => {
-      const items = snap.docs.map(d => {
-        const data = d.data() as any;
+      const items = snap.docs.map((d: QueryDocumentSnapshot) => {
+        const data = d.data();
         return {
           id: d.id,
           date: data.date ?? undefined,
@@ -291,7 +307,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
           strength: data.strength ?? undefined,
           answers: data.answers ?? undefined,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ?? undefined),
-        };
+        } as PersonalityHistoryRecord;
       });
       setHistory(items);
     }, (err) => {
@@ -333,7 +349,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     setIsFrequencyModalOpen(false);
   };
 
-  const openRecordDetail = (rec: any) => {
+  const openRecordDetail = (rec: PersonalityHistoryRecord) => {
     // その日の記録をメイン表示にセットして結果ページへ遷移、上部へスクロール
     setSubmittedResult(rec);
     setStep('results');
@@ -434,7 +450,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     const items = history.slice(0, 5);
     return (
       <ul className="space-y-2 max-h-56 overflow-y-auto">
-        {items.map(h => {
+        {items.map((h: PersonalityHistoryRecord) => {
           const dateLabel = new Date((h.date || h.createdAt) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
           return (
             <li key={h.id ?? h.date} className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
@@ -564,12 +580,12 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(() => {
                     const typeKey = submittedResult?.type;
-                    const habits = (typeKey && PERSONALITY_HABITS[typeKey]) || (TYPE_MAP[typeKey]?.habits ? TYPE_MAP[typeKey].habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })) : []);
+                    const habits: RecommendedHabit[] = (typeKey && PERSONALITY_HABITS[typeKey]) || (TYPE_MAP[typeKey]?.habits ? TYPE_MAP[typeKey].habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })) : []);
                     if (!habits || habits.length === 0) {
                       return <div className="text-sm text-gray-500 col-span-full">自分に合う習慣を少し試して継続すること。</div>;
                     }
-                    return habits.map((h: any, i: number) => {
-                      const energyKey = h.energy as 'physical'|'mental'|'emotional'|'intellectual';
+                    return habits.map((h: RecommendedHabit, i: number) => {
+                      const energyKey = h.energy;
                       const energyMeta = ENERGY_CATEGORIES?.[energyKey];
                       // card per habit with + button
                       return (

@@ -22,11 +22,14 @@ export interface Profile {
   imageUrl?: string | null;
 }
 
-export type EnergyCategory = string;
+export type EnergyCategory = 'physical' | 'mental' | 'emotional' | 'intellectual';
 
 export interface EnergyRecord {
   date: string;
-  [k: string]: any;
+  physical: number;
+  mental: number;
+  emotional: number;
+  intellectual: number;
 }
 
 export interface Habit {
@@ -36,7 +39,7 @@ export interface Habit {
   createdAt?: string;
   startDate?: string;
   frequencyType?: FrequencyType;
-  frequencyValue?: any[];
+  frequencyValue?: number[];
   type?: 'amount' | 'boolean';
   targetAmount?: number;
   target?: number;
@@ -132,3 +135,13 @@ export interface LearningItem {
   updatedAt?: string;
   createdBy?: string;
 }
+
+export interface Question {
+  id: string;
+  text: string;
+  isReversed: boolean;
+}
+
+export type EnergyQuestionnaire = {
+  [key in EnergyCategory]: Question[];
+};
