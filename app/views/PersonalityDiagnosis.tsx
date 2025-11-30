@@ -141,7 +141,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   // submittedResult が変わったら表示用の画像パスを決定
   const resultImageSrc = useMemo(() => {
     if (!submittedResult || !submittedResult.type) return null;
-    const file = IMAGE_FILE_MAP[submittedResult.type] ?? `${submittedResult.type}.png`;
+    const file = IMAGE_FILE_MAP[submittedResult.type as keyof typeof IMAGE_FILE_MAP] ?? `${submittedResult.type}.png`;
     return `/images/16personalities/${encodeURI(file)}`;
   }, [submittedResult]);
   
@@ -370,7 +370,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
               <div className="relative w-full h-44 md:h-56">
                 <Image 
                   src={resultImageSrc} 
-                  alt={submittedResult.type ? (TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type) : '診断結果'} 
+                  alt={submittedResult.type ? (TYPE_MAP[submittedResult.type as keyof typeof TYPE_MAP]?.name ?? submittedResult.type) : '診断結果'} 
                   layout="fill" 
                   objectFit="cover" />
               </div>) : (
@@ -382,7 +382,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-xs text-gray-500">{dateLabelForTitle} の診断結果</div>
-                  <div className="text-lg font-semibold text-gray-800">{submittedResult.type ? (TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type) : '-'}</div>
+                  <div className="text-lg font-semibold text-gray-800">{submittedResult.type ? (TYPE_MAP[submittedResult.type as keyof typeof TYPE_MAP]?.name ?? submittedResult.type) : '-'}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -395,7 +395,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                 </div>
               </div>
 
-              <div className="text-sm text-gray-600 mb-4">{submittedResult.type ? (TYPE_MAP[submittedResult.type]?.description ?? 'あなたの傾向を示します。') : 'あなたの傾向を示します。'}</div>
+              <div className="text-sm text-gray-600 mb-4">{submittedResult.type ? (TYPE_MAP[submittedResult.type as keyof typeof TYPE_MAP]?.description ?? 'あなたの傾向を示します。') : 'あなたの傾向を示します。'}</div>
 
               {/* 縦並びの軸表示 */}
               <div className="text-sm font-medium text-gray-700 mb-3">各軸の偏り（%）と強さ</div>
@@ -451,7 +451,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(() => {
                     const typeKey = submittedResult?.type;
-                    const habits: RecommendedHabit[] = (typeKey && PERSONALITY_HABITS[typeKey]) || (TYPE_MAP[typeKey]?.habits ? TYPE_MAP[typeKey].habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })) : []);
+                    const habits: RecommendedHabit[] = (typeKey && PERSONALITY_HABITS[typeKey as keyof typeof PERSONALITY_HABITS]) || (typeKey && TYPE_MAP[typeKey as keyof typeof TYPE_MAP]?.habits ? TYPE_MAP[typeKey as keyof typeof TYPE_MAP].habits.map((t: string) => ({ energy: 'mental' as EnergyCategory, title: t, detail: '' })) : []);
                     if (!habits || habits.length === 0) {
                       return <div className="text-sm text-gray-500 col-span-full">自分に合う習慣を少し試して継続すること。</div>;
                     }
@@ -461,7 +461,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                       // card per habit with + button
                       return (
                         <div key={i} className="flex items-stretch gap-3 p-3 bg-gray-50 rounded-lg shadow-sm">
-                          <div className="flex-shrink-0">
+                          <div className="flex-shrink-0 pt-1">
                             <span
                               className="inline-flex items-center justify-center text-xs font-semibold rounded-full px-2 py-1 text-white"
                               style={{ backgroundColor: energyMeta?.color ?? '#9CA3AF' }}
