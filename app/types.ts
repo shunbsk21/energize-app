@@ -140,6 +140,17 @@ export interface LearningItem {
   createdBy?: string;
 }
 
+export interface NoteItem {
+  id: string;
+  title?: string;
+  body: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt?: string;
+  archived?: boolean;
+  deleted?: boolean;
+}
+
 export interface Question {
   id: string;
   text: string;
