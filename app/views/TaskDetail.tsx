@@ -1,20 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
-import { Task, TaskDetailProps } from '../types';
-
-const toLocalISO = (d: Date) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dd}`;
-};
-
-const formatMMDD = (iso?: string) => {
-  if (!iso) return '';
-  const parts = iso.split('-');
-  if (parts.length >= 3) return `${parts[1]}/${parts[2]}`;
-  return iso;
-};
+import { Task, TaskDetailProps } from '../types'; 
 
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (typeof document === 'undefined') return null;
@@ -22,31 +8,17 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 export default function TaskDetail({ task, onClose, updateTask, toggleTask, removeTask }: TaskDetailProps) {
-  const [title, setTitle] = useState(task.title ?? '');
-  const [details, setDetails] = useState(task.details ?? '');
-  const [dueDate, setDueDate] = useState<string | undefined>(task.dueDate ?? undefined);
-  const [priority, setPriority] = useState<Task['priority']>(task.priority ?? 'medium');
-  const [done, setDone] = useState(!!task.done);
-  useEffect(() => {
-    setTitle(task.title ?? '');
-    setDetails(task.details ?? '');
-    setDueDate(task.dueDate ?? undefined);
-    setPriority(task.priority ?? 'medium');
-    setDone(!!task.done);
-  }, [task]);
+  // ローカルのstateを削除し、propsの変更をハンドリングする関数を定義
+  const handleChange = (field: keyof Task, value: any) => {
+    updateTask({ ...task, [field]: value });
+  };
 
   const submit = async () => {
-    if (!title.trim()) return;
+    if (!task.title.trim()) return;
     try {
-      const updatedTask: Task = {
-        ...task,
-        title: title.trim(), 
-        details: details || undefined, 
-        dueDate: dueDate || undefined, 
-        priority,
-        done,
-      };
-      await updateTask(updatedTask);
+      // updateTaskはhandleChangeですでに呼ばれているため、
+      // ここでは単に閉じるだけで良い。
+      // もし一括更新が必要な場合は、この関数内でupdateTaskを呼ぶ。
     } catch (e) {
       console.error('TaskDetail update error', e);
     }
@@ -63,7 +35,6 @@ export default function TaskDetail({ task, onClose, updateTask, toggleTask, remo
   };
 
   const handleToggleDone = async (v: boolean) => {
-    setDone(v);
     try { await toggleTask(task.id, v); } catch (e) { console.error(e); }
   };
 
@@ -81,7 +52,7 @@ export default function TaskDetail({ task, onClose, updateTask, toggleTask, remo
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={done}
+                checked={!!task.done}
                 onChange={e => handleToggleDone(e.target.checked)}
                 className="w-4 h-4"
               />
@@ -90,11 +61,11 @@ export default function TaskDetail({ task, onClose, updateTask, toggleTask, remo
           </div>
 
           <div className="space-y-3">
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-            <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
+            <input value={task.title ?? ''} onChange={e => handleChange('title', e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
+            <textarea value={task.details ?? ''} onChange={e => handleChange('details', e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
             <div className="flex items-center gap-2 flex-wrap">
-              <input type="date" value={dueDate || ''} onChange={e => setDueDate(e.target.value || undefined)} className="p-2 border border-gray-200 rounded" />
-              <select value={priority} onChange={e => setPriority(e.target.value as Task['priority'])} className="p-2 border border-gray-200 rounded text-sm">
+              <input type="date" value={task.dueDate ?? ''} onChange={e => handleChange('dueDate', e.target.value || undefined)} className="p-2 border border-gray-200 rounded" />
+              <select value={task.priority ?? 'medium'} onChange={e => handleChange('priority', e.target.value as Task['priority'])} className="p-2 border border-gray-200 rounded text-sm">
                 <option value="low">低</option>
                 <option value="medium">中</option>
                 <option value="high">高</option>

@@ -69,41 +69,23 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const { habits, setHabits, groups, setGroups, profile: contextProfile, setProfile: setContextProfile } = useAppContext();
   const { data: energyHistory, loading: energyHistoryLoading } = useFirestoreCollection<EnergyRecord>(`users/${profile.id}/energyHistory`);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
-
-  // 新規: チェックイン / チェックアウトの state
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [checkouts, setCheckouts] = useState<Checkout[]>([]);
-  
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
-  
   const [tasks, setTasks] = useState<Task[]>([]);
-  
-  // ★ コメントの state を削除
-  // const [comments, setComments] = useState<Comment[]>([]);
-  
   const [groupInvites, setGroupInvites] = useState<GroupType[]>([]);
-
   const [allUserProfiles, setAllUserProfiles] = useState<Map<string, Profile | Friend>>(new Map());
-
   const [isLoading, setIsLoading] = useState(false); // useFirestoreCollection がローディングを管理
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
   const [notifications, setNotifications] = useState<Notification[]>([]);
-
-  // ★ 通知から遷移するための選択されたグループID
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-
-  // --- Purelife 設定を保持して HabitTracker に渡す ---
   const [purelifeFrequency, setPurelifeFrequency] = useState<DiagnosisFrequency | null>(null);
   const [purelifeCompletedDates, setPurelifeCompletedDates] = useState<string[]>([]);
   const [localPurelifeCompletedDates, setLocalPurelifeCompletedDates] = useState<string[]>(purelifeCompletedDates ?? []);
-
-  // ★ Value Diagnosis の設定と完了履歴
   const [valueDiagnosisFrequency, setValueDiagnosisFrequency] = useState<DiagnosisFrequency | null>(null);
   const [valueDiagnosisCompletedDates, setValueDiagnosisCompletedDates] = useState<string[]>([]);
-
 
   // sync incoming prop -> local state
   useEffect(() => {
@@ -768,7 +750,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !taskId) return;
     try {
       await firestoreService.updateTask(profile.id, taskId, payload);
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updatePayload } as Task : t));
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload, updatedAt: new Date().toISOString() } as Task : t));
     } catch (err) {
       console.error('handleUpdateTask error', err);
       throw err;
