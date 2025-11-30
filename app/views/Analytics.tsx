@@ -3,17 +3,10 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { EnergyRecord, Habit, EnergyCategory, Checkin, Checkout, AnalyticsProps } from '../types';
 import { ENERGY_CATEGORIES } from '../constants';
+import { formatDateKey } from '../utils/dates';
 
 type Period = 7 | 30 | 'all';
 type TooltipData = { x: number; y: number; content: React.ReactNode; };
-
-const HelpIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9
- 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-    </svg>
-);
-
 
 // SVG Path smoothing function (Catmull-Rom)
 const createSpline = (points: {x: number; y: number}[]) => {
@@ -62,12 +55,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
     return energyHistory.filter(record => new Date(record.date) >= cutoff);
   }, [energyHistory, period]);
 
-
-import { formatDateKey } from '../utils/dates';
-
-// ... (rest of the imports)
-
-// ...
 
   const habitData = useMemo(() => {
     if (habits.length === 0) return [];
