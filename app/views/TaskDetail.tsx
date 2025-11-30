@@ -38,7 +38,15 @@ export default function TaskDetail({ task, onClose, updateTask, toggleTask, remo
   const submit = async () => {
     if (!title.trim()) return;
     try {
-      await updateTask({ id: task.id, title: title.trim(), details: details || undefined, dueDate: dueDate || undefined, priority, done });
+      const updatedTask: Task = {
+        ...task,
+        title: title.trim(),
+        details: details || undefined,
+        dueDate: dueDate || undefined,
+        priority,
+        done,
+      };
+      await updateTask(updatedTask);
     } catch (e) {
       console.error('TaskDetail update error', e);
     }

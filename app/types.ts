@@ -351,4 +351,3 @@ export interface ProfileModalProps {
   onLogout: () => void;
   onSave: (newDisplayName: string, newImageUrl: string | null) => void;
 }
-}
