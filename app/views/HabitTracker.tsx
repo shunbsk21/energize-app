@@ -784,7 +784,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       recordAmountForHabit(habitId);
       return;
     }
-    const isCompleted = habitToToggle.completedDates.includes(selectedDateString);
+    const isCompleted = (habitToToggle.completedDates || []).includes(selectedDateString);
     const updatedHabit: Habit = {
       ...habitToToggle,
       completedDates: isCompleted
