@@ -3,21 +3,14 @@
 import React, { useMemo } from 'react';
 import { Profile, Friend, Habit } from '../types';
 import { isHabitScheduledForDate, calculateCompletionPercentForDate } from '../utils/habits';
+import { formatDateKey } from '../utils/dates';
 
 export const MemberHabitsModal: React.FC<{
   memberId: string;
-  memberProfile: Profile | Friend | null;
-  memberHabits?: Habit[];
-  groupSharedHabitIds: string[];
-  currentUserId: string;
-  isFollowing: boolean;
-  onClose: () => void;
-  onFollowUser: (friendId: string) => void;
-  onEditMySharedHabits?: () => void;
-  isLoading: boolean;
+// ...
 }> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
   const habits: Habit[] = memberHabits || memberProfile?.habits || [];
-  const todayStr = new Date().formatDateKey();
+  const todayStr = formatDateKey(new Date());
   const sharedHabits = habits.filter(h => h.id && groupSharedHabitIds.includes(h.id));
   const isSelf = memberId === currentUserId;
   const weekdayNames = ['日','月','火','水','木','金','土'];

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Checkin, Checkout, RecordsProps } from '../types';
-import { formatFullDate } from '../utils/dates';
+import { formatFullDate, formatDateKey } from '../utils/dates';
 import DatePickerModal from '../components/DatePickerModal';
 import { CalendarIcon } from '../components/Icons';
 
@@ -113,7 +113,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
     // 日付フィルタ
     if (selectedDate) {
-      const dateStr = selectedDate.formatDateKey();
+      const dateStr = formatDateKey(selectedDate);
       return sorted.filter(r => (r.date ?? r.createdAt ?? '').startsWith(dateStr));
     }
 

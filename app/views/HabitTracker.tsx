@@ -16,6 +16,7 @@ import {
   isHabitCompletedOnDate,
   normalizeKey
 } from '../utils/habits';
+import { formatDateKey } from '../utils/dates';
 import {
   PlusIcon,
   ChevronLeftIcon,
@@ -152,7 +153,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   isAdmin = false
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
-  const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().formatDateKey());
+  const [newHabitStartDate, setNewHabitStartDate] = useState(formatDateKey(new Date()));
   const [newHabitFrequency, setNewHabitFrequency] = useState<{type: FrequencyType, value: number[]}>({type: 'daily', value: []});
   const [newHabitType, setNewHabitType] = useState<'binary' | 'amount'>('binary');
   const [newHabitTarget, setNewHabitTarget] = useState<number | undefined>(undefined);
@@ -227,13 +228,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     return () => window.removeEventListener('purelife-diagnosis-saved', handler as EventListener);
   }, []);
 
-  // selectedDate をローカル日の ISO (YYYY-MM-DD) で使う（タイムゾーン差で日付がずれる問題を防ぐ）
-  const formatDateKey = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
+
   const selectedDateISO = formatDateKey(selectedDate);
   
   // --- purelife の表示制御（props の頻度 / 完了日を使う） ---
@@ -491,11 +486,11 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // --- checkin/checkout lookup helpers (date format: sv-SE) ---
   const getCheckinForDate = (date: Date) => {
-    const d = date.formatDateKey();
+    const d = formatDateKey(date);
     return (propsOrEmpty(checkins) || []).find((c:Checkin) => c.date === d) || null;
   };
   const getCheckoutForDate = (date: Date) => {
-    const d = date.formatDateKey();
+    const d = formatDateKey(date);
     return (propsOrEmpty(checkouts) || []).find((c:Checkout) => c.date === d) || null;
   };
 
@@ -626,7 +621,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
 
     // ...existing code...
-    const selectedDateString = selectedDate.formatDateKey();
+    const selectedDateString = formatDateKey(selectedDate);
 
     // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
     const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
@@ -660,16 +655,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     const completedCount = displayedScheduled.reduce((acc, h) => acc + (isHabitCompletedOnDate(h, selectedDateString) ? 1 : 0), 0);
     const completionPercent = scheduledCount > 0 ? Math.round((completedCount / scheduledCount) * 100) : 0;
     
-    // normalize 日付キー -> sv-SE で統一
-    const normalizeKey = (d: string) => {
-      try {
-        const dt = new Date(d);
-        if (Number.isNaN(dt.getTime())) return String(d);
-        return dt.formatDateKey();
-      } catch {
-        return String(d);
-      }
-    };
+
 
     // ① 未完了優先、② 連続記録が長い順 に並べる
     const sortedScheduledHabits = useMemo(() => {
@@ -781,7 +767,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       name: newHabitName.trim(),
       details: newHabitDetails.trim() || undefined,
       type: newHabitType,
-      startDate: newHabitStartDate ?? new Date().formatDateKey(),
+      startDate: newHabitStartDate ?? formatDateKey(new Date()),
       frequencyType: newHabitFrequency?.type ?? 'daily',
       frequencyValue: Array.isArray(newHabitFrequency?.value) ? newHabitFrequency.value : (newHabitFrequency?.value ? [newHabitFrequency.value] : []),
       skippedDates: [],
@@ -812,7 +798,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       // 成功時はフォームをクリアしてモーダルを閉じる（ローディング状態を触らない）
       setNewHabitName('');
       setNewHabitDetails('');
-      setNewHabitStartDate(new Date().formatDateKey());
+      setNewHabitStartDate(formatDateKey(new Date()));
       setNewHabitFrequency({ type: 'daily', value: [] });
       setNewHabitType('binary');
       setNewHabitTarget(undefined);
@@ -917,7 +903,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (rec && onUpdateCheckin) {
       onUpdateCheckin(rec.id, value, note);
     } else if (!rec && onAddCheckin) {
-      const dateStr = selectedDate.formatDateKey();
+      const dateStr = formatDateKey(selectedDate);
       onAddCheckin(value, note, dateStr);
     }
     setCheckedInToday(true);
@@ -928,14 +914,14 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (rec && onUpdateCheckout) {
       onUpdateCheckout(rec.id, gratitude, note, rating);
     } else if (!rec && onAddCheckout) {
-      const dateStr = selectedDate.formatDateKey();
+      const dateStr = formatDateKey(selectedDate);
       onAddCheckout(gratitude, note, rating, dateStr);
     }
     setCheckedOutToday(true);
   };
 
   const recordOrToggleForNonScheduled = async (habit: Habit) => {
-    const dkey = selectedDate.formatDateKey();
+    const dkey = formatDateKey(selectedDate);
     if (habit.type === 'amount') {
       // amount はモーダルで入力
       const current = (habit.completedAmounts || {})[dkey];
@@ -957,7 +943,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   const toggleSkipForDate = (habit: Habit) => {
-    const dkey = selectedDate.formatDateKey();
+    const dkey = formatDateKey(selectedDate);
     const skips = habit.skippedDates ?? [];
     const exists = skips.includes(dkey);
     const newSkips = exists ? skips.filter(s => s !== dkey) : [...skips, dkey];

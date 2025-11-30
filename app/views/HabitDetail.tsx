@@ -141,9 +141,9 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
 
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(year, month, day);
-      const dateStr = d.formatDateKey();
+      const dateStr = formatDateKey(d);
       const isScheduled = isHabitScheduledForDate(habit, d);
-      const isToday = dateStr === new Date().formatDateKey();
+      const isToday = dateStr === formatDateKey(new Date());
 
       const amountMap = habit.completedAmounts || {};
       const amountVal = amountMap[dateStr] ?? 0;
@@ -166,7 +166,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
         else dayClass = 'bg-gray-300 text-gray-500';
       }
       // 選択日は actionModalDate（あれば）または今日を選択状態として表示
-      const selectedKey = actionModalDate ? formatDateKey(actionModalDate) : new Date().formatDateKey();
+      const selectedKey = actionModalDate ? formatDateKey(actionModalDate) : formatDateKey(new Date());
       const isSelected = dateStr === selectedKey;
       if (isToday && ((habit.type === 'amount' ? !isAmountFull && isScheduled : !isBinaryCompleted && isScheduled))) {
         dayClass += ' ring-2 ring-indigo-500';

@@ -524,7 +524,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
         initialDate={new Date()}
         highlightedDates={recordDates}
         onDateSelect={(date) => {
-          const dStr = date.formatDateKey();
+          const dStr = formatDateKey(date);
           const rec = history.find(h => String(h.date) === dStr) ?? null;
           setSelectedRecord(rec);
           setStep(rec ? 'results' : 'idle');

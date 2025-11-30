@@ -26,6 +26,7 @@ import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useAppContext } from './context/AppContext';
 import { useFirestoreCollection } from './hooks/useFirestore';
+import { formatDateKey } from './utils/dates';
 
 // (↓ 既存のコンポーネントインポート)
 import EnergyDiagnosis from './views/EnergyDiagnosis';
@@ -673,7 +674,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = collection(db, 'users', profile.id, 'checkins');
       const payload: Omit<Checkin, 'id'> = {
-        date: dateStr ?? new Date().formatDateKey(),
+        date: dateStr ?? formatDateKey(new Date()),
         value,
         note: note || '',
         createdAt: new Date().toISOString()
@@ -690,7 +691,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = collection(db, 'users', profile.id, 'checkouts');
       const payload: Omit<Checkout, 'id'> = {
-        date: dateStr ?? new Date().formatDateKey(),
+        date: dateStr ?? formatDateKey(new Date()),
         gratitude: gratitude || '',
         note: note || '',
         rating: rating ?? null,

@@ -1,11 +1,12 @@
 import { Habit } from '../types';
+import { formatDateKey } from '../utils/dates';
 
 export const normalizeKey = (d: string | Date): string => {
   try {
     const dt = new Date(d);
     if (Number.isNaN(dt.getTime())) return String(d);
     dt.setHours(0, 0, 0, 0);
-    return dt.formatDateKey();
+    return formatDateKey(dt);
   } catch {
     return String(d);
   }

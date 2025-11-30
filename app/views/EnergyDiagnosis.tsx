@@ -13,6 +13,7 @@ import {
   ENERGY_PERSONALITY_HABITS
 } from '../constants';
 
+import { formatDateKey } from '../utils/dates';
 import AddHabitModal from "../components/AddHabitModal";
 import DatePickerModal from '../components/DatePickerModal';
 import FrequencyEditor from "../components/FrequencyEditor";
@@ -131,7 +132,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   const recordDates = useMemo(() => new Set(history.map(r => r.date)), [history]);
 
   const displayedRecord = useMemo(() => {
-    const dateString = selectedDate.formatDateKey();
+    const dateString = formatDateKey(selectedDate);
     return history.find(r => r.date === dateString) || null;
   }, [history, selectedDate]);
 

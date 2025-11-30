@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Habit } from '../types';
 import { calculateCompletionStatus } from '../utils/habits';
+import { formatDateKey } from '../utils/dates';
 
 interface DatePickerModalProps {
   isOpen: boolean;
@@ -51,8 +52,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateStr = date.formatDateKey();
-      const isSelected = initialDate.formatDateKey() === dateStr;
+      const dateStr = formatDateKey(date);
+      const isSelected = formatDateKey(initialDate) === dateStr;
       const completionStatus = habits ? calculateCompletionStatus(date, habits) : 'none';
       const hasRecord = highlightedDates?.has(dateStr);
 

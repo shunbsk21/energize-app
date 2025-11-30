@@ -63,6 +63,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
   }, [energyHistory, period]);
 
 
+import { formatDateKey } from '../utils/dates';
+
+// ... (rest of the imports)
+
+// ...
+
   const habitData = useMemo(() => {
     if (habits.length === 0) return [];
 
@@ -71,7 +77,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       if (d instanceof Date) {
         const dt = new Date(d);
         dt.setHours(0, 0, 0, 0);
-        return dt.formatDateKey();
+        return formatDateKey(dt);
       }
       const s = String(d);
       const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -79,12 +85,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       if (m) {
         const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
         dt.setHours(0, 0, 0, 0);
-        return dt.formatDateKey();
+        return formatDateKey(dt);
       }
       const dt2 = new Date(s);
       if (!Number.isNaN(dt2.getTime())) {
         dt2.setHours(0, 0, 0, 0);
-        return dt2.formatDateKey();
+        return formatDateKey(dt2);
       }
       return s;
     };
