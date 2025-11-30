@@ -7,7 +7,7 @@ import AddHabitModal from '../components/AddHabitModal';
 import DatePickerModal from '../components/DatePickerModal';
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth";
-import { formatLocalISO, formatDateLabel } from '../utils/dates';
+import { formatDateKey, formatDateLabel } from '../utils/dates';
 import {
   collection,
   query,
@@ -117,7 +117,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
         } as PurelifeResultRecord;
         });
         setHistory(items);
-        const todayIso = formatLocalISO(new Date());
+        const todayIso = formatDateKey(new Date());
         const todayRec = items.find(r => r.date === todayIso) || null;
         if (todayRec) {
           setSelectedRecord(todayRec);
@@ -178,7 +178,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       console.warn("no uid, cannot save");
       return;
     }
-    const todayIso = formatLocalISO(new Date());
+    const todayIso = formatDateKey(new Date());
     const record = {
       date: todayIso,
       categories: categoryScoresForCurrentAnswers,

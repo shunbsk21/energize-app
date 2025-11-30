@@ -228,13 +228,13 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   }, []);
 
   // selectedDate をローカル日の ISO (YYYY-MM-DD) で使う（タイムゾーン差で日付がずれる問題を防ぐ）
-  const formatLocalISO = (d: Date) => {
+  const formatDateKey = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
-  const selectedDateISO = formatLocalISO(selectedDate);
+  const selectedDateISO = formatDateKey(selectedDate);
   
   // --- purelife の表示制御（props の頻度 / 完了日を使う） ---
   const hasPurelifeConfig = Boolean(purelifeFrequency);

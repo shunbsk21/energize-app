@@ -5,7 +5,7 @@ import { DriverKey, Habit, DiagnosisFrequency, ValueAnswersMap, ValueResultRecor
 import { CATEGORIES, TYPE_INFO } from "../constants";
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth"; // signInAnonymously をインポート
-import { formatLocalISO, formatDateLabel } from '../utils/dates';
+import { formatDateKey, formatDateLabel } from '../utils/dates';
 import {
   collection,
   query,
@@ -94,7 +94,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
           } as ValueResultRecord;
         });
         setHistory(items);
-        const todayIso = formatLocalISO(new Date());
+        const todayIso = formatDateKey(new Date());
         const todayRec = items.find(r => r.date === todayIso) || null;
         if (todayRec) {
           setSelectedRecord(todayRec);
@@ -151,7 +151,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
       console.warn("no uid, cannot save");
       return;
     }
-    const todayIso = formatLocalISO(new Date());
+    const todayIso = formatDateKey(new Date());
     const record = {
       date: todayIso,
       scores: currentResult.scores,
