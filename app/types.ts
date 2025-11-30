@@ -117,7 +117,7 @@ export interface Task {
 
 export interface Checkin {
   id: string;
-  date: string;
+  date?: string;
   value: number;
   note?: string;
   text?: string; // for legacy data
@@ -128,7 +128,7 @@ export interface Checkin {
 
 export interface Checkout {
   id: string;
-  date: string;
+  date?: string;
   gratitude?: string;
   note?: string;
   rating?: number | null;

@@ -72,7 +72,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
       const note = rawNote == null ? '' : (typeof rawNote === 'string' ? rawNote : String(rawNote));
 
       // date の正規化: 明示的 date があればそのまま、なければ createdAt の先頭 10 文字（YYYY-MM-DD）を採る
-      let date = c?.date;
+      let date: string | undefined = c?.date;
       if (!date && c?.createdAt) {
         if (typeof c.createdAt === 'string') {
           date = c.createdAt.slice(0, 10);
@@ -100,30 +100,37 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
   }, [checkouts]);
 
   // source records depending on view
-  const source = useMemo(() => (view === 'checkout' ? normalizedCheckouts : normalizedCheckins), [view, normalizedCheckouts, normalizedCheckins]);
+  const source: (Checkin | Checkout)[] = useMemo(() => (view === 'checkout' ? normalizedCheckouts : normalizedCheckins), [view, normalizedCheckouts, normalizedCheckins]);
 
   // filtered + sorted (date desc)
   const filtered = useMemo(() => {
     // sort by date desc
-    const sorted = (source || []).slice().sort((a, b) => {
-      const ta = new Date(parseDateValue(a)).getTime();
-      const tb = new Date(parseDateValue(b)).getTime();
-      return tb - ta;
-    });
+    const sorted = [...source].sort((a, b) => {
+      const getDateMs = (record: Checkin | Checkout): number => {
+        const dateValue = record.date ?? record.createdAt;
+        if (!dateValue) return 0;
+        if (typeof dateValue === 'string') return new Date(dateValue).getTime();
+        // Assuming it's a Firestore Timestamp
+        if (typeof dateValue.toDate === 'function') return dateValue.toDate().getTime();
+        return 0;
+      };
+      return getDateMs(b) - getDateMs(a);
+    })
 
     // 日付フィルタ
     if (selectedDate) {
       const dateStr = formatDateKey(selectedDate);
-      return sorted.filter(r => (r.date ?? r.createdAt ?? '').startsWith(dateStr));
+      // `r.date` is already normalized to YYYY-MM-DD string in useMemo above
+      return sorted.filter(r => r.date === dateStr);
     }
 
     // checkout のタイプフィルタ（checkout のみ）
     let preFiltered = sorted;
     if (view === 'checkout' && checkoutFilter !== 'all') {
       if (checkoutFilter === 'gratitude') {
-        preFiltered = sorted.filter((r: Checkout) => !!(r.gratitude && String(r.gratitude).trim()));
+        preFiltered = sorted.filter((r): r is Checkout => 'gratitude' in r && !!(r.gratitude && String(r.gratitude).trim()));
       } else if (checkoutFilter === 'note') {
-        preFiltered = sorted.filter((r: Checkout) => !!(r.note && String(r.note).trim()));
+        preFiltered = sorted.filter((r): r is Checkout => 'note' in r && !!(r.note && String(r.note).trim()));
       }
     }
 
@@ -134,8 +141,8 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
       afterSearch = preFiltered.filter(r => {
         if (view === 'checkout') {
           const co = r as Checkout;
-          const fields = [
-            (co.gratitude ?? '').toLowerCase(),
+          const fields = [ // gratitude は Checkout にしかないので型ガードが必要
+            ('gratitude' in co ? (co.gratitude ?? '') : '').toLowerCase(),
             (co.note ?? '').toLowerCase(),
           ].join(' ');
           return fields.includes(q);
@@ -147,7 +154,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
     }
     // チェックイン表示時は本文が空のレコードを一覧から除外する
     if (view === 'checkin') {
-      return afterSearch.filter((r: Checkin) => {
+      return afterSearch.filter((r): r is Checkin => {
         const content = String(r.note ?? (r as any).text ?? '').trim();
         return content.length > 0;
       });
@@ -249,12 +256,12 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
                       {/* checkin の value 表示（画像アイコン + 白背景タグ） */}
                       {view === 'checkin' && (
-                        <ValueTag value={r.value ?? r.amount ?? r.score} />
+                        <ValueTag value={(r as Checkin).value} />
                       )}
 
                       {/* checkout の rating 表示（画像アイコン + 白背景タグ） */}
                       {view === 'checkout' && (
-                        <RatingTag value={r.rating ?? r.raiting} />
+                        <RatingTag value={(r as Checkout).rating} />
                       )}
 
                     </div>
@@ -266,7 +273,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                       {/* 感謝 / 日記 をそれぞれ分かりやすくグルーピング */}
                       {/* フィルタに応じて感謝 / 日記 を相互に非表示にする */}
                       {checkoutFilter === 'gratitude' ? (
-                        r.gratitude && r.gratitude.trim() ? (
+                        'gratitude' in r && r.gratitude && r.gratitude.trim() ? (
                           <div className="mt-3">
                             <div className="flex items-start gap-3 min-w-0">
                               <span className="inline-block text-xs font-semibold px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full flex-shrink-0">感謝</span>
@@ -277,7 +284,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                           <div className="text-sm text-gray-400 mt-2">記録がありません。</div>
                         )
                       ) : checkoutFilter === 'note' ? (
-                        r.note && r.note.trim() ? (
+                        'note' in r && r.note && r.note.trim() ? (
                           <div className="mt-3">
                             <div className="flex items-start gap-3 min-w-0">
                               <span className="inline-block text-xs font-semibold px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full flex-shrink-0">日記</span>
@@ -289,15 +296,15 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                         )
                       ) : (
                         // all: 両方ある場合は両方表示
-                        (r.gratitude && r.gratitude.trim()) || (r.note && r.note.trim()) ? (
+                        (('gratitude' in r && r.gratitude && r.gratitude.trim()) || ('note' in r && r.note && r.note.trim())) ? (
                           <div className="mt-3 space-y-3">
-                            {r.gratitude && r.gratitude.trim() && (
+                            {'gratitude' in r && r.gratitude && r.gratitude.trim() && (
                               <div className="flex items-start gap-3 min-w-0">
                                 <span className="inline-block text-xs font-semibold px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full flex-shrink-0">感謝</span>
                                 <div className="text-sm text-gray-700 leading-relaxed break-words min-w-0">{r.gratitude}</div>
                               </div>
                             )}
-                            {r.note && r.note.trim() && (
+                            {'note' in r && r.note && r.note.trim() && (
                               <div className="flex items-start gap-3 min-w-0">
                                 <span className="inline-block text-xs font-semibold px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full flex-shrink-0">日記</span>
                                 <div className="text-sm text-gray-700 leading-relaxed break-words min-w-0">{r.note}</div>

@@ -18,6 +18,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  Timestamp,
   QueryDocumentSnapshot,
 } from 'firebase/firestore';
 
@@ -153,11 +154,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const snap = await getDocs(collection(db, 'learnings'));
         const items: LearningItem[] = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<LearningItem, 'id'>) }));
         // createdAt/updatedAt を ISO 文字列に統一（Firestore タイムスタンプか文字列に対応）
-        const normalized = items.map(i => ({
-          ...i,
-          createdAt: i.createdAt ? String(i.createdAt) : undefined,
-          updatedAt: i.updatedAt ? String(i.updatedAt) : undefined,
-        }));
+        const normalized = items.map(i => {
+          const convertTimestamp = (ts: string | Timestamp | undefined): string | undefined => {
+            if (!ts) return undefined;
+            if (typeof ts === 'string') return ts;
+            if (ts.toDate) return ts.toDate().toISOString();
+            return String(ts);
+          };
+          return { ...i, createdAt: convertTimestamp(i.createdAt), updatedAt: convertTimestamp(i.updatedAt) };
+        });
         setLearnings(normalized);
       } catch (err) {
         console.error('load learnings failed', err);
