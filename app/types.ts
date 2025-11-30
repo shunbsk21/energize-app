@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export type View =
   | 'diagnosis'
   | 'personality'
@@ -35,7 +37,7 @@ export interface Habit {
   title?: string; // 旧データ互換用
   label?: string; // 旧データ互換用
   detail?: string;
-  createdAt?: string;
+  createdAt?: string | Timestamp;
   startDate?: string;
   frequencyType: FrequencyType;
   frequencyValue: number[] | string;
@@ -108,8 +110,8 @@ export interface Task {
   dueDate?: string;
   priority?: 'low' | 'medium' | 'high';
   done?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | Timestamp;
+  updatedAt?: string | Timestamp;
   completedAt?: string | null;
 }
 
@@ -121,7 +123,7 @@ export interface Checkin {
   text?: string; // for legacy data
   data?: any; // for legacy data
   payload?: any; // for legacy data
-  createdAt?: string;
+  createdAt?: string | Timestamp;
 }
 
 export interface Checkout {
@@ -131,7 +133,7 @@ export interface Checkout {
   note?: string;
   rating?: number | null;
   data?: any; // for legacy data
-  createdAt?: string;
+  createdAt?: string | Timestamp;
 }
 
 export interface LearningItem {
@@ -140,8 +142,8 @@ export interface LearningItem {
   url?: string;
   notes?: string;
   tags?: string[];
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | Timestamp;
+  updatedAt?: string | Timestamp;
   createdBy?: string;
 }
 
@@ -150,8 +152,8 @@ export interface NoteItem {
   title?: string;
   body: string;
   tags: string[];
-  createdAt: string;
-  updatedAt?: string;
+  createdAt: string | Timestamp;
+  updatedAt?: string | Timestamp;
   archived?: boolean;
   deleted?: boolean;
 }
@@ -179,7 +181,7 @@ export interface ValueResultRecord {
   top1: DriverKey;
   top2: DriverKey;
   answers?: ValueAnswersMap;
-  createdAt: string;
+  createdAt: string | Timestamp;
 }
 
 export interface PersonalityQuestion {
@@ -196,7 +198,7 @@ export interface PersonalityHistoryRecord {
   percents: Record<PersonalityDimension, number>;
   strength: Record<PersonalityDimension, number>;
   answers?: Record<number, PersonalityAnswerValue>;
-  createdAt?: string;
+  createdAt?: string | Timestamp;
 }
 
 export interface RecommendedHabit {
@@ -210,7 +212,7 @@ export interface PurelifeResultRecord {
   date: string;
   categories: Record<string, number>;
   overall: number;
-  createdAt: string;
+  createdAt: string | Timestamp;
 }
 
 // --- Component Props ---
