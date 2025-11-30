@@ -1,6 +1,7 @@
 "use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import Image from 'next/image';
 // types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
 import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View, Question } from '../types'; 
 import {
@@ -15,6 +16,16 @@ import {
 
 import AddHabitModal from "../components/AddHabitModal";
 import FrequencyEditor from "../components/FrequencyEditor";
+import {
+  IconBody,
+  IconMental,
+  IconEmotional,
+  IconIntellectual,
+  HelpIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+} from '../components/Icons';
+import { isHabitScheduledForDate } from '../utils/habits';
 
 const THRESHOLD = 16;
 const getTypeKey = (scores: EnergyScores) => {
@@ -41,91 +52,6 @@ interface EnergyDiagnosisProps {
 type QuizStep = EnergyCategory | 'start' | 'results';
 
 const categoryOrder: EnergyCategory[] = ['physical', 'mental', 'emotional', 'intellectual'];
-
-// (↓ isHabitScheduledForDate は変更なし)
-const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
-    // startDate が未設定ならスケジュールされていないものとみなす
-    if (!habit?.startDate) return false;
-
-    const habitStartDate = new Date(habit.startDate);
-    habitStartDate.setHours(0,0,0,0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0,0,0,0);
-
-    if (targetDate < habitStartDate) return false;
-
-    const fv: number[] = habit.frequencyValue ?? [];
-    switch (habit.frequencyType) {
-        case 'daily':
-            return true;
-        case 'weekly':
-            return fv.includes(targetDate.getDay());
-        case 'monthly':
-            return fv.includes(targetDate.getDate());
-        default:
-            return false;
-    }
-};
-
-// (↓ calculateCompletionStatus は変更なし)
-const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'partial' | 'full' => {
-    const dateStr = date.toLocaleDateString('sv-SE');
-    const scheduledHabits = habits.filter(h => isHabitScheduledForDate(h, date));
-
-    if (scheduledHabits.length === 0) {
-        return 'none';
-    }
-
-    const completedCount = scheduledHabits.filter(h => (h.completedDates ?? []).includes(dateStr)).length;
-
-    if (completedCount === 0) {
-        return 'none';
-    }
-    if (completedCount === scheduledHabits.length) {
-        return 'full';
-    }
-    return 'partial';
-};
-
-
-// --- Icon Components Start (変更なし) ---
-const IconBody: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-const IconMental: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-    </svg>
-);
-const IconEmotional: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-    </svg>
-);
-const IconIntellectual: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-    </svg>
-);
-const ChevronDownIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-    </svg>
-);
-const HelpIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-    </svg>
-);
-const CalendarIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-);
-// --- Icon Components End ---
-
 
 const categoryIcons: {[key in EnergyCategory]: React.FC<{className?: string}>} = {
     physical: IconBody,

@@ -1,5 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Checkin, Checkout } from '../types';
+import { formatFullDate } from '../utils/dates';
+import DatePickerModal from '../components/DatePickerModal';
+import { CalendarIcon } from '../components/Icons';
 
 // アイコンマップ（value / rating に応じた簡易アイコン）
 const ICON_MAP: Record<number, string> = {
@@ -45,12 +48,6 @@ interface RecordsProps {
   checkins?: Checkin[];
 }
 
-const formatDate = (d?: string) => {
-  if (!d) return '';
-  const dt = new Date(d);
-  return dt.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
-};
-
 const parseDateValue = (r: Checkin | Checkout) => {
   return r.date ?? r.createdAt ?? '';
 };
@@ -61,6 +58,8 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
   const [search, setSearch] = useState('');
   const [perPage, setPerPage] = useState<number>(20);
   const [page, setPage] = useState<number>(1);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // 入力データのばらつきに備えて正規化する（note / text の両対応、いろんなネストや型に対応）
   const normalizedCheckins = useMemo(() => {
@@ -117,6 +116,12 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
       return tb - ta;
     });
 
+    // 日付フィルタ
+    if (selectedDate) {
+      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      return sorted.filter(r => (r.date ?? r.createdAt ?? '').startsWith(dateStr));
+    }
+
     // checkout のタイプフィルタ（checkout のみ）
     let preFiltered = sorted;
     if (view === 'checkout' && checkoutFilter !== 'all') {
@@ -154,7 +159,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
     }
 
     return afterSearch;
-  }, [source, search, view, checkoutFilter]);
+  }, [source, search, view, checkoutFilter, selectedDate]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -168,7 +173,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
   return (
     <>
-      <div className="fixed left-4 right-4 z-40 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-4">
+      <div className="sticky top-20 z-30 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-4">
         <div className="w-full max-w-4xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-2">
@@ -214,11 +219,27 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                 </div>
               )}
             </div>
-            <div className="w-6" /> {/* 右側に左と同じ程度の余白を確保する小さなプレースホルダ */}
+            <div className="flex items-center gap-2">
+              {selectedDate && (
+                <button onClick={() => setSelectedDate(null)} className="text-sm text-red-600">
+                  日付フィルタ解除
+                </button>
+              )}
+              <button onClick={() => setIsDatePickerOpen(true)} className="p-2 rounded-lg hover:bg-gray-100">
+                <CalendarIcon className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-      <div className={`space-y-4 ${view === 'checkin' ? 'mt-24' : 'mt-36'}`}>
+      <DatePickerModal
+        isOpen={isDatePickerOpen}
+        onClose={() => setIsDatePickerOpen(false)}
+        initialDate={selectedDate || new Date()}
+        onDateSelect={(d) => { setSelectedDate(d); setIsDatePickerOpen(false); }}
+        highlightedDates={new Set([...checkins, ...checkouts].map(r => r.date).filter(Boolean) as string[])}
+      />
+      <div className="space-y-4 mt-6">
         <div className="mt-4">
           {total === 0 ? (
             <p className="text-sm text-gray-500">表示する記録がありません。</p>
@@ -229,7 +250,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                   <div className="flex items-start justify-between">
                     {/* 日付 + 値/レーティングをアイコン付きで表示 */}
                     <div className="flex items-center gap-2">
-                      <div className="text-xs text-gray-500">{formatDate(parseDateValue(r))}</div>
+                      <div className="text-xs text-gray-500">{formatFullDate(parseDateValue(r))}</div>
 
                       {/* checkin の value 表示（画像アイコン + 白背景タグ） */}
                       {view === 'checkin' && (

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 // ★ ユーザーの指示通り ../types に修正
+import AddFriendModal from './AddFriendModal';
 import { Profile, Friend } from '../types';
 
 // ★★★ Propsの定義を変更 ★★★
@@ -14,95 +15,6 @@ interface ProfileModalProps {
   onLogout: () => void;
   onSave: (newDisplayName: string, newImageUrl: string | null) => void;
 }
-
-// --- Icon Components Start (変更なし) ---
-const CameraIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-);
-
-const CopyIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-);
-
-const UserPlusIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-    </svg>
-);
-
-const LogoutIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-    </svg>
-);
-// --- Icon Components End ---
-
-
-// ★★★ AddFriendModal の Props を修正 ★★★
-const AddFriendModal: React.FC<{
-    profile: Profile;
-    following: Friend[]; // ★ friends -> following
-    onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
-    onClose: () => void;
-}> = ({ profile, following, onFollowUser, onClose }) => {
-    const [friendId, setFriendId] = useState('');
-    const [error, setError] = useState('');
-    
-    const handleAddFriend = () => {
-        const trimmedId = friendId.trim();
-        if (!trimmedId) {
-            setError('ユーザーIDを入力してください。');
-            return;
-        }
-        if (trimmedId === profile.id) {
-            setError('自分自身を友達として追加することはできません。');
-            return;
-        }
-        if (following.some(f => f.id === trimmedId)) {
-            setError('このユーザーは既にフォロー中です。');
-            return;
-        }
-
-        // ★ MainApp の onFollowUser に「IDだけ」を渡す
-        onFollowUser(trimmedId);
-        
-        setError('');
-        onClose(); // 成功したらモーダルを閉じる
-    };
-
-    return (
-         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
-             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-                 <h3 className="text-lg font-bold text-gray-800">友達をフォロー</h3>
-                 <p className="text-gray-600 my-2 text-sm">追加したい友達のユーザーIDを入力してください。</p>
-                 <input
-                     type="text"
-                     value={friendId}
-                     onChange={(e) => {
-                         setFriendId(e.target.value);
-                         setError('');
-                     }}
-                     className="mt-1 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900"
-                     placeholder="ユーザーID"
-                 />
-                 {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-                 <div className="flex justify-end gap-2 mt-6">
-                     <button onClick={onClose} className="px-4 py-2 rounded-lg text-gray-700 bg-gray-200 hover:bg-gray-300 font-semibold">
-                         キャンセル
-                     </button>
-                     <button onClick={handleAddFriend} className="px-4 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 font-semibold">
-                         フォロー
-                     </button>
-                 </div>
-             </div>
-         </div>
-     );
-};
 
 
 // ★★★ ProfileModal の Props を修正 ★★★

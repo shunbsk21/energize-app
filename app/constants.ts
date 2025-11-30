@@ -1,7 +1,9 @@
-import { DriverKey } from "./types";
-// FIX: Removed circular dependency by importing types from the corrected `types.ts` file.
-// This file now correctly separates constants from type definitions.
-import type { EnergyCategory, EnergyQuestionnaire, Advice } from '../app/types';
+import type {
+  DriverKey,
+  EnergyCategory,
+  EnergyQuestionnaire,
+  Advice,
+} from './types';
 
 type Question = { id: number; text: string };
 type Category = { 

@@ -5,6 +5,7 @@ import { DriverKey, Habit, DiagnosisFrequency, ValueAnswersMap, ValueResultRecor
 import { CATEGORIES, TYPE_INFO } from "../constants";
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth"; // signInAnonymously をインポート
+import { formatLocalISO, formatDateLabel } from '../utils/dates';
 import {
   collection,
   query,
@@ -15,12 +16,15 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import AddHabitModal from '../components/AddHabitModal';
 import FrequencyEditor from '../components/FrequencyEditor';
-
-// ★ CalendarIcon を追加
-const CalendarIcon: React.FC<{className?: string}> = ({className}) => ( <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>);
+import DatePickerModal from '../components/DatePickerModal';
+import ConfirmRemoveModal from '../components/ConfirmRemoveModal';
+import RecordsPickerModal from '../components/RecordsPickerModal';
+import { CalendarIcon, TrashIcon } from '../components/Icons';
+import HexagonChart from '../components/HexagonChart';
 
 // ★ 修正: CATEGORIES から質問の配列を生成
 const VALUE_QUESTIONS = CATEGORIES.flatMap(category => 
@@ -30,142 +34,6 @@ const VALUE_QUESTIONS = CATEGORIES.flatMap(category =>
   }))
 );
 
-// ...existing code...
-const formatDateLabel = (iso: string) => {
-  try { return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return iso; }
-};
-
-const HexagonChart: React.FC<{
-  values: number[];
-  labels: string[];
-  max: number;
-  size: number;
-}> = ({ values, labels, max, size }) => {
-  const center = size / 2;
-  const radius = size * 0.35;
-
-  const points = useMemo(() => {
-    return values.map((value, i) => {
-      const angle = (Math.PI / 3) * i - Math.PI / 2;
-      const r = Math.max(0, (value / max) * radius);
-      const x = center + r * Math.cos(angle);
-      const y = center + r * Math.sin(angle);
-      return `${x},${y}`;
-    }).join(' ');
-  }, [values, max, radius, center]);
-
-  const gridLines = useMemo(() => {
-    const levels = 4;
-    return Array.from({ length: levels }).map((_, levelIndex) => {
-      const r = (radius / levels) * (levelIndex + 1);
-      return labels.map((_, i) => {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        return `${center + r * Math.cos(angle)},${center + r * Math.sin(angle)}`;
-      }).join(' ');
-    });
-  }, [labels, radius, center]);
-
-  const axisAndLabels = useMemo(() => {
-    return labels.map((label, i) => {
-      const angle = (Math.PI / 3) * i - Math.PI / 2;
-      const x1 = center;
-      const y1 = center;
-      const x2 = center + radius * Math.cos(angle);
-      const y2 = center + radius * Math.sin(angle);
-      const labelX = center + (radius + 15) * Math.cos(angle);
-      const labelY = center + (radius + 15) * Math.sin(angle);
-      return { x1, y1, x2, y2, labelX, labelY, label };
-    });
-  }, [labels, radius, center]);
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {gridLines.map((line, i) => <polygon key={i} points={line} fill="none" stroke="#e5e7eb" strokeWidth="1" />)}
-      {axisAndLabels.map((axis, i) => (
-        <g key={i}>
-          <line x1={axis.x1} y1={axis.y1} x2={axis.x2} y2={axis.y2} stroke="#e5e7eb" strokeWidth="1" />
-          <text x={axis.labelX} y={axis.labelY} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="#4b5563">{axis.label}</text>
-        </g>
-      ))}
-      <polygon points={points} fill="rgba(79, 70, 229, 0.2)" stroke="#4f46e5" strokeWidth="2" />
-    </svg>
-  );
-};
-
-// ★ PurelifeDiagnosis.tsx から DatePickerModal をコピー
-const DatePickerModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onDateSelect: (date: Date) => void;
-  initialDate: Date;
-  highlightedDates?: Set<string>;
-}> = ({ isOpen, onClose, onDateSelect, initialDate, highlightedDates }) => {
-  const [displayDate, setDisplayDate] = useState<Date>(initialDate);
-  useEffect(() => setDisplayDate(initialDate), [initialDate, isOpen]);
-  if (!isOpen) return null;
-
-  const changeMonth = (amount: number) => setDisplayDate(d => {
-    const nd = new Date(d); nd.setMonth(nd.getMonth() + amount); return nd;
-  });
-
-  const generateCalendar = () => {
-    const year = displayDate.getFullYear();
-    const month = displayDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const nodes: React.ReactNode[] = [];
-    for (let i = 0; i < firstDay; i++) nodes.push(<div key={`e-${i}`} className="w-10 h-10"></div>);
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dateStr = date.toLocaleDateString('sv-SE');
-      const hasRecord = highlightedDates?.has(dateStr);
-      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
-      nodes.push(
-        <div
-          key={day}
-          className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-50 relative"
-          onClick={() => onDateSelect(date)}
-        >
-          <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
-            {day}
-          </span>
-          {hasRecord && (
-            <div className="absolute bottom-1">
-              <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
-            </div>
-          )}
-        </div>
-      );
-    }
-    return nodes;
-  };
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4 z-10" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
-          <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
-          <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
-        </div>
-        <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
-          {['日','月','火','水','木','金','土'].map(d => <div key={d}>{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-y-1 place-items-center">
-          {generateCalendar()}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const formatLocalISO = (d: Date = new Date()) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 interface ValueDiagnosisProps {
   handleAddHabit?: (newHabitData: any) => Promise<void> | void;
   setIsHelpOpen?: (open: boolean) => void;
@@ -173,8 +41,8 @@ interface ValueDiagnosisProps {
 
 export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueDiagnosisProps) {
   const defaultAnswers = useMemo(() => {
-    const m: AnswersMap = {};
-    VALUE_QUESTIONS.forEach(q => { m[String(q.id)] = 3; }); // ★ 修正: q.id を string に変換
+    const m: ValueAnswersMap = {};
+    VALUE_QUESTIONS.forEach(q => { m[String(q.id)] = 3; });
     return m;
   }, []);
 
@@ -190,8 +58,11 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
   const [habitDraft, setHabitDraft] = useState<any>(null);
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false); // ★ カレンダーモーダルの表示状態
-  const recordDates = useMemo(() => new Set(history.map(h => h.date)), [history]); // ★ 履歴のある日付セット
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isRecordsPickerModalOpen, setIsRecordsPickerModalOpen] = useState(false);
+  const [isConfirmRemoveModalOpen, setIsConfirmRemoveModalOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<ValueResultRecord | null>(null);
+  const recordDates = useMemo(() => new Set(history.map(h => h.date)), [history]);
 
   const getCurrentUid = () => {
     try { return auth?.currentUser?.uid ?? null; } catch { return null; }
@@ -255,11 +126,11 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
     return () => { mounted = false; };
   }, []);
   
-  const setAnswer = (id: number, val: number) => setAnswers(prev => ({ ...prev, [String(id)]: val })); // ★ 修正: id を string に変換
+  const setAnswer = (id: number, val: number) => setAnswers(prev => ({ ...prev, [String(id)]: val }));
 
   const calculateResult = (currentAnswers: ValueAnswersMap) => {
     const scores: Record<DriverKey, number> = { ACH: 0, CRE: 0, CON: 0, SEC: 0, TRU: 0, JOY: 0 };
-    CATEGORIES.forEach(cat => { // ★ 修正: VALUE_QUESTIONS.filter を削除し、直接 CATEGORIES を使用
+    CATEGORIES.forEach(cat => {
       const categoryQuestions = VALUE_QUESTIONS.filter(q => q.category === cat.key);
       const sum = categoryQuestions.reduce((acc, q) => acc + (currentAnswers[q.id] ?? 3), 0);
       scores[cat.key] = sum;
@@ -308,6 +179,25 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
     } catch (e) {
       console.error("saveResult error", e);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!uid || !recordToDelete) return;
+    try {
+      const docRef = doc(db, 'users', uid, 'valueHistory', recordToDelete.id);
+      await deleteDoc(docRef);
+      const newHistory = history.filter(h => h.id !== recordToDelete.id);
+      setHistory(newHistory);
+      if (selectedRecord?.id === recordToDelete.id) {
+        setSelectedRecord(null);
+        setStep('idle');
+      }
+    } catch (error) {
+      console.error("Error deleting record: ", error);
+    } finally {
+      setIsConfirmRemoveModalOpen(false);
+      setRecordToDelete(null);
     }
   };
 
@@ -487,7 +377,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
       <div className="bg-white rounded-xl p-6 shadow-md">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-gray-800">過去の診断結果 <span className="text-sm text-gray-500">（最新5件）</span></h3>
-          <button onClick={() => setIsCalendarOpen(true)} className="p-2 rounded-full hover:bg-gray-100" aria-label="カレンダーで過去の診断を表示">
+          <button onClick={() => setIsRecordsPickerModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100" aria-label="過去の診断をすべて表示">
             <CalendarIcon className="w-5 h-5 text-gray-600" />
           </button>
         </div>
@@ -503,6 +393,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => { setSelectedRecord(rec); setStep('results'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-sm text-indigo-600">詳細</button>
+                  <button onClick={() => { setRecordToDelete(rec); setIsConfirmRemoveModalOpen(true); }} className="text-sm text-red-600"><TrashIcon className="w-4 h-4" /></button>
                 </div>
               </li>
             ))}
@@ -524,6 +415,26 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
           setIsCalendarOpen(false);
           try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
         }}
+      />
+      <RecordsPickerModal
+        open={isRecordsPickerModalOpen}
+        onClose={() => setIsRecordsPickerModalOpen(false)}
+        history={history}
+        onSelect={(rec) => {
+          if (rec) {
+            setSelectedRecord(rec);
+            setStep('results');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          setIsRecordsPickerModalOpen(false);
+        }}
+      />
+      <ConfirmRemoveModal
+        open={isConfirmRemoveModalOpen}
+        onClose={() => setIsConfirmRemoveModalOpen(false)}
+        onConfirm={handleDeleteRecord}
+        title="診断結果の削除"
+        message={`本当に ${recordToDelete ? formatDateLabel(recordToDelete.date) : ''} の診断結果を削除しますか？この操作は元に戻せません。`}
       />
 
       <AddHabitModal

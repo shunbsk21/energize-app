@@ -144,3 +144,53 @@ export interface Question {
 export type EnergyQuestionnaire = {
   [key in EnergyCategory]: Question[];
 };
+
+export type ValueAnswersMap = Record<string, number>;
+
+export interface ValueResultRecord {
+  id: string;
+  date: string;
+  scores: Record<DriverKey, number>;
+  type: string;
+  top1: DriverKey;
+  top2: DriverKey;
+  answers?: ValueAnswersMap;
+  createdAt: any;
+}
+
+export type PersonalityDimension = "EI" | "SN" | "TF" | "JP";
+
+export type PersonalityAnswerValue = 1 | 2 | 3 | 4 | 5;
+
+export interface PersonalityQuestion {
+  id: number;
+  text: string;
+  dimension: PersonalityDimension;
+  direction: "positive" | "negative";
+}
+
+export interface PersonalityHistoryRecord {
+  id: string;
+  date: string;
+  type: string;
+  percents: Record<PersonalityDimension, number>;
+  strength: Record<PersonalityDimension, number>;
+  answers?: Record<number, PersonalityAnswerValue>;
+  createdAt?: string;
+}
+
+export interface RecommendedHabit {
+  energy: EnergyCategory;
+  title: string;
+  detail: string;
+}
+
+export type PurelifeAnswersMap = Record<string, number>;
+
+export interface PurelifeResultRecord {
+  id: string;
+  date: string;
+  categories: Record<string, number>;
+  overall: number;
+  createdAt: any;
+}

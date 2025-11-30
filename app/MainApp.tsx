@@ -35,7 +35,11 @@ import ProfileModal from './components/Profile';
 import Tasks from './views/Tasks';
 import Notes from './views/Notes';
 import Learnings from './views/Learnings';
-// ★ types.ts のパスを修正 (app/ 直下にあるため)
+import PersonalityDiagnosis from './views/PersonalityDiagnosis';
+import PurelifeDiagnosis from './views/PurelifeDiagnosis';
+import ValueDiagnosis from './views/ValueDiagnosis';
+
+// Icon
 import {
   DiagnosisIcon,
   HabitIcon,
@@ -48,14 +52,9 @@ import {
   ScholarIcon,
   BellIcon
 } from './components/Icons';
+
+// Type
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem } from './types'; 
-import PersonalityDiagnosis from './views/PersonalityDiagnosis';
-import PurelifeDiagnosis from './views/PurelifeDiagnosis';
-import ValueDiagnosis from './views/ValueDiagnosis';
-
-
-// --- Icon Components Start (コード変更なし) ---
-
 
 // Propsの定義 (変更なし)
 interface MainAppProps {

@@ -8,6 +8,14 @@ import HabitDetail from './HabitDetail';
 import CheckInModal from '../components/CheckInModal';
 import CheckOutModal from '../components/CheckOutModal';
 import {
+  isHabitScheduledForDate,
+  calculateCompletionStatus,
+  calculateCompletionPercentForDate,
+  calculateCurrentStreak,
+  isHabitCompletedOnDate,
+  normalizeKey
+} from '../utils/habits';
+import {
   PlusIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -68,90 +76,6 @@ interface HabitTrackerProps {
 const prioritySortValue = (p?: 'low'|'medium'|'high') => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
 
 
-// --- Helper Functions Start (変更なし) ---
-
-const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
-    if (!habit.startDate) return false;
-    const habitStartDate = new Date(habit.startDate);
-    habitStartDate.setHours(0,0,0,0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0,0,0,0);
-
-    if (targetDate < habitStartDate) return false;
-
-    switch (habit.frequencyType) {
-        case 'daily':
-            return true;
-        case 'weekly':
-            return habit.frequencyValue.includes(targetDate.getDay());
-        case 'monthly':
-            return habit.frequencyValue.includes(targetDate.getDate());
-        default:
-            return false;
-    }
-};
-
-const calculateCompletionStatus = (date: Date, habits: Habit[]): 'none' | 'partial' | 'full' => {
-  const dateStr = date.toLocaleDateString('sv-SE');
-  // scheduled and not skipped
-  const scheduledHabits = habits.filter(h => {
-    if (!isHabitScheduledForDate(h, date)) return false;
-    const skipped = (h.skippedDates || []).map((s:string) => {
-      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-    });
-    return !skipped.includes(dateStr);
-  });
-
-  if (scheduledHabits.length === 0) return 'none';
-
-  const completedCount = scheduledHabits.reduce((acc, h) => {
-    const type = (h.type ?? 'binary');
-    if (type === 'amount') {
-      const amountMap = h.completedAmounts || {};
-      const val = amountMap[dateStr] ?? 0;
-      const target = h.target ?? 0;
-      const satisfied = target > 0 ? val >= target : val > 0;
-      return acc + (satisfied ? 1 : 0);
-    } else {
-      const doneKeys = (h.completedDates || []).map((d: string) => {
-        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-      });
-      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
-    }
-  }, 0);
-
-  if (completedCount === 0) return 'none';
-  if (completedCount === scheduledHabits.length) return 'full';
-  return 'partial';
-};
-
-// 日ごとの完了率を計算（0..100）
-const calculateCompletionPercentForDate = (date: Date, habitsList: Habit[]) => {
-  const dateStr = date.toLocaleDateString('sv-SE');
-  const scheduled = habitsList.filter(h => {
-    if (!isHabitScheduledForDate(h, date)) return false;
-    const skipped = (h.skippedDates || []).map((s:string) => {
-      const dt = new Date(s); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-    });
-    return !skipped.includes(dateStr);
-  });
-  if (scheduled.length === 0) return 0;
-  const completedCount = scheduled.reduce((acc, h) => {
-    if ((h.type ?? 'binary') === 'amount') {
-      const val = ((h.completedAmounts || {})[dateStr] ?? 0);
-      const target = h.target ?? 0;
-      const ok = target > 0 ? val >= target : val > 0;
-      return acc + (ok ? 1 : 0);
-    } else {
-      const doneKeys = (h.completedDates || []).map((d: string) => {
-        const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toLocaleDateString('sv-SE');
-      });
-      return acc + (doneKeys.includes(dateStr) ? 1 : 0);
-    }
-  }, 0);
-  return Math.round((completedCount / scheduled.length) * 100);
-};
-
 const isDiagnosisScheduledForDate = (frequency: DiagnosisFrequency, date: Date): boolean => {
     const targetDate = new Date(date);
     targetDate.setHours(0,0,0,0);
@@ -167,8 +91,6 @@ const isDiagnosisScheduledForDate = (frequency: DiagnosisFrequency, date: Date):
             return false;
     }
 };
-
-// --- Helper Functions End ---
 
 
 // --- Modal Components Start (変更なし) ---
@@ -824,18 +746,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
     const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
 
-    // helper: その日 Habit が完了扱いか（scheduledHabits を参照する前に定義）
-    const isHabitCompletedOnDate = (habit: Habit, dkey: string) => {
-      const type = (habit.type ?? 'binary');
-      if (type === 'amount') {
-        const amount = (habit.completedAmounts || {})[dkey] ?? 0;
-        const target = habit.target ?? 0;
-        return target > 0 ? amount >= target : amount > 0;
-      } else {
-        return (habit.completedDates || []).includes(dkey);
-      }
-    };
-    
     // 表示用の"実効的な"habit（optimistic を優先）を考慮して
     const scheduledHabits = useMemo(() => {
       return habits.filter(h => {
@@ -876,111 +786,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       }
     };
 
-    // amount / binary 共通で「その日が done（達成）か」を返す Set を作る（キー正規化を厳密化）
-    const getDoneSetForHabit = (habit: Habit): Set<string> => {
-      if (habit.type === 'amount') {
-        const amtMap = habit.completedAmounts || {};
-        const target = habit.target ?? 0;
-        const keys: string[] = [];
-        Object.entries(amtMap).forEach(([rawKey, rawVal]) => {
-          const key = normalizeKey(rawKey);
-          const v = Number(rawVal);
-          if (Number.isNaN(v)) return;
-          if (target > 0 ? v >= target : v > 0) keys.push(key);
-        });
-        // completedDates が併存している場合も取り込む（保険）
-        (habit.completedDates || []).forEach(d => keys.push(normalizeKey(d)));
-        return new Set(keys);
-      }
-      return new Set((habit.completedDates || []).map(normalizeKey));
-    };
-
-    const calculateStreak = (habit: Habit): number => {
-      const doneSet = getDoneSetForHabit(habit);
-      if (!doneSet || doneSet.size === 0) return 0;
-      const skipSet = new Set((habit.skippedDates || []).map(normalizeKey));
-
-      // safe parser for keys like "YYYY-MM-DD" or Date strings
-      const parseKeyToDate = (k: string): Date | null => {
-        const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
-        const m = String(k).match(ymd);
-        if (m) {
-          const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
-          const dt = new Date(y, mo, d); dt.setHours(0,0,0,0); return dt;
-        }
-        const dt = new Date(k);
-        if (!Number.isNaN(dt.getTime())) { dt.setHours(0,0,0,0); return dt; }
-        return null;
-      };
-
-      // determine start = min(habit.startDate, earliest recorded done/skip) if available
-      const allKeys = [...Array.from(doneSet), ...Array.from(skipSet)] as string[];
-      const parsedDates = allKeys.map(k => parseKeyToDate(k)).filter(Boolean) as Date[];
-      let startFromHabit = parseKeyToDate(habit.startDate);
-      if (startFromHabit) startFromHabit.setHours(0,0,0,0);
-      let earliestRecorded: Date | null = null;
-      if (parsedDates.length > 0) {
-        earliestRecorded = parsedDates.reduce((a,b) => a.getTime() <= b.getTime() ? a : b);
-        earliestRecorded.setHours(0,0,0,0);
-      }
-      let start: Date;
-      if (startFromHabit && earliestRecorded) {
-        start = (earliestRecorded.getTime() < startFromHabit.getTime()) ? earliestRecorded : startFromHabit;
-      } else if (startFromHabit) {
-        start = startFromHabit;
-      } else if (earliestRecorded) {
-        start = earliestRecorded;
-      } else {
-        start = new Date(); start.setHours(0,0,0,0);
-      }
-
-      const isScheduled = (date: Date) => {
-        if (date < start) return false;
-        const key = date.toLocaleDateString('sv-SE');
-        // 予定日判定に先立ち、その日に記録済み（done）または skip があれば
-        // 非予定日でも連続計算に含める（ユーザー操作で記録した日を優先）
-        if (doneSet.has(key) || skipSet.has(key)) return true;
-        switch (habit.frequencyType) {
-          case 'daily': return true;
-          case 'weekly': return (habit.frequencyValue || []).includes(date.getDay());
-          case 'monthly': return (habit.frequencyValue || []).includes(date.getDate());
-          default: return false;
-        }
-      };
-
-      // find latest scheduled date on or before today that has a record (done or skip)
-      const today = new Date(); today.setHours(0,0,0,0);
-      let lastRecordedScheduled: Date | null = null;
-      for (let d = new Date(today); d >= start; d.setDate(d.getDate() - 1)) {
-        if (!isScheduled(d)) continue;
-        const k = d.toLocaleDateString('sv-SE');
-        if (doneSet.has(k) || skipSet.has(k)) { lastRecordedScheduled = new Date(d); break; }
-      }
-      if (!lastRecordedScheduled) return 0;
-
-      // 追加チェック：lastRecordedScheduled より最近の scheduled 日で未実施（done/skip でない）の日があれば
-      // 「丸1日空けた」とみなし現在の連続記録を 0 にする
-      for (let d = new Date(lastRecordedScheduled); d <= today; d.setDate(d.getDate() + 1)) {
-        if (d.getTime() === lastRecordedScheduled.getTime()) continue;
-        if (!isScheduled(d)) continue;
-        const key = d.toLocaleDateString('sv-SE');
-        if (!doneSet.has(key) && !skipSet.has(key)) {
-          return 0;
-        }
-      }
-
-      // count streak backwards from that recorded scheduled date (done -> +1, skip -> continue)
-      let streak = 0;
-      for (let cur = new Date(lastRecordedScheduled); cur >= start; cur.setDate(cur.getDate() - 1)) {
-        if (!isScheduled(cur)) continue;
-        const key = cur.toLocaleDateString('sv-SE');
-        if (doneSet.has(key)) { streak++; continue; }
-        if (skipSet.has(key)) { continue; }
-        break;
-      }
-      return streak;
-    };
-
     // ① 未完了優先、② 連続記録が長い順 に並べる
     const sortedScheduledHabits = useMemo(() => {
       const list = scheduledHabits.map(h => getDisplayedHabit(h));
@@ -990,8 +795,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         // 未完了を先に
         if (aDone !== bDone) return aDone ? 1 : -1;
         // 連続日数が長い方を上に
-        const aStreak = calculateStreak(a);
-        const bStreak = calculateStreak(b);
+        const aStreak = calculateCurrentStreak(a);
+        const bStreak = calculateCurrentStreak(b);
         if (bStreak !== aStreak) return bStreak - aStreak;
         // 最後は名前順で安定化
         return (a.name ?? '').localeCompare(b.name ?? '');
@@ -1606,7 +1411,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
                         const isCompleted = isHabitCompletedOnDate(habit, selectedDateString);
                         const amountVal = (habit.completedAmounts || {})[selectedDateString] ?? 0;
                         const isSkipped = ((habit.skippedDates || []) .map(normalizeKey)).includes(selectedDateString);
-                        const streak = calculateStreak(habit);
+                        const streak = calculateCurrentStreak(habit);
 
                         return (
                           <div 

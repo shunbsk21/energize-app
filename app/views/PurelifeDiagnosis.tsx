@@ -1,10 +1,14 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE, PurelifeAnswersMap, PurelifeResultRecord } from '../constants';
 import FrequencyEditor from '../components/FrequencyEditor';
+import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
+import { PurelifeAnswersMap, PurelifeResultRecord } from '../types';
 import AddHabitModal from '../components/AddHabitModal';
+import DatePickerModal from '../components/DatePickerModal';
+import { HelpIcon, CalendarIcon } from '../components/Icons';
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth";
+import { formatLocalISO, formatDateLabel } from '../utils/dates';
 import {
   collection,
   query,
@@ -20,29 +24,12 @@ import {
 } from "firebase/firestore";
 import { arrayUnion } from "firebase/firestore";
 
-// アイコン等（既存）
-const HelpIcon: React.FC<{className?: string}> = ({className}) => (/* ...existing svg... */ <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>);
-const CalendarIcon: React.FC<{className?: string}> = ({className}) => (/* ...existing svg... */ <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>);
-
-const defaultFrequency = { frequencyType: 'daily', frequencyValue: [] as any[] };
-
-const formatDateLabel = (iso: string) => {
-  try { return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return iso; }
-};
-
-// ローカルの YYYY-MM-DD を生成するユーティリティ（タイムゾーン差を排除）
-const formatLocalISO = (d: Date = new Date()) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 interface PurelifeProps {
   handleAddHabit?: (newHabitData: any) => Promise<void> | void;
   setIsHelpOpen?: (open: boolean) => void;
 }
+
+const defaultFrequency = { frequencyType: "daily", frequencyValue: [] };
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
 const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
@@ -74,71 +61,6 @@ const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelec
 
 const recordDatesFromHistory = (history: PurelifeResultRecord[] = []) => {
   return new Set(history.map(h => String(h.date)));
-};
-
-const DatePickerModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onDateSelect: (date: Date) => void;
-  initialDate: Date;
-  highlightedDates?: Set<string>;
-}> = ({ isOpen, onClose, onDateSelect, initialDate, highlightedDates }) => {
-  // ...copy existing DatePickerModal implementation...
-  const [displayDate, setDisplayDate] = useState<Date>(initialDate);
-  useEffect(() => setDisplayDate(initialDate), [initialDate, isOpen]);
-  if (!isOpen) return null;
-  const changeMonth = (amount: number) => setDisplayDate(d => {
-    const nd = new Date(d); nd.setMonth(nd.getMonth() + amount); return nd;
-  });
-  const generateCalendar = () => {
-    const year = displayDate.getFullYear();
-    const month = displayDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const nodes: React.ReactNode[] = [];
-    for (let i = 0; i < firstDay; i++) nodes.push(<div key={`e-${i}`} className="w-10 h-10"></div>);
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dateStr = date.toLocaleDateString('sv-SE');
-      const hasRecord = highlightedDates?.has(dateStr);
-      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
-      nodes.push(
-        <div
-          key={day}
-          className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-50 relative"
-          onClick={() => onDateSelect(date)}
-        >
-          <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
-            {day}
-          </span>
-          {hasRecord && (
-            <div className="absolute bottom-1">
-              <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
-            </div>
-          )}
-        </div>
-      );
-    }
-    return nodes;
-  };
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="absolute inset-0" />
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4 z-10" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
-          <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
-          <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
-        </div>
-        <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
-          {['日','月','火','水','木','金','土'].map(d => <div key={d}>{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-y-1 place-items-center">
-          {generateCalendar()}
-        </div>
-      </div>
-    </div>
-  );
 };
 
 const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
