@@ -1,5 +1,6 @@
 import { Habit } from '../types';
 import { formatDateKey } from '../utils/dates';
+import { DiagnosisFrequency } from '../types';
 
 const weekdayNames = ['日','月','火','水','木','金','土'];
 
@@ -204,18 +205,34 @@ export const calculateLongestStreak = (habit: Habit): number => {
 };
 
 export const formatFrequency = (habit: Habit) => {
-    const type = habit.frequencyType;
-    const val = habit.frequencyValue;
-    if (type === 'daily') return '毎日';
-    if (type === 'weekly') {
-      if (Array.isArray(val) && val.length > 0) return '毎週 ' + val.map((d: number) => weekdayNames[d]).join('・');
-      return '毎週';
-    }
-    if (type === 'monthly') {
-      if (Array.isArray(val) && val.length > 0) return '毎月 ' + val.map((d: number) => `${d}日`).join('、');
-      return '毎月';
-    }
-    if (typeof val === 'string' && val) return String(val);
-    if (Array.isArray(val) && val.length) return String(val);
-    return '';
-  };
+  const type = habit.frequencyType;
+  const val = habit.frequencyValue;
+  if (type === 'daily') return '毎日';
+  if (type === 'weekly') {
+    if (Array.isArray(val) && val.length > 0) return '毎週 ' + val.map((d: number) => weekdayNames[d]).join('・');
+    return '毎週';
+  }
+  if (type === 'monthly') {
+    if (Array.isArray(val) && val.length > 0) return '毎月 ' + val.map((d: number) => `${d}日`).join('、');
+    return '毎月';
+  }
+  if (typeof val === 'string' && val) return String(val);
+  if (Array.isArray(val) && val.length) return String(val);
+  return '';
+};
+
+export const isDiagnosisScheduledForDate = (frequency: DiagnosisFrequency, date: Date): boolean => {
+  const targetDate = new Date(date);
+  targetDate.setHours(0,0,0,0);
+
+  switch (frequency.frequencyType) {
+    case 'daily':
+        return true;
+    case 'weekly':
+        return Array.isArray(frequency.frequencyValue) && frequency.frequencyValue.includes(targetDate.getDay());
+    case 'monthly':
+        return Array.isArray(frequency.frequencyValue) && frequency.frequencyValue.includes(targetDate.getDate());
+    default:
+        return false;
+  }
+};

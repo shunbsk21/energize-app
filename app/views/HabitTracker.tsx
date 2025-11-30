@@ -15,7 +15,8 @@ import {
   calculateCompletionPercentForDate,
   calculateCurrentStreak,
   isHabitCompletedOnDate,
-  normalizeKey
+  normalizeKey,
+  isDiagnosisScheduledForDate
 } from '../utils/habits';
 import { formatDateKey } from '../utils/dates';
 import {
@@ -36,38 +37,13 @@ import {
 // 優先度ソート用
 const prioritySortValue = (p?: 'low'|'medium'|'high') => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
 
+const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
-const isDiagnosisScheduledForDate = (frequency: DiagnosisFrequency, date: Date): boolean => {
-    const targetDate = new Date(date);
-    targetDate.setHours(0,0,0,0);
-
-    switch (frequency.frequencyType) {
-        case 'daily':
-            return true;
-        case 'weekly':
-            return Array.isArray(frequency.frequencyValue) && frequency.frequencyValue.includes(targetDate.getDay());
-        case 'monthly':
-            return Array.isArray(frequency.frequencyValue) && frequency.frequencyValue.includes(targetDate.getDate());
-        default:
-            return false;
-    }
-};
-
-// HabitListModal has been moved to its own file: app/components/HabitListModal.tsx
-// WEEK_DAYS is now part of app/components/HabitListModal.tsx
-
-// --- Modal Components End ---
-
-// --- HabitTracker の中にモーダルを追加 ---
-// --- モーダル内 textarea の自動リサイズ用ヘルパ（モジュール内どこでも可） ---
 function autoGrowTextArea(el?: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = 'auto';
   el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
 }
-
-
-// --- HabitTracker Component Start ---
 
 const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, 
