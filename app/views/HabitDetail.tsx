@@ -9,6 +9,7 @@ import {
   normalizeKey
 } from '../utils/habits';
 import { EditIcon, TrashIcon } from '../components/Icons';
+import { formatDateKey } from '../utils/dates';
 import { ActionModal } from '../components/ActionModal'; 
 
 interface HabitDetailProps {
@@ -165,7 +166,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
         else dayClass = 'bg-gray-300 text-gray-500';
       }
       // 選択日は actionModalDate（あれば）または今日を選択状態として表示
-      const selectedKey = actionModalDate ? dateKey(actionModalDate) : new Date().toLocaleDateString('sv-SE');
+      const selectedKey = actionModalDate ? formatDateKey(actionModalDate) : new Date().toLocaleDateString('sv-SE');
       const isSelected = dateStr === selectedKey;
       if (isToday && ((habit.type === 'amount' ? !isAmountFull && isScheduled : !isBinaryCompleted && isScheduled))) {
         dayClass += ' ring-2 ring-indigo-500';

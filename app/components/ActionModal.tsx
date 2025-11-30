@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Habit } from '../types';
+import { formatDateKey } from '../utils/dates';
 
 interface ActionModalProps {
   habit: Habit;
@@ -30,7 +31,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
   setIsEnteringAmount,
   setPendingAmount,
 }) => {
-    const dkey = actionModalDate.toLocaleDateString('sv-SE');
+    const dkey = formatDateKey(actionModalDate);
     const isSkipped = habit.skippedDates?.includes(dkey) ?? false;
     const amountMap = habit.completedAmounts || {};
     const currentAmount = amountMap[dkey] ?? '';
