@@ -8,6 +8,7 @@ import DatePickerModal from '../components/DatePickerModal';
 import HabitDetail from './HabitDetail';
 import CheckInModal from '../components/CheckInModal';
 import CheckOutModal from '../components/CheckOutModal';
+import TaskModal from '../components/TaskModal';
 import { HabitListModal } from '../components/HabitListModal';
 import {
   isHabitScheduledForDate,
@@ -95,7 +96,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [isAmountModalOpen, setIsAmountModalOpen] = useState(false);
   const [amountModalHabit, setAmountModalHabit] = useState<Habit | null>(null);
   const [amountModalValue, setAmountModalValue] = useState<string>('');
-
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(false);
@@ -103,10 +103,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // --- Task add modal state (新規) ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskDetails, setTaskDetails] = useState('');
-  const [taskDueDate, setTaskDueDate] = useState<string>(''); // ISO YYYY-MM-DD
-  const [taskPriority, setTaskPriority] = useState<'low'|'medium'|'high'>('medium');
 
   // --- Floating multi-button 展開 state ---
   const [fabOpen, setFabOpen] = useState(false);
@@ -226,31 +222,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         return (a.title || '').localeCompare(b.title || '');
       });
   }, [localTasks, selectedDateISO]);
-
-  // タスク追加 submit
-  const submitTask = async () => {
-    if (!taskTitle.trim()) return;
-    const payload = { title: taskTitle.trim(), detail: taskDetails.trim() || undefined, dueDate: taskDueDate || selectedDateISO, priority: taskPriority };
-    try {
-      if (onAddTask) {
-        await onAddTask(payload);
-      } else {
-        // fallback: write directly to Firestore
-        const uid = auth?.currentUser?.uid ?? null;
-        if (db && uid) {
-          await addDoc(collection(db, 'users', uid, 'tasks'), { ...payload, done: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        } else {
-          console.warn('onAddTask not provided and no auth/db available');
-        }
-      }
-    } catch (err) {
-      console.error('onAddTask error', err);
-    }
-    // reset
-    setTaskTitle(''); setTaskDetails(''); setTaskDueDate(''); setTaskPriority('medium');
-    setIsTaskModalOpen(false);
-    setFabOpen(false);
-  };
 
   // タスク完了トグル時にローカル更新して親へ通知
   const handleToggleTaskLocal = async (taskId: string, nextDone: boolean) => {
@@ -1315,31 +1286,16 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
               </div>
             )}
 
-            {/* /* Task add modal */}
-            {isTaskModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsTaskModalOpen(false)}>
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">タスクを追加</h3>
-                    <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-500">閉じる</button>
-                  </div>
-                  <div className="space-y-3">
-                    <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-                    <textarea value={taskDetails} onChange={e => setTaskDetails(e.target.value)} placeholder="詳細" rows={3} className="w-full p-2 border border-gray-200 rounded" />
-                    <div className="flex items-center gap-2">
-                      <input type="date" value={taskDueDate} onChange={e => setTaskDueDate(e.target.value)} className="p-2 border border-gray-200 rounded" />
-                      <select value={taskPriority} onChange={e => setTaskPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
-                        <option value="low">低</option>
-                        <option value="medium">中</option>
-                        <option value="high">高</option>
-                      </select>
-                      <div className="flex-1" />
-                      <button onClick={submitTask} className="px-4 py-2 bg-indigo-600 text-white rounded">追加</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <TaskModal
+              isOpen={isTaskModalOpen}
+              onClose={() => setIsTaskModalOpen(false)}
+              onSubmit={async (payload) => {
+                await onAddTask(payload);
+                setIsTaskModalOpen(false);
+                setFabOpen(false);
+              }}
+              initialDate={selectedDateISO}
+            />
 
             {/* 予定外タスク用モーダル */}
             {isNonScheduledOpen && (

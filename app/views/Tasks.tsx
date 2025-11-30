@@ -18,6 +18,7 @@ import {
 import { db, auth } from '../../lib/firebase';
 import TaskDetail from './TaskDetail';
 
+import TaskModal from '../components/TaskModal';
 interface TaskItem {
   id: string;
   title: string;
@@ -289,7 +290,13 @@ const Tasks: React.FC = () => {
     const uid = auth?.currentUser?.uid ?? null;
     if (!db || !uid) return;
     try {
-      await addDoc(collection(db, 'users', uid, 'tasks'), { ...payload, done: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      const dataToSave = {
+        ...payload,
+        details: payload.details || null, // undefined を null に変換
+        done: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp() };
+      await addDoc(collection(db, 'users', uid, 'tasks'), dataToSave);
     } catch (e) { console.error(e); }
   };
 
@@ -458,54 +465,16 @@ const Tasks: React.FC = () => {
        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
      </button>
  
-     {/* Create / Edit Modal */}
-     {isCreateOpen && (
-        <Portal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsCreateOpen(false)}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">{editingId ? 'タスクを編集' : 'タスクを追加'}</h3>
-                <button onClick={() => setIsCreateOpen(false)} className="text-gray-500">閉じる</button>
-              </div>
-    
-              <div className="space-y-3">
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-                <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
-                <div className="flex gap-2 items-center">
-                  <CalendarPicker value={dueDate} onChange={setDueDate} />
-                  <PrioritySelect value={priority} onChange={setPriority} />
-                  <label className="inline-flex items-center gap-2 ml-2">
-                    <input type="checkbox" checked={isDone} onChange={e => setIsDone(e.target.checked)} />
-                    <span className="text-sm">完了</span>
-                  </label>
-                  <div className="flex-1" />
-                  <button onClick={submit} className="px-4 py-2 bg-indigo-600 text-white rounded">{editingId ? '更新' : '追加'}</button>
-                </div>
-              </div>
-              {/* 編集中は削除ボタンを表示 */}
-              {editingId && (
-                <div className="mt-4 flex justify-between">
-                  <button
-                    onClick={async () => {
-                      if (!editingId) return;
-                      try {
-                        await removeTask(editingId);
-                      } catch (e) { console.error(e); }
-                      setIsCreateOpen(false);
-                      setEditingId(null);
-                      setTitle(''); setDetails(''); setDueDate(undefined); setPriority(defaultPriority); setIsDone(false);
-                    }}
-                    className="px-4 py-2 text-sm text-red-600 border border-red-100 rounded"
-                  >
-                    削除
-                  </button>
-                  <div />
-                </div>
-              )}
-            </div>
-          </div>
-        </Portal>
-     )}
+    <TaskModal
+      isOpen={isCreateOpen}
+      onClose={() => setIsCreateOpen(false)}
+      onSubmit={async (payload) => {
+        await createTask(payload);
+        setIsCreateOpen(false);
+      }}
+      initialDate={toLocalISO(new Date())}
+    />
+
     {/* 編集用詳細モーダル（HabitTracker と同等の編集 UI） */}
     {editingId && (() => {
       const t = tasks.find(x => x.id === editingId);
