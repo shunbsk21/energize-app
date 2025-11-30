@@ -221,7 +221,11 @@ const Learnings: React.FC<LearningsProps> = ({ learnings = [], onAddLearning, pr
 
           <div className="p-6 overflow-auto flex-1">
             <div className="mb-4 text-xs text-gray-500">
-              {selected.createdAt && <span>作成: {new Date(selected.createdAt).toLocaleString()}</span>}
+              {selected.createdAt && <span>作成: {
+                (typeof selected.createdAt === 'object' && selected.createdAt && 'toDate' in selected.createdAt)
+                  ? (selected.createdAt as any).toDate().toLocaleString()
+                  : new Date(selected.createdAt).toLocaleString()
+              }</span>}
               {selected.updatedAt && <span className="ml-3">更新: {
                 (typeof selected.updatedAt === 'object' && selected.updatedAt && 'toDate' in selected.updatedAt)
                   ? (selected.updatedAt as any).toDate().toLocaleString()
