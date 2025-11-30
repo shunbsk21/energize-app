@@ -24,9 +24,9 @@ export const isHabitScheduledForDate = (habit: Habit, date: Date): boolean => {
     case 'daily':
       return true;
     case 'weekly':
-      return (habit.frequencyValue || []).includes(targetDate.getDay());
+      return Array.isArray(habit.frequencyValue) && habit.frequencyValue.includes(targetDate.getDay());
     case 'monthly':
-      return (habit.frequencyValue || []).includes(targetDate.getDate());
+      return Array.isArray(habit.frequencyValue) && habit.frequencyValue.includes(targetDate.getDate());
     default:
       return false;
   }
