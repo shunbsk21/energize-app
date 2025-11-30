@@ -307,30 +307,32 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                 </div>
 
                 {formData.frequencyType === 'weekly' && (() => {
-                  const currentFrequencyValue = formData.frequencyValue as number[];
+                  const currentFrequencyValueNumber = formData.frequencyValue as number[];
                   return (
                     <div className="flex justify-center gap-1">
                       {WEEK_DAYS.map((day, index) => (
                         <button type="button" key={index}
                           onClick={() => {
-                            const newValue = currentFrequencyValue.includes(index)
-                              ? currentFrequencyValue.filter(d => d !== index)
-                              : [...currentFrequencyValue, index];
+                            const newValue = currentFrequencyValueNumber.includes(index)
+                              ? currentFrequencyValueNumber.filter(d => d !== index)
+                              : [...currentFrequencyValueNumber, index];
                             setFormData(f => ({...f, frequencyValue: newValue.sort()}));
                           }}
-                          className={`w-10 h-10 rounded-full font-semibold transition-colors ${currentFrequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                          className={`w-10 h-10 rounded-full font-semibold transition-colors ${currentFrequencyValueNumber.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                         >{day}</button>
                       ))}
                     </div>
                   );
                 })()}
 
-                {formData.frequencyType === 'monthly' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
-                    <input
-                      type="text" placeholder="例: 1, 15"
-                      defaultValue={formData.frequencyValue.join(', ')}
+                {formData.frequencyType === 'monthly' && (() => {
+                  const currentFrequencyValueString = formData.frequencyValue as string;
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
+                      <input
+                        type="text" placeholder="例: 1, 15"
+                      defaultValue={currentFrequencyValueString.join(', ')}
                       onChange={e => {
                         const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
                         setFormData(f => ({...f, frequencyValue: value.sort((a,b)=>a-b)}));
@@ -338,7 +340,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                       className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                     />
                   </div>
-                )}
+                )})()}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
