@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export const formatDateLabel = (iso: string): string => {
   try {
     const date = new Date(`${iso}T00:00:00`);
@@ -14,3 +16,12 @@ export const formatFullDate = (d?: string): string => {
 };
 
 export const formatDateKey = (d: Date): string => d.toLocaleDateString('sv-SE');
+
+export const formatDateForLabel = (dateValue: string | Date | Timestamp | undefined | null): string => {
+  if (!dateValue) return new Date().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+  if (typeof dateValue === 'string' || dateValue instanceof Date) {
+    return new Date(dateValue).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+  }
+  // Assuming it's a Firestore Timestamp
+  return dateValue.toDate().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+};

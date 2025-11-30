@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { EnergyRecord, Habit, EnergyCategory, Checkin, Checkout, AnalyticsProps } from '../types';
 import { ENERGY_CATEGORIES } from '../constants';
 import { formatDateKey } from '../utils/dates';
+import { formatDateForLabel } from '../utils/dates';
 
 type Period = 7 | 30 | 'all';
 type TooltipData = { x: number; y: number; content: React.ReactNode; };
@@ -26,7 +27,6 @@ const createSpline = (points: {x: number; y: number}[]) => {
   return path;
 };
 
-
 const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpOpen, checkins, checkouts }) => {
   const [period, setPeriod] = useState<Period>(7);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -36,25 +36,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
   // --- 追加: チャート切替(state) ---
   const [checkChartMode, setCheckChartMode] = useState<'checkin' | 'checkout' | 'both'>('both');
 
-  const handleCategoryToggle = (category: EnergyCategory) => {
-    setVisibleCategories(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(category)) {
-        newSet.delete(category);
-      } else {
-        newSet.add(category);
-      }
-      return newSet;
-    });
-  };
-
   const filteredHistory = useMemo(() => {
     if (period === 'all' || energyHistory.length === 0) return energyHistory;
     const now = new Date();
     const cutoff = new Date(now.setDate(now.getDate() - period));
     return energyHistory.filter(record => new Date(record.date) >= cutoff);
   }, [energyHistory, period]);
-
 
   const habitData = useMemo(() => {
     if (habits.length === 0) return [];
@@ -415,7 +402,15 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
           <p className="text-gray-500 text-center py-6">チェックインが2件以上必要です。</p>
         ) : (
           (() => {
-            const data = (checkins || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const getDateMs = (record: Checkin): number => {
+              const dateValue = record.date ?? record.createdAt;
+              if (!dateValue) return 0;
+              if (typeof dateValue === 'string') return new Date(dateValue).getTime();
+              // Assuming it's a Firestore Timestamp
+              if (typeof (dateValue as any).toDate === 'function') return (dateValue as any).toDate().getTime();
+              return 0;
+            };
+            const data = [...(checkins || [])].sort((a, b) => getDateMs(a) - getDateMs(b));
             const width = 600, height = 300, margin = { left: 40, right: 20, top: 10, bottom: 28 }; // height を倍に
             const x = (i:number) => margin.left + i * (width - margin.left - margin.right) / Math.max(1, data.length - 1);
             const y = (v:number) => margin.top + (5 - v) * ((height - margin.top - margin.bottom) / 4);
@@ -442,9 +437,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                   ))}
                   {data.map((d,i) => (
                     (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
-                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">
-                      {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
-                    </text>
+                    <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">{formatDateForLabel(d.date || d.createdAt)}</text>
                   ))}
                 </svg>
               </div>
@@ -460,7 +453,15 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-3">チェックアウトの推移</h3>
         {(() => {
-          const co = (checkouts || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const getDateMs = (record: Checkout): number => {
+            const dateValue = record.date ?? record.createdAt;
+            if (!dateValue) return 0;
+            if (typeof dateValue === 'string') return new Date(dateValue).getTime();
+            // Assuming it's a Firestore Timestamp
+            if (typeof (dateValue as any).toDate === 'function') return (dateValue as any).toDate().getTime();
+            return 0;
+          };
+          const co = [...(checkouts || [])].sort((a, b) => getDateMs(a) - getDateMs(b));
           if (typeof window !== 'undefined') console.debug('[Analytics] checkouts sample:', co.slice(0,10));
 
           // 柔軟に数値を抽出（rating, value, score 等を試し、文字列数字も数値化）
@@ -515,7 +516,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
                 {data.map((d,i) => (
                   (i % Math.max(1, Math.floor(data.length / 6)) === 0) &&
                   <text key={i} x={x(i)} y={height - 6} textAnchor="middle" fontSize="12" fill="#6B7281">
-                    {new Date(d.date).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
+                    {formatDateForLabel(d.date || d.createdAt)}
                   </text>
                 ))}
               </svg>
@@ -528,8 +529,17 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
 
   const renderBothChart = () => {
     // prepare series (sorted ascending)
-    const ci = (checkins || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const co = (checkouts || []).slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const getDateMs = (record: Checkin | Checkout): number => {
+      const dateValue = record.date ?? record.createdAt;
+      if (!dateValue) return 0;
+      if (typeof dateValue === 'string') return new Date(dateValue).getTime();
+      // Assuming it's a Firestore Timestamp
+      if (typeof (dateValue as any).toDate === 'function') return (dateValue as any).toDate().getTime();
+      return 0;
+    };
+    const ci = [...(checkins || [])].sort((a, b) => getDateMs(a) - getDateMs(b));
+    const co = [...(checkouts || [])].sort((a, b) => getDateMs(a) - getDateMs(b));
+
     const extractNumeric = (c: Record<string, any>) => {
       const cand = c.rating ?? c.value ?? c.score ?? null;
       if (cand === null || cand === undefined) return null;
@@ -544,7 +554,10 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
     // checkins 型には value が存在するので value をそのまま使う（不要なプロパティ参照を排除）
     const checkinSeries = ci.map(c => ({ date: c.date, v: Number(c.value) })).filter(x => !isNaN(x.v));
 
-    const allDates = Array.from(new Set([...checkoutSeries.map(s=>s.date), ...checkinSeries.map(s=>s.date)])).sort((a,b)=> new Date(a).getTime() - new Date(b).getTime());
+    const allDates = Array.from(new Set([...checkoutSeries.map(s => s.date), ...checkinSeries.map(s => s.date)]))
+      .filter((d): d is string => !!d) // filter out undefined dates
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
     if (allDates.length < 2) return <p className="text-gray-500 text-center py-6">グラフ表示に必要なデータが不足しています。</p>;
 
     const width = 600, height = 300, margin = { left: 40, right: 20, top: 10, bottom: 28 };
