@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import {
+  AnswerValue,
   View,
   DiagnosisFrequency,
   FrequencyType,

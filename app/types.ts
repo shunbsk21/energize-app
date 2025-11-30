@@ -163,6 +163,7 @@ export type EnergyQuestionnaire = {
 };
 export type ValueAnswersMap = Record<string, number>;
 export type PersonalityDimension = "EI" | "SN" | "TF" | "JP";
+export type AnswerValue = 1 | 2 | 3 | 4 | 5;
 export type PersonalityAnswerValue = 1 | 2 | 3 | 4 | 5;
 export type PurelifeAnswersMap = Record<string, number>;
 
