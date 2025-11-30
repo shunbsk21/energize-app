@@ -1290,7 +1290,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
               isOpen={isTaskModalOpen}
               onClose={() => setIsTaskModalOpen(false)}
               onSubmit={async (payload) => {
-                await onAddTask(payload);
+                if (onAddTask) {
+                  await onAddTask(payload);
+                }
                 setIsTaskModalOpen(false);
                 setFabOpen(false);
               }}
