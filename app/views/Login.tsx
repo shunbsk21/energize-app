@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Profile } from '../types';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../../lib/firebase';
+import { GoogleIcon } from '../components/Icons';
 // ...existing code...
 
 interface LoginProps {

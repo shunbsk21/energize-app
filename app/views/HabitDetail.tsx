@@ -9,6 +9,7 @@ import {
   calculateLongestStreak,
   normalizeKey
 } from '../utils/habits';
+import { EditIcon, TrashIcon } from '../components/Icons';
 
 interface HabitDetailProps {
   habit: Habit;

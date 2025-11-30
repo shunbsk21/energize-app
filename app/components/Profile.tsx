@@ -4,6 +4,7 @@ import React, { useState, useRef, useMemo } from 'react';
 // ★ ユーザーの指示通り ../types に修正
 import AddFriendModal from './AddFriendModal';
 import { Profile, Friend } from '../types';
+import { CameraIcon, CopyIcon, LogoutIcon } from './Icons';
 
 // ★★★ Propsの定義を変更 ★★★
 interface ProfileModalProps {
