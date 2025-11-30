@@ -44,7 +44,13 @@ const RatingTag: React.FC<{ value: string | number | undefined | null }> = ({ va
 };
 
 const parseDateValue = (r: Checkin | Checkout) => {
-  return r.date ?? r.createdAt ?? '';
+  const dateValue = r.date ?? r.createdAt;
+  if (!dateValue) return '';
+  if (typeof dateValue === 'string') {
+    return dateValue;
+  }
+  // Firestore Timestamp object
+  return dateValue.toDate().toISOString();
 };
 
 const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
