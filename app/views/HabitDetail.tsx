@@ -4,12 +4,12 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Habit, FrequencyType } from '../types';
 import {
   isHabitScheduledForDate,
-  getDoneSetForHabit,
   calculateCurrentStreak,
   calculateLongestStreak,
   normalizeKey
 } from '../utils/habits';
 import { EditIcon, TrashIcon } from '../components/Icons';
+import { ActionModal } from '../components/ActionModal'; 
 
 interface HabitDetailProps {
   habit: Habit;
@@ -42,25 +42,28 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
     type: (habit.type ?? 'binary') as 'binary' | 'amount',
     target: habit.target ?? undefined,
     unit: habit.unit ?? '',
-    details: habit.details ?? '',
+    detail: habit.detail ?? '',
     skippedDates: habit.skippedDates ?? []
   });
 
+  // isEditingがtrueになった時に、フォームデータをhabit propから初期化する
   useEffect(() => {
-    setFormData({
-      name: habit.name,
-      startDate: habit.startDate,
-      frequencyType: habit.frequencyType,
-      frequencyValue: habit.frequencyValue,
-      type: (habit.type ?? 'binary') as 'binary' | 'amount',
-      target: habit.target ?? undefined,
-      unit: habit.unit ?? '',
-      details: habit.details ?? '',
-      skippedDates: habit.skippedDates ?? []
-    });
-    // 自動リサイズを一度実行
-    setTimeout(() => autoGrowTextArea(detailsRef.current), 0);
-  }, [habit, isEditing]);
+    if (isEditing) {
+      setFormData({
+        name: habit.name,
+        startDate: habit.startDate,
+        frequencyType: habit.frequencyType,
+        frequencyValue: habit.frequencyValue,
+        type: (habit.type ?? 'binary') as 'binary' | 'amount',
+        target: habit.target ?? undefined,
+        unit: habit.unit ?? '',
+        detail: habit.detail ?? '',
+        skippedDates: habit.skippedDates ?? []
+      });
+      // 自動リサイズを一度実行
+      setTimeout(() => autoGrowTextArea(detailsRef.current), 0);
+    }
+  }, [isEditing, habit]);
 
   const completedDatesSet = useMemo(() => new Set((habit.completedDates || []).map(normalizeKey)), [habit.completedDates]);
 
@@ -88,8 +91,6 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       default: return '頻度未設定';
     }
   }, [habit.frequencyType, habit.frequencyValue]);
-
-  const dateKey = (d: Date) => d.toLocaleDateString('sv-SE');
 
   const [actionModalDate, setActionModalDate] = useState<Date | null>(null);
   const [pendingAmount, setPendingAmount] = useState<string>('');
@@ -196,82 +197,6 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
     return calendarDays;
   };
 
-  const ActionModal: React.FC = () => {
-    if (!actionModalDate) return null;
-    const dkey = dateKey(actionModalDate);
-    const isSkipped = habit.skippedDates?.includes(dkey) ?? false;
-    const amountMap = habit.completedAmounts || {};
-    const currentAmount = amountMap[dkey] ?? '';
-    const isBinaryDone = (habit.completedDates || []).includes(dkey);
-
-    // 親 fixed コンテナ内に absolute 表示、画面下の固定タブを避けるため bottom を確保
-    return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center p-4" style={{ bottom: '84px' }} onClick={e => e.stopPropagation()}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className="text-xl font-semibold text-gray-900">{habit.name}</div>
-              <div className="text-base text-gray-600">{actionModalDate.toLocaleDateString()}</div>
-            </div>
-            <button
-              onClick={() => setActionModalDate(null)}
-              aria-label="閉じる"
-              className="text-gray-600 hover:text-gray-900 text-3xl leading-none"
-            >
-              ×
-            </button>
-          </div>
-          {/* ボタン群 / 入力フォーム（既存ロジックをそのまま使用） */}
-          {!isEnteringAmount ? (
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 flex flex-col items-center gap-2 py-4 bg-indigo-600 text-white rounded-lg shadow-lg"
-                onClick={() => {
-                  if (habit.type === 'amount') {
-                    setIsEnteringAmount(true);
-                    setPendingAmount(currentAmount ? String(currentAmount) : '');
-                  } else {
-                    performToggleBinary(dkey);
-                  }
-                }}
-              >
-                {/* アイコン */}
-                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6L9 17l-5-5" stroke="white" />
-                </svg>
-                <span className="font-medium">{habit.type === 'amount' ? '記録する' : (isBinaryDone ? '取り消す' : '記録する')}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-lg border ${isSkipped ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-white border-gray-200 text-gray-700'}`}
-                onClick={() => { isSkipped ? performUnskip(dkey) : performSkip(dkey); }}
-              >
-                <svg className={`w-8 h-8 ${isSkipped ? 'text-yellow-700' : 'text-gray-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v4" />
-                  <path d="M12 22v-4" />
-                  <path d="M4.93 4.93l2.83 2.83" />
-                  <path d="M16.24 16.24l2.83 2.83" />
-                </svg>
-                <span className="font-medium">{isSkipped ? 'スキップ解除' : 'この日をスキップ'}</span>
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={(e) => { e.preventDefault(); performRecordAmount(dkey, pendingAmount); }}>
-              <label className="block text-sm text-gray-700 mb-2">達成量（{habit.unit ?? ''}）</label>
-              <input autoFocus value={pendingAmount} onChange={e => setPendingAmount(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md mb-3" />
-              <div className="flex gap-2">
-                <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-md">保存</button>
-                <button type="button" className="flex-1 py-3 bg-gray-100 rounded-md" onClick={() => { setIsEnteringAmount(false); setPendingAmount(''); }}>戻る</button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   const handleDeleteConfirm = () => {
     onDelete(habit.id);
     onClose();
@@ -286,8 +211,8 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       startDate: formData.startDate,
       frequencyType: formData.frequencyType,
       frequencyValue: formData.frequencyValue,
-      type: formData.type,
-      details: formData.details ?? undefined,
+      type: formData.type, 
+      detail: formData.detail ?? undefined,
       skippedDates: formData.skippedDates ?? (habit.skippedDates ?? []),
       // completedDates は常に配列として保持（binary タイプで使う）
       completedDates: habit.completedDates ?? []
@@ -338,8 +263,8 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                       ) : null}
                     </div>
                     {/* 追加: タイトル・タグの下に詳細を小さなテキストで表示 */}
-                    {habit.details ? (
-                      <p className="text-sm text-gray-500 line-clamp-3">{habit.details}</p>
+                    {habit.detail ? (
+                      <p className="text-sm text-gray-500 line-clamp-3">{habit.detail}</p>
                     ) : null}
                   </div>
                 )}
@@ -358,9 +283,9 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                   <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
                   <textarea
                     ref={detailsRef}
-                    value={formData.details}
+                    value={formData.detail}
                     onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-                    onChange={e => setFormData(f => ({...f, details: e.target.value}))}
+                    onChange={e => setFormData(f => ({...f, detail: e.target.value}))}
                     placeholder="例: 朝の10分で深呼吸しながら行う"
                     rows={3}
                     className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 resize-none"
@@ -492,7 +417,21 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
             )}
           </div>
           {/* ActionModal を同じ fixed コンテナ内に置く（外側に render されていたものをここに移動） */}
-          {actionModalDate && <ActionModal />}
+          {actionModalDate && (
+            <ActionModal
+              habit={habit}
+              actionModalDate={actionModalDate}
+              isEnteringAmount={isEnteringAmount}
+              pendingAmount={pendingAmount}
+              onClose={() => setActionModalDate(null)}
+              onToggleBinary={performToggleBinary}
+              onSkip={performSkip}
+              onUnskip={performUnskip}
+              onRecordAmount={performRecordAmount}
+              setIsEnteringAmount={setIsEnteringAmount}
+              setPendingAmount={setPendingAmount}
+            />
+          )}
         </div>
       </div>
 
