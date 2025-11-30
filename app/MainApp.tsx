@@ -55,13 +55,8 @@ import {
 } from './components/Icons';
 
 // Type
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem } from './types'; 
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem, MainAppProps } from './types'; 
 
-// Propsの定義 (変更なし)
-interface MainAppProps {
-    profile: Profile;
-    setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
-}
 
 const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [view, setView] = useState<View>('habits');
@@ -1069,7 +1064,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         return <Notes /* 必要な props を渡す（例: notes, onAddNote 等） */ />
       case 'learnings':
         return (
-          <Learnings
+          <Learnings 
             learnings={learnings}
             onAddLearning={handleCreateLearning}
             profile={profile}
@@ -1093,12 +1088,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   const mainContainerClass = isView('notes')
     ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
-    // ? 'max-w-5xl mx-auto p-2 sm:p-4 lg:p-6'
     : 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8';
+  
+  const mainDivClass = `min-h-screen bg-gray-100 font-sans text-gray-800 ${view !== 'notifications' ? (isView('tasks') ? 'pb-24' : 'pb-28') : ''}`;
 
   // --- JSX (変更なし) ---
   return (
-    <div className={`min-h-screen bg-gray-100 font-sans text-gray-800 ${view !== 'notifications' ? 'pb-28' : ''}`}>
+    <div className={mainDivClass}>
       <header className={`bg-white sticky top-0 z-40 ${showDiagnosisTabs ? '' : 'shadow-sm'}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-2 h-16">

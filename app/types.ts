@@ -195,3 +195,114 @@ export interface PurelifeResultRecord {
   overall: number;
   createdAt: string;
 }
+
+// --- Component Props ---
+
+export interface MainAppProps {
+  profile: Profile;
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
+}
+
+export interface HabitTrackerProps {
+  habits: Habit[];
+  energyHistory: EnergyRecord[];
+  onAddHabit: (newHabit: Omit<Habit, 'id'>) => void;
+  onUpdateHabit: (updatedHabit: Habit) => void;
+  onDeleteHabit: (habitId: string) => void;
+  setIsHelpOpen: (isOpen: boolean) => void;
+  setView: (view: View) => void;
+  diagnosisFrequency: DiagnosisFrequency;
+  checkins?: Checkin[];
+  checkouts?: Checkout[];
+  onAddCheckin?: (value: number, note?: string, dateStr?: string) => void | Promise<void>;
+  onAddCheckout?: (gratitude?: string, note?: string, rating?: number | null, dateStr?: string) => void | Promise<void>;
+  onUpdateCheckin?: (id: string, value: number, note?: string) => void | Promise<void>;
+  onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number | null) => void | Promise<void>;
+  tasks?: Task[];
+  onAddTask?: (t: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => void | Promise<void>;
+  onToggleTask?: (taskId: string, done: boolean) => Promise<void> | void;
+  onUpdateTask?: (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => Promise<void> | void;
+  onDeleteTask?: (taskId: string) => Promise<void> | void;
+  onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
+  isAdmin?: boolean;
+  purelifeFrequency?: DiagnosisFrequency;
+  localPurelifeCompletedDates?: string[];
+  onOpenPurelife?: () => void;
+  valueDiagnosisFrequency?: DiagnosisFrequency;
+  valueDiagnosisCompletedDates?: string[];
+  onOpenValueDiagnosis?: () => void;
+}
+
+export interface GroupProps {
+    profile: Profile;
+    following: Friend[];
+    followers: Friend[];
+    onFollowUser: (friendId: string) => void;
+    groups: Group[];
+    groupInvites: Group[];
+    onAddGroup: (newGroupData: Omit<Group, 'id'>) => void;
+    onInviteToGroup: (group: Group, memberIdsToInvite: string[]) => void;
+    onAcceptGroupInvite: (invite: Group) => void;
+    onDeclineGroupInvite: (inviteId: string) => void;
+    onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
+    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
+    habits: Habit[];
+    setIsHelpOpen: (isOpen: boolean) => void;
+    allUserProfiles: Map<string, Profile | Friend>;
+    onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
+    selectedGroupId: string | null;
+    onClearSelectedGroup: () => void;
+}
+
+export interface GroupDetailProps {
+  group: Group;
+  profile: Profile;
+  following: Friend[];
+  onFollowUser: (friendId: string) => void;
+  onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
+  habits: Habit[];
+  onBack: () => void;
+  onInviteMembers: (group: Group, memberIds: string[]) => void;
+  onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
+  allUserProfiles: Map<string, Profile | Friend>;
+  onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
+}
+
+export interface EnergyDiagnosisProps {
+  history: EnergyRecord[];
+  onComplete: (scores: EnergyScores) => void;
+  setIsHelpOpen: (isOpen: boolean) => void;
+  diagnosisFrequency: DiagnosisFrequency;
+  setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
+  habits: Habit[];
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
+}
+
+export interface PersonalityProps {
+  onComplete?: (result: any) => void;
+  setIsHelpOpen?: (open: boolean) => void;
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
+}
+
+export interface PurelifeProps {
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
+  setIsHelpOpen?: (open: boolean) => void;
+}
+
+export interface ValueDiagnosisProps {
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
+  setIsHelpOpen?: (open: boolean) => void;
+}
+
+export interface RecordsProps {
+  checkouts?: Checkout[];
+  checkins?: Checkin[];
+}
+
+export interface TaskDetailProps {
+  task: Task;
+  onClose: () => void;
+  updateTask: (t: Task) => Promise<void> | void;
+  toggleTask: (id: string, done: boolean) => Promise<void> | void;
+  removeTask: (id: string) => Promise<void> | void;
+}

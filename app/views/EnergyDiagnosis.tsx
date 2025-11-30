@@ -2,8 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
-// types.ts が MainApp.tsx と同じ階層にある想定 (`../types` -> `./types`)
-import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View, Question } from '../types'; 
+import { EnergyCategory, EnergyRecord, EnergyScores, DiagnosisFrequency, FrequencyType, Habit, View, Question, EnergyDiagnosisProps } from '../types'; 
 import {
   ENERGY_CATEGORIES,
   QUESTIONS,
@@ -15,6 +14,7 @@ import {
 } from '../constants';
 
 import AddHabitModal from "../components/AddHabitModal";
+import DatePickerModal from '../components/DatePickerModal';
 import FrequencyEditor from "../components/FrequencyEditor";
 import {
   IconBody,
@@ -50,7 +50,6 @@ interface EnergyDiagnosisProps {
 }
 
 type QuizStep = EnergyCategory | 'start' | 'results';
-
 const categoryOrder: EnergyCategory[] = ['physical', 'mental', 'emotional', 'intellectual'];
 
 const categoryIcons: {[key in EnergyCategory]: React.FC<{className?: string}>} = {
@@ -59,89 +58,6 @@ const categoryIcons: {[key in EnergyCategory]: React.FC<{className?: string}>} =
     emotional: IconEmotional,
     intellectual: IconIntellectual,
 }
-
-// (↓ DatePickerModal は変更なし)
-const DatePickerModal: React.FC<{
-    isOpen: boolean, 
-    onClose: () => void, 
-    onDateSelect: (date: Date) => void,
-    initialDate: Date,
-    highlightedDates?: Set<string>,
-    habits?: Habit[],
-}> = ({isOpen, onClose, onDateSelect, initialDate, highlightedDates, habits}) => {
-    const [displayDate, setDisplayDate] = useState(initialDate);
-    
-    const completionStatusCache = useMemo(() => {
-        if (!habits) return new Map();
-        const cache = new Map<string, 'none' | 'partial' | 'full'>();
-        return cache;
-    }, [habits]);
-
-    if (!isOpen) return null;
-
-    const changeMonth = (amount: number) => {
-        setDisplayDate(prev => {
-          const newDate = new Date(prev);
-          newDate.setMonth(newDate.getMonth() + amount);
-          return newDate;
-        });
-    };
-
-    const generateCalendar = () => {
-        const year = displayDate.getFullYear();
-        const month = displayDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        const calendarDays = [];
-        for (let i = 0; i < firstDay; i++) {
-          calendarDays.push(<div key={`empty-${i}`} className="w-10 h-10"></div>);
-        }
-        for (let day = 1; day <= daysInMonth; day++) {
-          const date = new Date(year, month, day);
-          const dateStr = date.toLocaleDateString('sv-SE');
-          const hasRecord = highlightedDates?.has(dateStr);
-          const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
-
-          calendarDays.push(
-            <div 
-                key={day} 
-                className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-100 relative"
-                onClick={() => onDateSelect(date)}
-            >
-              <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
-                {day}
-              </span>
-              {/* エネルギー診断の記録がある日だけ青いドットを表示（他の達成率ドットは表示しない） */}
-              {hasRecord && (
-                <div className="absolute bottom-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
-                </div>
-              )}
-            </div>
-          );
-        }
-        return calendarDays;
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                    <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
-                    <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
-                    <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
-                </div>
-                <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
-                    {['日', '月', '火', '水', '木', '金', '土'].map(d => <div key={d}>{d}</div>)}
-                </div>
-                <div className="grid grid-cols-7 gap-y-1 place-items-center">
-                    {generateCalendar()}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   history,
@@ -425,10 +341,10 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
                             {personalityResult.imageSrc ? (
                               <div className="relative w-full h-44 md:h-56">
                                 <Image
-                                  src={personalityResult.imageSrc ?? ''}
+                                  src={personalityResult.imageSrc}
                                   alt={personalityResult.data.name ?? ''}
-                                  fill
-                                  className="object-cover"
+                                  layout="fill"
+                                  objectFit="cover"
                                 />
                               </div>
                             ) : (

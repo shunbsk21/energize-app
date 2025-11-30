@@ -1,6 +1,7 @@
 // ...existing code...
 "use client";
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import {
   View,
   DiagnosisFrequency,
@@ -22,17 +23,12 @@ import {
 
 import AddHabitModal from "../components/AddHabitModal";
 import FrequencyEditor from "../components/FrequencyEditor";
+import DatePickerModal from '../components/DatePickerModal';
 import { HelpIcon, CalendarIcon } from "../components/Icons";
 
 // Firestore
 import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot, FirestoreError } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
-
-interface PersonalityProps {
-  onComplete?: (result: any) => void;
-  setIsHelpOpen?: (open: boolean) => void;
-  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
-}
 
 const fallbackPreference: Record<Dimension, "left" | "right"> = {
   EI: "right",
@@ -92,121 +88,9 @@ function calcScores(answers: Record<number, PersonalityAnswerValue>) {
   return { sums, counts, maxes, percents, strength, type };
 }
 
-/* --- RadarChart same as before --- */
-function RadarChart({ values }: { values: Record<Dimension, number> }) {
-  const size = 180;
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = size * 0.36;
-  const axes: Dimension[] = ["EI", "SN", "TF", "JP"];
-  const points = axes.map((d, i) => {
-    const angle = (Math.PI / 2) - (i * (2 * Math.PI) / axes.length);
-    const r = (values[d] / 100) * radius;
-    return [cx + r * Math.cos(angle), cy - r * Math.sin(angle)];
-  });
-  const polygon = points.map((p) => p.join(",")).join(" ");
-  const labels = axes.map((d, i) => {
-    const angle = (Math.PI / 2) - (i * (2 * Math.PI) / axes.length);
-    const lx = cx + (radius + 18) * Math.cos(angle);
-    const ly = cy - (radius + 18) * Math.sin(angle);
-    const label = d === "EI" ? "外向(E)<->内向(I)" : d === "SN" ? "感覚(S)<->直観(N)" : d === "TF" ? "思考(T)<->感情(F)" : "判断(J)<->知覚(P)";
-    return { x: lx, y: ly, label };
-  });
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
-      {[0.33, 0.66, 1].map((f, idx) => {
-        const poly = axes.map((d, i) => {
-          const angle = (Math.PI / 2) - (i * (2 * Math.PI) / axes.length);
-          const r = radius * f;
-          return `${cx + r * Math.cos(angle)},${cy - r * Math.sin(angle)}`;
-        }).join(" ");
-        return <polygon key={idx} points={poly} fill="none" stroke="#e6e6e6" strokeWidth={1} />;
-      })}
-      {axes.map((_, i) => {
-        const angle = (Math.PI / 2) - (i * (2 * Math.PI) / axes.length);
-        const x = cx + radius * Math.cos(angle);
-        const y = cy - radius * Math.sin(angle);
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#f0f0f0" strokeWidth={1} />;
-      })}
-      <polygon points={polygon} fill="rgba(79,70,229,0.12)" stroke="#4f46e5" strokeWidth={2} />
-      {points.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={3.5} fill="#4f46e5" />)}
-      {labels.map((l, i) => (
-        <text key={i} x={l.x} y={l.y} fontSize={10} textAnchor="middle" fill="#334155">{l.label.split("<")[0]}</text>
-      ))}
-    </svg>
-  );
-}
-
 // カレンダー用の highlightedDates と DatePickerModal を追加
 const recordDatesFromHistory = (history: PersonalityHistoryRecord[]) => {
   return new Set((history || []).map(h => String(h.date)));
-};
-
-const DatePickerModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onDateSelect: (date: Date) => void;
-  initialDate: Date;
-  highlightedDates?: Set<string>;
-}> = ({ isOpen, onClose, onDateSelect, initialDate, highlightedDates }) => {
-  const [displayDate, setDisplayDate] = useState<Date>(initialDate);
-  useEffect(() => setDisplayDate(initialDate), [initialDate, isOpen]);
-  if (!isOpen) return null;
-
-  const changeMonth = (amount: number) => setDisplayDate(d => {
-    const nd = new Date(d); nd.setMonth(nd.getMonth() + amount); return nd;
-  });
-
-  const generateCalendar = () => {
-    const year = displayDate.getFullYear();
-    const month = displayDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const nodes: React.ReactNode[] = [];
-    for (let i = 0; i < firstDay; i++) nodes.push(<div key={`e-${i}`} className="w-10 h-10"></div>);
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dateStr = date.toLocaleDateString('sv-SE');
-      const hasRecord = highlightedDates?.has(dateStr);
-      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
-      nodes.push(
-        <div
-          key={day}
-          className="w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-indigo-50 relative"
-          onClick={() => onDateSelect(date)}
-        >
-          <span className={`${isSelected ? 'w-9 h-9 rounded-[10px] scale-105 transform bg-indigo-600 text-white flex items-center justify-center font-semibold' : 'w-8 h-8 rounded-full flex items-center justify-center'}`}>
-            {day}
-          </span>
-          {hasRecord && (
-            <div className="absolute bottom-1">
-              <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`}></div>
-            </div>
-          )}
-        </div>
-      );
-    }
-    return nodes;
-  };
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="absolute inset-0" />
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-4 z-10" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">&larr;</button>
-          <h3 className="font-bold text-lg">{`${displayDate.getFullYear()}年 ${displayDate.getMonth() + 1}月`}</h3>
-          <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">&rarr;</button>
-        </div>
-        <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-500 mb-2">
-          {['日','月','火','水','木','金','土'].map(d => <div key={d}>{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-y-1 place-items-center">
-          {generateCalendar()}
-        </div>
-      </div>
-    </div>
-  );
 };
 
 /* --- Component --- */
@@ -473,8 +357,13 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {/* 画像を横いっぱいに表示 */}
             {resultImageSrc ? (
-              <img src={resultImageSrc ?? ''} alt={TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type} className="w-full h-44 md:h-56 object-cover block" />
-            ) : (
+              <div className="relative w-full h-44 md:h-56">
+                <Image 
+                  src={resultImageSrc} 
+                  alt={TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type} 
+                  layout="fill" 
+                  objectFit="cover" />
+              </div>) : (
               <div className="w-full h-44 md:h-56 bg-gray-100 flex items-center justify-center text-gray-400">画像なし</div>
             )}
 

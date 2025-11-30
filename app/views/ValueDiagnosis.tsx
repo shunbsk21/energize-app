@@ -1,7 +1,7 @@
 // ...existing code...
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { DriverKey, Habit, DiagnosisFrequency, ValueAnswersMap, ValueResultRecord } from "../types"; // Habit をインポート
+import { DriverKey, Habit, DiagnosisFrequency, ValueAnswersMap, ValueResultRecord, ValueDiagnosisProps } from "../types"; // Habit をインポート
 import { CATEGORIES, TYPE_INFO } from "../constants";
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth"; // signInAnonymously をインポート
@@ -18,7 +18,7 @@ import {
   setDoc,
   deleteDoc,
 } from "firebase/firestore";
-import AddHabitModal from '../components/AddHabitModal';
+import AddHabitModal from '../components/AddHabitModal'; 
 import FrequencyEditor from '../components/FrequencyEditor';
 import DatePickerModal from '../components/DatePickerModal';
 import ConfirmRemoveModal from '../components/ConfirmRemoveModal';
@@ -33,11 +33,6 @@ const VALUE_QUESTIONS = CATEGORIES.flatMap(category =>
     category: category.key,
   }))
 );
-
-interface ValueDiagnosisProps {
-  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
-  setIsHelpOpen?: (open: boolean) => void;
-}
 
 export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueDiagnosisProps) {
   const defaultAnswers = useMemo(() => {

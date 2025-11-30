@@ -2,32 +2,11 @@
 
 import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
-import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
+import { Profile, Friend, Group as GroupType, Comment, Habit, GroupProps } from '../types';
 import GroupDetail from '../views/GroupDetail';
 import CreateGroupModal from '../components/CreateGroupModal';
 import { GroupProgressModal } from '../components/GroupProgressModal';
 import { HelpIcon, PlusIcon, ChevronLeftIcon } from '../components/Icons';
-
-interface GroupProps {
-    profile: Profile;
-    following: Friend[];
-    followers: Friend[];
-    onFollowUser: (friendId: string) => void;
-    groups: GroupType[];
-    groupInvites: GroupType[];
-    onAddGroup: (newGroupData: Omit<GroupType, 'id'>) => void;
-    onInviteToGroup: (group: GroupType, memberIdsToInvite: string[]) => void;
-    onAcceptGroupInvite: (invite: GroupType) => void;
-    onDeclineGroupInvite: (inviteId: string) => void;
-    onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
-    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
-    habits: Habit[];
-    setIsHelpOpen: (isOpen: boolean) => void;
-    allUserProfiles: Map<string, Profile | Friend>;
-    onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
-    selectedGroupId: string | null;
-    onClearSelectedGroup: () => void;
-}
 
 const Group: React.FC<GroupProps> = ({ 
     profile, 

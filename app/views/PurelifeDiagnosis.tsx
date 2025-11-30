@@ -1,8 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import FrequencyEditor from '../components/FrequencyEditor'; // Assuming this is correctly typed
-import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
-import { PurelifeAnswersMap, PurelifeResultRecord, DiagnosisFrequency, Habit } from '../types';
+import FrequencyEditor from '../components/FrequencyEditor';
+import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants'; 
+import { PurelifeAnswersMap, PurelifeResultRecord, DiagnosisFrequency, Habit, PurelifeProps } from '../types';
 import AddHabitModal from '../components/AddHabitModal';
 import DatePickerModal from '../components/DatePickerModal';
 import { db, auth } from "../../lib/firebase";
@@ -22,11 +22,6 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { arrayUnion } from "firebase/firestore";
-
-interface PurelifeProps {
-  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
-  setIsHelpOpen?: (open: boolean) => void;
-}
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
 const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {

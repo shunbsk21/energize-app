@@ -3,9 +3,9 @@
 import Image from 'next/image';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter, DocumentSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter, DocumentSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
+import { Profile, Friend, Group as GroupType, Comment, Habit, GroupDetailProps } from '../types';
 import { calculateCompletionPercentForDate } from '../utils/habits';
 import { ChevronLeftIcon, SendIcon, } from '../components/Icons';
 import { ConfirmRemoveModal } from '../components/ConfirmRemoveModal';
@@ -13,19 +13,7 @@ import { MemberHabitsModal } from '../components/MemberHabitsModal';
 import { SharedHabitsModal } from '../components/SharedHabitsModal';
 import { InviteMemberModal } from '../components/InviteMemberModal';
 
-const GroupDetail: React.FC<{
-  group: GroupType;
-  profile: Profile;
-  following: Friend[];
-  onFollowUser: (friendId: string) => void;
-  onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
-  habits: Habit[];
-  onBack: () => void;
-  onInviteMembers: (group: GroupType, memberIds: string[]) => void;
-  onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
-  allUserProfiles: Map<string, Profile | Friend>;
-  onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
-}> = ({ group, profile, following, onFollowUser, onAddComment, habits, onBack, onInviteMembers, onRemoveMember, allUserProfiles, onUpdateGroupSharedHabits }) => {
+const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, onFollowUser, onAddComment, habits, onBack, onInviteMembers, onRemoveMember, allUserProfiles, onUpdateGroupSharedHabits }) => {
 
   const [newComment, setNewComment] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -325,7 +313,7 @@ const GroupDetail: React.FC<{
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedMemberId, group.id, JSON.stringify(group.sharedByMember || group.sharedHabitIds || {})]);
+  }, [selectedMemberId, group]); // 以前の修正で対応済み
 
   useEffect(() => {
     if (!selectedMemberId) return;
@@ -337,7 +325,7 @@ const GroupDetail: React.FC<{
         const q = query(habitsCol);
         const snap = await getDocs(q);
         if (cancelled) return;
-        const loaded: Habit[] = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Habit[]);
+        const loaded: Habit[] = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Habit[];
         setMemberHabitsMap(prev => ({ ...prev, [selectedMemberId]: loaded }));
       } catch (err) {
         console.error('[Group] failed to load member habits', selectedMemberId, err);
@@ -345,7 +333,7 @@ const GroupDetail: React.FC<{
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedMemberId, JSON.stringify(selectedMemberId ? (memberHabitsMap[selectedMemberId] || []) : [])]);
+  }, [selectedMemberId, memberHabitsMap]);
 
   const getMemberProfile = (memberId: string) => {
     return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
@@ -396,7 +384,13 @@ const GroupDetail: React.FC<{
                 return (
                   <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <img src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                      <Image 
+                        src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} 
+                        alt={member.displayName ?? ''} 
+                        width={40}
+                        height={40}
+                        className="w-10 h-10 rounded-full object-cover bg-gray-200" 
+                      />
                       <div>
                         <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
                       </div>
@@ -495,15 +489,15 @@ const GroupDetail: React.FC<{
                     const authorImageUrl = message.authorImageUrl;
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
-                        {!isAuthor && (
-                          <Image
-                            src={authorImageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
-                            alt={message.authorName}
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
-                            onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
-                          />
+                        {!isAuthor && allUserProfiles.has(message.authorId) && (
+                            <Image
+                                src={allUserProfiles.get(message.authorId)?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
+                                alt={message.authorName}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
+                                onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
+                            />
                         )}
                         <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}>
                           {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName || '名無しのさん'}</p>}

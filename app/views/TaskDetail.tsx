@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-
-interface TaskItem {
-  id: string;
-  title: string;
-  details?: string;
-  dueDate?: string;
-  priority?: 'low' | 'medium' | 'high';
-  done?: boolean;
-}
+import { Task, TaskDetailProps } from '../types';
 
 const toLocalISO = (d: Date) => {
   const y = d.getFullYear();
@@ -29,23 +21,11 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return createPortal(<>{children}</>, document.body);
 };
 
-export default function TaskDetail({
-  task,
-  onClose,
-  updateTask,
-  toggleTask,
-  removeTask,
-}: {
-  task: TaskItem;
-  onClose: () => void;
-  updateTask: (t: TaskItem) => Promise<void> | void;
-  toggleTask: (id: string, done: boolean) => Promise<void> | void;
-  removeTask: (id: string) => Promise<void> | void;
-}) {
+export default function TaskDetail({ task, onClose, updateTask, toggleTask, removeTask }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title || '');
   const [details, setDetails] = useState(task.details || '');
   const [dueDate, setDueDate] = useState<string | undefined>(task.dueDate || undefined);
-  const [priority, setPriority] = useState<TaskItem['priority']>(task.priority || 'medium');
+  const [priority, setPriority] = useState<Task['priority']>(task.priority || 'medium');
   const [done, setDone] = useState(!!task.done);
   useEffect(() => {
     setTitle(task.title || '');
@@ -106,7 +86,7 @@ export default function TaskDetail({
             <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
             <div className="flex items-center gap-2 flex-wrap">
               <input type="date" value={dueDate || ''} onChange={e => setDueDate(e.target.value || undefined)} className="p-2 border border-gray-200 rounded" />
-              <select value={priority} onChange={e => setPriority(e.target.value as TaskItem['priority'])} className="p-2 border border-gray-200 rounded text-sm">
+              <select value={priority} onChange={e => setPriority(e.target.value as Task['priority'])} className="p-2 border border-gray-200 rounded text-sm">
                 <option value="low">低</option>
                 <option value="medium">中</option>
                 <option value="high">高</option>

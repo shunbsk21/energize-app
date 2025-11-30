@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Checkin, Checkout } from '../types';
+import { Checkin, Checkout, RecordsProps } from '../types';
 import { formatFullDate } from '../utils/dates';
 import DatePickerModal from '../components/DatePickerModal';
 import { CalendarIcon } from '../components/Icons';
@@ -42,11 +42,6 @@ const RatingTag: React.FC<{ value: string | number | undefined | null }> = ({ va
     </span>
   );
 };
-
-interface RecordsProps {
-  checkouts?: Checkout[];
-  checkins?: Checkin[];
-}
 
 const parseDateValue = (r: Checkin | Checkout) => {
   return r.date ?? r.createdAt ?? '';
