@@ -243,14 +243,19 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     } else {
       // finish
       const res = calcScores(answers);
-      setSubmittedResult(res);
+      const today = formatDateKey(new Date());
+      const resultForState: PersonalityHistoryRecord = {
+        id: today, // Firestore保存前の一時的なIDとして日付を使用
+        date: today,
+        ...res,
+      };
+      setSubmittedResult(resultForState);
       setStep('results');
 
       // Persist to Firestore (under users/{uid}/personalityHistory/{date})
       const uid = getCurrentUid();
       if (db && uid) {
         try {
-          const today = formatDateKey(new Date());
           const payload = {
             date: today,
             type: res.type,

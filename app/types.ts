@@ -188,7 +188,7 @@ export interface PersonalityQuestion {
 export interface PersonalityHistoryRecord {
   id: string;
   date: string;
-  type: string;
+  type?: string;
   percents: Record<PersonalityDimension, number>;
   strength: Record<PersonalityDimension, number>;
   answers?: Record<number, PersonalityAnswerValue>;
