@@ -19,6 +19,7 @@ export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'custom';
 export interface Profile {
   id: string;
   displayName?: string;
+  habits?: Habit[];
   imageUrl?: string | null;
 }
 
@@ -29,13 +30,15 @@ export interface EnergyRecord extends EnergyScores {
 }
 
 export interface Habit {
-  id?: string;
-  title: string;
+  id: string;
+  name: string;
+  title?: string; // 旧データ互換用
+  label?: string; // 旧データ互換用
   detail?: string;
   createdAt?: string;
   startDate?: string;
-  frequencyType?: FrequencyType;
-  frequencyValue?: number[];
+  frequencyType: FrequencyType;
+  frequencyValue: number[] | string;
   type?: 'amount' | 'boolean';
   targetAmount?: number;
   target?: number;
@@ -59,29 +62,31 @@ export interface DiagnosisFrequency {
 export interface Friend {
   id: string;
   displayName?: string;
+  habits?: Habit[];
   imageUrl?: string | null;
 }
 
 export interface Group {
-  id?: string;
-  name?: string;
+  id: string;
+  name: string;
   members: string[];
   ownerId?: string;
   sharedByMember?: Record<string, string[]>;
+  sharedHabitIds?: string[];
 }
 
 export interface Comment {
-  id?: string;
+  id: string;
   groupId: string;
   text: string;
-  authorId?: string;
-  authorName?: string;
+  authorId: string;
+  authorName: string;
   authorImageUrl?: string | null;
-  createdAt?: string;
+  timestamp: string;
 }
 
 export interface Notification {
-  id?: string;
+  id: string;
   groupId?: string | null;
   groupName?: string | null;
   message?: string | null;
@@ -125,7 +130,7 @@ export interface Checkout {
 }
 
 export interface LearningItem {
-  id?: string;
+  id: string;
   title: string;
   url?: string;
   notes?: string;

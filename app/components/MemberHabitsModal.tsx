@@ -16,7 +16,7 @@ export const MemberHabitsModal: React.FC<{
   onEditMySharedHabits?: () => void;
   isLoading: boolean;
 }> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
-  const habits: Habit[] = memberHabits || (memberProfile && 'habits' in memberProfile && Array.isArray((memberProfile as any).habits) ? (memberProfile as any).habits : []);
+  const habits: Habit[] = memberHabits || memberProfile?.habits || [];
   const todayStr = new Date().toLocaleDateString('sv-SE');
   const sharedHabits = habits.filter(h => h.id && groupSharedHabitIds.includes(h.id));
   const isSelf = memberId === currentUserId;
@@ -38,7 +38,7 @@ export const MemberHabitsModal: React.FC<{
     return '';
   };
   const getTitle = (habit: Habit) => {
-    return habit.name || (habit as any).title || (habit as any).label || '無題の習慣';
+    return habit.name || habit.title || habit.label || '無題の習慣';
   };
 
   const completionPercent = useMemo(() => calculateCompletionPercentForDate(new Date(), sharedHabits), [sharedHabits]);
