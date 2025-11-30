@@ -325,7 +325,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
                   ) : (
                     <>
                       {(() => {
-                        const content = String(r.note ?? r.text ?? '').trim();
+                        const content = String((r as Checkin).note ?? (r as Checkin).text ?? '').trim();
                         if (content.length === 0) {
                           // チェックインでは本文がない場合は何も表示しない（レコード自体は filtered で除外済み）
                           return null;
