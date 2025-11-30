@@ -370,7 +370,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
               <div className="relative w-full h-44 md:h-56">
                 <Image 
                   src={resultImageSrc} 
-                  alt={TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type} 
+                  alt={submittedResult.type ? (TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type) : '診断結果'} 
                   layout="fill" 
                   objectFit="cover" />
               </div>) : (
@@ -382,7 +382,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-xs text-gray-500">{dateLabelForTitle} の診断結果</div>
-                  <div className="text-lg font-semibold text-gray-800">{TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type}</div>
+                  <div className="text-lg font-semibold text-gray-800">{submittedResult.type ? (TYPE_MAP[submittedResult.type]?.name ?? submittedResult.type) : '-'}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -395,7 +395,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                 </div>
               </div>
 
-              <div className="text-sm text-gray-600 mb-4">{TYPE_MAP[submittedResult.type]?.description ?? 'あなたの傾向を示します。'}</div>
+              <div className="text-sm text-gray-600 mb-4">{submittedResult.type ? (TYPE_MAP[submittedResult.type]?.description ?? 'あなたの傾向を示します。') : 'あなたの傾向を示します。'}</div>
 
               {/* 縦並びの軸表示 */}
               <div className="text-sm font-medium text-gray-700 mb-3">各軸の偏り（%）と強さ</div>
