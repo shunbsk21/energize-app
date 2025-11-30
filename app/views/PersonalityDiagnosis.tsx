@@ -451,7 +451,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(() => {
                     const typeKey = submittedResult?.type;
-                    const habits: RecommendedHabit[] = (typeKey && PERSONALITY_HABITS[typeKey as keyof typeof PERSONALITY_HABITS]) || (typeKey && TYPE_MAP[typeKey as keyof typeof TYPE_MAP]?.habits ? TYPE_MAP[typeKey as keyof typeof TYPE_MAP].habits.map((t: string) => ({ energy: 'mental' as EnergyCategory, title: t, detail: '' })) : []);
+                    const habits: RecommendedHabit[] = (typeKey && PERSONALITY_HABITS[typeKey as keyof typeof PERSONALITY_HABITS]) || (typeKey && TYPE_MAP[typeKey as keyof typeof TYPE_MAP]?.habits?.map((t: string) => ({ energy: 'mental' as EnergyCategory, title: t, detail: '' }))) || [];
                     if (!habits || habits.length === 0) {
                       return <div className="text-sm text-gray-500 col-span-full">自分に合う習慣を少し試して継続すること。</div>;
                     }
