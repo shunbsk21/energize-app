@@ -112,7 +112,7 @@ export interface Task {
   done?: boolean;
   createdAt?: string | Timestamp;
   updatedAt?: string | Timestamp;
-  completedAt?: string | null;
+  completedAt?: string | Timestamp | null;
 }
 
 export interface Checkin {

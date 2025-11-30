@@ -435,7 +435,11 @@ const Tasks: React.FC = () => {
                   <div key={stableKey} className="flex items-center gap-3 p-2 bg-white rounded shadow-sm">
                     <div className="flex-1">
                       <div className="text-sm">{ct.title}</div>
-                      <div className="text-xs text-gray-400">{ct.completedAt ? new Date(ct.completedAt).toLocaleString() : ''}</div>
+                      <div className="text-xs text-gray-400">{ct.completedAt ? (
+                        (typeof ct.completedAt === 'object' && ct.completedAt && 'toDate' in ct.completedAt)
+                          ? (ct.completedAt as any).toDate().toLocaleString()
+                          : new Date(ct.completedAt as string).toLocaleString()
+                      ) : ''}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => toggleTask(ct.id, false)} className="px-3 py-1 text-sm bg-gray-100 rounded">元に戻す</button>
