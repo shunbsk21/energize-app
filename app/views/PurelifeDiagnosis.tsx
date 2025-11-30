@@ -22,7 +22,10 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { arrayUnion } from "firebase/firestore";
-import { HelpIcon } from "../components/Icons";
+import { 
+  HelpIcon,
+  CalendarIcon,
+} from "../components/Icons";
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
 const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
