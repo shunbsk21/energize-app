@@ -590,6 +590,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   }, [energyHistory, selectedDateString]);
 
   const isPersonalityDiagnosisDay = useMemo(() => {
+    if (!personalityDiagnosisFrequency) return false;
     return isDiagnosisScheduledForDate(personalityDiagnosisFrequency, selectedDate);
   }, [personalityDiagnosisFrequency, selectedDate]);
 
