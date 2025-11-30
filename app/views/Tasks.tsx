@@ -244,7 +244,7 @@ const Tasks: React.FC = () => {
         return {
           id: d.id,
           title: data.title ?? '',
-          details: data.details ?? '',
+          detail: data.details ?? '',
           dueDate: dueDateStr,
           priority: data.priority ?? undefined,
           done: !!data.done,
@@ -295,7 +295,7 @@ const Tasks: React.FC = () => {
     if (!db || !uid) return;
     try {
       const ref = doc(db, 'users', uid, 'tasks', t.id);
-      await updateDoc(ref, { title: t.title ?? null, details: t.details ?? null, dueDate: t.dueDate ?? null, priority: t.priority ?? null, done: !!t.done, updatedAt: serverTimestamp() });
+      await updateDoc(ref, { title: t.title ?? null, detail: t.details ?? null, dueDate: t.dueDate ?? null, priority: t.priority ?? null, done: !!t.done, updatedAt: serverTimestamp() });
     } catch (e) { console.error(e); }
   };
 

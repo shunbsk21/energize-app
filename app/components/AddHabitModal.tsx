@@ -39,7 +39,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
   onCreate
 }) => {
   const [name, setName] = useState(initial?.title ?? "");
-  const [details, setDetails] = useState(initial?.detail ?? "");
+  const [detail, setDetail] = useState(initial?.detail ?? "");
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
   const [frequency, setFrequency] = useState<DiagnosisFrequency>({ frequencyType: initial?.frequencyType ?? "daily", frequencyValue: initial?.frequencyValue ?? [] });
   const [type, setType] = useState<"binary" | "amount">(initial?.type ?? "binary");
@@ -50,7 +50,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setName(initial?.title ?? "");
-    setDetails(initial?.detail ?? "");
+    setDetail(initial?.detail ?? "");
     setStartDate(initial?.startDate ?? new Date().toLocaleDateString("sv-SE"));
     setType(initial?.type ?? "binary");
     setTarget(initial?.target ?? undefined);
@@ -65,7 +65,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
   const buildPayload = () => {
     const base: any = {
       name: (name || "").trim(),
-      details: (details || "").trim() || undefined,
+      detail: (detail || "").trim() || undefined,
       type,
       startDate: startDate || new Date().toLocaleDateString("sv-SE"),
       frequencyType: frequency.frequencyType,
@@ -127,9 +127,9 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">詳細（任意）</label>
             <textarea
               ref={detailsRef}
-              value={details}
+              value={detail}
               onInput={e => autoGrowTextArea(e.currentTarget as HTMLTextAreaElement)}
-              onChange={e => setDetails(e.target.value)}
+              onChange={e => setDetail(e.target.value)}
               placeholder="例: 朝の10分で深呼吸しながら行う"
               rows={3}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white text-gray-900 resize-none"

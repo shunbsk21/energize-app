@@ -302,7 +302,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // タスク追加 submit
   const submitTask = async () => {
     if (!taskTitle.trim()) return;
-    const payload = { title: taskTitle.trim(), details: taskDetails.trim() || undefined, dueDate: taskDueDate || selectedDateISO, priority: taskPriority };
+    const payload = { title: taskTitle.trim(), detail: taskDetails.trim() || undefined, dueDate: taskDueDate || selectedDateISO, priority: taskPriority };
     try {
       if (onAddTask) {
         await onAddTask(payload);
@@ -352,7 +352,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (!selectedTask) return;
     const payload = {
       title: editTitle.trim() || selectedTask.title,
-      details: editDetails.trim() || undefined,
+      detail: editDetails.trim() || undefined,
       dueDate: editDueDate || undefined,
       priority: editPriority,
       done: editDone
@@ -711,7 +711,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     const base: Partial<Habit> = {
       name: newHabitName.trim(),
-      details: newHabitDetails.trim() || undefined,
+      detail: newHabitDetails.trim() || undefined,
       type: newHabitType,
       startDate: newHabitStartDate ?? formatDateKey(new Date()),
       frequencyType: newHabitFrequency?.type ?? 'daily',
