@@ -31,7 +31,7 @@ import DatePickerModal from '../components/DatePickerModal';
 import { HelpIcon, CalendarIcon } from "../components/Icons";
 
 // Firestore
-import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot, FirestoreError } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, setDoc, getDoc, doc, serverTimestamp, QueryDocumentSnapshot, FirestoreError } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
 
 type Dimension = PersonalityDimension;
