@@ -35,7 +35,7 @@ const VALUE_QUESTIONS = CATEGORIES.flatMap(category =>
 );
 
 interface ValueDiagnosisProps {
-  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
   setIsHelpOpen?: (open: boolean) => void;
 }
 
@@ -55,7 +55,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
   const [uid, setUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
-  const [habitDraft, setHabitDraft] = useState<any>(null);
+  const [habitDraft, setHabitDraft] = useState<Partial<Habit> | null>(null);
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -87,7 +87,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
         const q = query(userHistCol, orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
         const items = snap.docs.map(d => {
-          const data: any = d.data();
+          const data = d.data();
           return {
             id: d.id,
             date: data.date,

@@ -104,9 +104,9 @@ export default function TaskDetail({
           <div className="space-y-3">
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
             <textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="詳細" rows={4} className="w-full p-2 border border-gray-200 rounded" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <input type="date" value={dueDate || ''} onChange={e => setDueDate(e.target.value || undefined)} className="p-2 border border-gray-200 rounded" />
-              <select value={priority} onChange={e => setPriority(e.target.value as any)} className="p-2 border border-gray-200 rounded text-sm">
+              <select value={priority} onChange={e => setPriority(e.target.value as TaskItem['priority'])} className="p-2 border border-gray-200 rounded text-sm">
                 <option value="low">低</option>
                 <option value="medium">中</option>
                 <option value="high">高</option>

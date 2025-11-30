@@ -26,8 +26,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         imageUrl: user.photoURL ?? `https://i.pravatar.cc/150?u=${user.uid}`
       };
       onLoginSuccess(profile);
-    } catch (err: any) {
-      setError(err?.message ?? 'ログインに失敗しました');
+    } catch (err) {
+      setError((err as Error)?.message ?? 'ログインに失敗しました');
     } finally {
       setLoading(false);
     }

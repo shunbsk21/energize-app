@@ -80,11 +80,11 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
     switch (habit.frequencyType) {
       case 'daily': return '毎日';
       case 'weekly':
-        if (!habit.frequencyValue || habit.frequencyValue.length === 0) return '毎週：曜日未設定';
-        return `毎週：${habit.frequencyValue.map(d => WEEK_DAYS[d]).join('、')}`;
+        if (!Array.isArray(habit.frequencyValue) || habit.frequencyValue.length === 0) return '毎週：曜日未設定';
+        return `毎週：${(habit.frequencyValue as number[]).map(d => WEEK_DAYS[d]).join('、')}`;
       case 'monthly':
-        if (!habit.frequencyValue || habit.frequencyValue.length === 0) return '月次：日付未設定';
-        return `月次：${habit.frequencyValue.join(',')}`;
+        if (!Array.isArray(habit.frequencyValue) || habit.frequencyValue.length === 0) return '月次：日付未設定';
+        return `月次：${(habit.frequencyValue as number[]).join(',')}`;
       default: return '頻度未設定';
     }
   }, [habit.frequencyType, habit.frequencyValue]);
@@ -150,8 +150,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       const isAmountPartial = !isAmountFull && amountVal > 0;
 
       const isBinaryCompleted = completedDatesSet.has(dateStr);
-      const skipDates: string[] = (habit as any).skippedDates ?? [];
-      const isSkipped = skipDates.includes(dateStr);
+      const isSkipped = habit.skippedDates?.includes(dateStr) ?? false;
 
       let dayClass = '';
       if (habit.type === 'amount') {
@@ -200,8 +199,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
   const ActionModal: React.FC = () => {
     if (!actionModalDate) return null;
     const dkey = dateKey(actionModalDate);
-    const skipDates: string[] = (habit as any).skippedDates ?? [];
-    const isSkipped = skipDates.includes(dkey);
+    const isSkipped = habit.skippedDates?.includes(dkey) ?? false;
     const amountMap = habit.completedAmounts || {};
     const currentAmount = amountMap[dkey] ?? '';
     const isBinaryDone = (habit.completedDates || []).includes(dkey);
@@ -282,7 +280,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     // undefined を送らないために条件付きでフィールドを追加/削除する
-    const base: any = {
+    const base: Partial<Habit> = {
       ...habit,
       name: formData.name,
       startDate: formData.startDate,
@@ -306,7 +304,7 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
       delete base.completedAmounts;
     }
 
-    const updatedHabit: Habit = base;
+    const updatedHabit: Habit = base as Habit;
     onUpdate(updatedHabit);
     setIsEditing(false);
   };

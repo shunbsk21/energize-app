@@ -56,7 +56,7 @@ export interface EnergyScores {
 
 export interface DiagnosisFrequency {
   frequencyType: FrequencyType;
-  frequencyValue?: any[];
+  frequencyValue?: number[];
 }
 
 export interface Friend {
@@ -91,7 +91,7 @@ export interface Notification {
   groupName?: string | null;
   message?: string | null;
   authorName?: string | null;
-  createdAt?: any;
+  createdAt?: string;
   isRead?: boolean;
 }
 
@@ -162,7 +162,7 @@ export interface ValueResultRecord {
   top1: DriverKey;
   top2: DriverKey;
   answers?: ValueAnswersMap;
-  createdAt: any;
+  createdAt: string;
 }
 
 export interface PersonalityQuestion {
@@ -193,5 +193,5 @@ export interface PurelifeResultRecord {
   date: string;
   categories: Record<string, number>;
   overall: number;
-  createdAt: any;
+  createdAt: string;
 }

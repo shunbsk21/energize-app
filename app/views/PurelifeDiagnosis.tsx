@@ -1,11 +1,10 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import FrequencyEditor from '../components/FrequencyEditor';
+import FrequencyEditor from '../components/FrequencyEditor'; // Assuming this is correctly typed
 import { PURELIFE_QUESTIONS, PURELIFE_CATEGORIES, PURELIFE_ADVICE } from '../constants';
-import { PurelifeAnswersMap, PurelifeResultRecord } from '../types';
+import { PurelifeAnswersMap, PurelifeResultRecord, DiagnosisFrequency, Habit } from '../types';
 import AddHabitModal from '../components/AddHabitModal';
 import DatePickerModal from '../components/DatePickerModal';
-import { HelpIcon, CalendarIcon } from '../components/Icons';
 import { db, auth } from "../../lib/firebase";
 import { signInAnonymously } from "firebase/auth";
 import { formatLocalISO, formatDateLabel } from '../utils/dates';
@@ -25,11 +24,9 @@ import {
 import { arrayUnion } from "firebase/firestore";
 
 interface PurelifeProps {
-  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
+  handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
   setIsHelpOpen?: (open: boolean) => void;
 }
-
-const defaultFrequency = { frequencyType: "daily", frequencyValue: [] };
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
 const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
@@ -65,11 +62,11 @@ const recordDatesFromHistory = (history: PurelifeResultRecord[] = []) => {
 
 const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
   handleAddHabit,
-  setIsHelpOpen
+  setIsHelpOpen,
 }) => {
   // default answers
   const defaultAnswers = useMemo(() => {
-    const m: AnswersMap = {};
+    const m: PurelifeAnswersMap = {};
     PURELIFE_QUESTIONS.forEach(q => { m[q.id] = 3; });
     return m;
   }, []);
@@ -81,10 +78,10 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
   const [pageIndex, setPageIndex] = useState(0);
   const PAGE_SIZE = 5;
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
-  const [localFrequency, setLocalFrequency] = useState<any>(defaultFrequency);
+  const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
-  const [habitDraft, setHabitDraft] = useState<any>(null);
+  const [habitDraft, setHabitDraft] = useState<Partial<Habit> | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -115,7 +112,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
         const q = query(userHistCol, orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
         const items = snap.docs.map(d => {
-          const data: any = d.data();
+          const data = d.data();
           return {
             id: d.id,
             date: data.date,
@@ -139,7 +136,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
           const settingsRef = doc(db, "users", myUid, "settings", "main");
           const settingsSnap = await getDoc(settingsRef);
           if (settingsSnap.exists()) {
-            const data: any = settingsSnap.data();
+            const data = settingsSnap.data();
               // prefer explicit purelife key, fall back to generic 'frequency' if present
             if (data.purelifeFrequency) {
               setLocalFrequency(data.purelifeFrequency);
@@ -161,7 +158,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setAnswer = (id: string, val: number) => setAnswers(prev => ({ ...prev, [id]: val }));
+  const setAnswer = (id: string, val: number) => setAnswers(prev => ({ ...prev, [id]: val as 1 | 2 | 3 | 4 | 5 }));
 
   const calcCategoryScore = (categoryKey: string, answersMap: PurelifeAnswersMap) => {
     const qs = PURELIFE_QUESTIONS.filter(q => q.category === categoryKey);
@@ -201,7 +198,7 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       const q = query(userHistColRef, orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
       const items = snap.docs.map(d => {
-        const data: any = d.data();
+        const data = d.data();
         return {
           id: d.id,
           date: data.date,

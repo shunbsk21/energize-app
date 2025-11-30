@@ -878,7 +878,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !taskId) return;
     try {
       const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      // completedAt を追加する可能性があるため any にして型エラーを避ける
       // サーバに送る前に undefined フィールドを除去する
       const base: Partial<Task> = { ...payload, updatedAt: new Date().toISOString() };
       if (payload.done === true) base.completedAt = new Date().toISOString();

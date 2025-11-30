@@ -54,7 +54,7 @@ export const SharedHabitsModal: React.FC<{
     return '';
   };
   const getTitle = (habit: Habit) => {
-    return habit.name || (habit as any).title || (habit as any).label || '無題の習慣';
+    return habit.name || habit.title || habit.label || '無題の習慣';
   };
 
   return (

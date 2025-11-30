@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter, DocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 import { calculateCompletionPercentForDate } from '../utils/habits';
@@ -43,7 +43,7 @@ const GroupDetail: React.FC<{
   const [memberHabitsMap, setMemberHabitsMap] = useState<Record<string, Habit[]>>({});
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const PAGE_SIZE = 30;
-  const [lastVisibleDoc, setLastVisibleDoc] = useState<any | null>(null);
+  const [lastVisibleDoc, setLastVisibleDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -68,7 +68,7 @@ const GroupDetail: React.FC<{
         try {
           const [habitsSnap, sharedSnap] = await Promise.all([habitPromise, sharedSettingPromise]);
 
-          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Habit[]) : memberHabitsMap[memberId] || [];
+          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Habit[] : memberHabitsMap[memberId] || [];
           const sharedIds = sharedSnap?.exists() ? (sharedSnap.data()?.sharedByMember?.[memberId] as string[] | undefined) || [] : memberSharedMap[memberId] || [];
 
           return { memberId, habits, sharedIds };
