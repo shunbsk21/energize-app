@@ -306,22 +306,24 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                   </select>
                 </div>
 
-                {formData.frequencyType === 'weekly' && (
-                  <div className="flex justify-center gap-1">
-                    {WEEK_DAYS.map((day, index) => (
-                      <button type="button" key={index}
-                        onClick={() => {
-                          const currentFrequencyValue = formData.frequencyValue as number[];
-                          const newValue = currentFrequencyValue.includes(index)
-                            ? currentFrequencyValue.filter(d => d !== index)
-                            : [...currentFrequencyValue, index];
-                          setFormData(f => ({...f, frequencyValue: newValue.sort()}));
-                        }}
-                        className={`w-10 h-10 rounded-full font-semibold transition-colors ${formData.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                      >{day}</button>
-                    ))}
-                  </div>
-                )}
+                {formData.frequencyType === 'weekly' && (() => {
+                  const currentFrequencyValue = formData.frequencyValue as number[];
+                  return (
+                    <div className="flex justify-center gap-1">
+                      {WEEK_DAYS.map((day, index) => (
+                        <button type="button" key={index}
+                          onClick={() => {
+                            const newValue = currentFrequencyValue.includes(index)
+                              ? currentFrequencyValue.filter(d => d !== index)
+                              : [...currentFrequencyValue, index];
+                            setFormData(f => ({...f, frequencyValue: newValue.sort()}));
+                          }}
+                          className={`w-10 h-10 rounded-full font-semibold transition-colors ${currentFrequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >{day}</button>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {formData.frequencyType === 'monthly' && (
                   <div>
