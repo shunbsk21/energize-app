@@ -565,31 +565,31 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // (↑ スワイプ関連のロジックここまで)
 
+  // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
+  const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
 
-    // ...existing code...
-    const selectedDateString = formatDateKey(selectedDate);
+  const getDisplayedHabit = useCallback((h: Habit) => {
+    return optimistic[h.id] ?? h;
+  }, [optimistic]);
 
-    // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
-    const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
+  const selectedDateString = formatDateKey(selectedDate);
 
-    // 表示用の"実効的な"habit（optimistic を優先）を考慮して
-    const scheduledHabits = useMemo(() => {
-      return habits.filter(h => {
-        const eff = optimistic[h.id] ?? h;
-        // 「予定」に該当する or その日に記録済み（予定外で記録したもの）を含める
-        return isHabitScheduledForDate(eff, selectedDate) || isHabitCompletedOnDate(eff, selectedDateString);
-      });
-    }, [habits, selectedDate, selectedDateString, optimistic]);
+  // 表示用の"実効的な"habit（optimistic を優先）を考慮して
+  const scheduledHabits = useMemo(() => {
+    return habits.filter(h => {
+      const eff = getDisplayedHabit(h);
+      // 「予定」に該当する or その日に記録済み（予定外で記録したもの）を含める
+      return isHabitScheduledForDate(eff, selectedDate) || isHabitCompletedOnDate(eff, selectedDateString);
+    });
+  }, [habits, selectedDate, selectedDateString, getDisplayedHabit]);
 
-    const nonScheduledHabits = useMemo(() => {
-      return habits.filter(h => {
-        const eff = optimistic[h.id] ?? h;
-        // 予定に該当せず、かつその日に記録済みでないものだけを「予定外」リストに表示
-        return !isHabitScheduledForDate(eff, selectedDate) && !isHabitCompletedOnDate(eff, selectedDateString);
-      });
-    }, [habits, selectedDate, selectedDateString, optimistic]);
-  
-    const getDisplayedHabit = (h: Habit) => optimistic[h.id] ?? h;
+  const nonScheduledHabits = useMemo(() => {
+    return habits.filter(h => {
+      const eff = getDisplayedHabit(h);
+      // 予定に該当せず、かつその日に記録済みでないものだけを「予定外」リストに表示
+      return !isHabitScheduledForDate(eff, selectedDate) && !isHabitCompletedOnDate(eff, selectedDateString);
+    });
+  }, [habits, selectedDate, selectedDateString, getDisplayedHabit]);
   
     // --- 追加: 達成率表示・祝福用 state（明示トリガー方式に変更） ---
     const [showCelebrate, setShowCelebrate] = useState(false);
@@ -618,7 +618,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
         // 最後は名前順で安定化
         return (a.name ?? '').localeCompare(b.name ?? '');
       });
-    }, [scheduledHabits, optimistic, selectedDateString]);
+    }, [scheduledHabits, selectedDateString, getDisplayedHabit]);
 
     // 明示的に呼び出して祝福判定を行う（更新後の状態を想定して判定できるようにする）
     const checkAndTriggerCelebrateWith = (maybeUpdatedHabit?: Habit, dateKey?: string) => {
@@ -788,8 +788,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     const updatedHabit: Habit = {
       ...habitToToggle,
       completedDates: isCompleted
-        ? habitToToggle.completedDates.filter(date => date !== selectedDateString)
-        : [...habitToToggle.completedDates, selectedDateString],
+        ? (habitToToggle.completedDates || []).filter(date => date !== selectedDateString)
+        : [...(habitToToggle.completedDates || []), selectedDateString],
     };
     // optimistic に即時反映してチェックがすぐ付くようにする
     setOptimistic(prev => ({ ...prev, [updatedHabit.id]: updatedHabit }));
@@ -816,31 +816,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     setSelectedHabit(habit);
     setIsListModalOpen(false);
   };
-
-  // (↓ WeekView は変更なし)
-  const WeekView = React.memo(({ days, habits, selectedDate, onDateClick }: {days: Date[], habits: Habit[], selectedDate: Date, onDateClick: (date: Date) => void}) => (
-    <div className="grid grid-cols-7 gap-1 text-center w-full">
-        {days.map(day => {
-            const dayName = day.toLocaleDateString('ja-JP', { weekday: 'short' });
-            const dateNum = day.getDate();
-            const isSelected = isSameDay(day, selectedDate);
-            const isToday = isSameDay(day, new Date());
-            const completionStatus = calculateCompletionStatus(day, habits);
-            return (
-                <div key={day.toISOString()} onClick={() => onDateClick(day)} className="cursor-pointer p-1 rounded-lg hover:bg-gray-50 select-none">
-                    <span className={`text-xs ${isSelected ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>{dayName}</span>
-                    <div className={`mt-1 mx-auto flex items-center justify-center font-semibold transition-colors ${isSelected ? 'w-9 h-9 bg-indigo-600 text-white rounded-[10px]' : 'w-8 h-8 text-gray-700 rounded-full ' + (isToday ? 'text-indigo-600' : '')}`}>
-                        {dateNum}
-                    </div>
-                    <div className="h-2 flex items-center justify-center mt-1">
-                        {completionStatus === 'full' && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
-                        {completionStatus === 'partial' && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div>}
-                    </div>
-                </div>
-            )
-        })}
-    </div>
-  ));
 
   // --- モーダル onSave を差し替えて create / update を切替える ---
   // CheckInModal の onSave -> handleSaveCheckin
