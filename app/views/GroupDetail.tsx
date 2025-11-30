@@ -36,8 +36,8 @@ const GroupDetail: React.FC<{
   const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const closeProgress = () => setIsProgressOpen(false);
-  const groupSharedIds: string[] = (group as any).sharedHabitIds || (group as any).sharedHabits || [];
-  const groupSharedByMember = (group as any).sharedByMember || {};
+  const groupSharedIds: string[] = group.sharedHabitIds || [];
+  const groupSharedByMember = group.sharedByMember || {};
   const [memberSharedMap, setMemberSharedMap] = useState<Record<string, string[]>>({});
   const [memberHabitsMap, setMemberHabitsMap] = useState<Record<string, Habit[]>>({});
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -67,8 +67,8 @@ const GroupDetail: React.FC<{
         try {
           const [habitsSnap, sharedSnap] = await Promise.all([habitPromise, sharedSettingPromise]);
 
-          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) : memberHabitsMap[memberId] || [];
-          const sharedIds = sharedSnap?.exists() ? (sharedSnap.data() as any).sharedByMember?.[memberId] || [] : memberSharedMap[memberId] || [];
+          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Habit)) : memberHabitsMap[memberId] || [];
+          const sharedIds = sharedSnap?.exists() ? (sharedSnap.data()?.sharedByMember?.[memberId] as string[] | undefined) || [] : memberSharedMap[memberId] || [];
 
           return { memberId, habits, sharedIds };
         } catch (err) {
@@ -104,7 +104,7 @@ const GroupDetail: React.FC<{
         if (cancelled) return;
         const docs = snap.docs;
         const msgs: Comment[] = docs
-          .map(d => {
+          .map((d): Comment => {
             const data = d.data() as any;
             const obj = {
               id: d.id,
@@ -115,7 +115,7 @@ const GroupDetail: React.FC<{
               timestamp: data.timestamp,
               authorImageUrl: data.authorImageUrl || null
             };
-            return obj as unknown as Comment;
+            return obj;
           })
           .reverse();
         setMessages(msgs);
@@ -131,7 +131,7 @@ const GroupDetail: React.FC<{
           unsubNew = onSnapshot(qNew, (snapNew) => {
             snapNew.docChanges().forEach(change => {
               if (change.type === 'added') {
-                const d = change.doc;
+                const d = change.doc; 
                 const data = d.data() as any;
                 const obj = {
                   id: d.id,
@@ -142,7 +142,7 @@ const GroupDetail: React.FC<{
                   timestamp: data.timestamp,
                   authorImageUrl: data.authorImageUrl || null
                 };
-                const newMsg = obj as unknown as Comment;
+                const newMsg = obj as Comment;
                 setMessages(prev => {
                   // avoid duplicates
                   if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -161,7 +161,7 @@ const GroupDetail: React.FC<{
           unsubNew = onSnapshot(qOne, (snapNew) => {
             snapNew.docChanges().forEach(change => {
               if (change.type === 'added') {
-                const d = change.doc;
+                const d = change.doc; 
                 const data = d.data() as any;
                 const obj = {
                   id: d.id,
@@ -172,7 +172,7 @@ const GroupDetail: React.FC<{
                   timestamp: data.timestamp,
                   authorImageUrl: data.authorImageUrl || null
                 };
-                const newMsg = obj as unknown as Comment;
+                const newMsg = obj as Comment;
                 setMessages(prev => {
                   // avoid duplicates
                   if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -210,7 +210,7 @@ const GroupDetail: React.FC<{
         setHasMore(false);
         return;
       }
-      const olderMsgs = docs.map(d => {
+      const olderMsgs: Comment[] = docs.map(d => {
         const data = d.data() as any;
         const obj = {
           id: d.id,
@@ -221,7 +221,7 @@ const GroupDetail: React.FC<{
           timestamp: data.timestamp,
           authorImageUrl: data.authorImageUrl || null
         };
-        return obj as unknown as Comment;
+        return obj;
       }).reverse();
 
       // preserve scroll position: measure before/after
@@ -301,16 +301,16 @@ const GroupDetail: React.FC<{
         const snap = await getDoc(memberGroupDocRef);
         if (cancelled) return;
         if (snap.exists()) {
-          const data = snap.data() as any;
-          const sharedForGroup = (data?.sharedByMember && data.sharedByMember[selectedMemberId]) || data?.sharedHabitIds || [];
+          const data = snap.data();
+          const sharedForGroup = (data?.sharedByMember?.[selectedMemberId]) || data?.sharedHabitIds || [];
           setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
           return;
         }
         try {
           const globalGroupRef = firestoreDoc(db, 'groups', group.id);
           const gSnap = await getDoc(globalGroupRef);
-          if (!cancelled && gSnap.exists()) {
-            const gdata = gSnap.data() as any;
+          if (!cancelled && gSnap.exists()) { 
+            const gdata = gSnap.data();
             const sharedForGroup = (gdata?.sharedByMember && gdata.sharedByMember[selectedMemberId]) || gdata?.sharedHabitIds || [];
             setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
             return;
@@ -336,7 +336,7 @@ const GroupDetail: React.FC<{
         const q = query(habitsCol);
         const snap = await getDocs(q);
         if (cancelled) return;
-        const loaded: Habit[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Habit));
+        const loaded: Habit[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Habit));
         setMemberHabitsMap(prev => ({ ...prev, [selectedMemberId]: loaded }));
       } catch (err) {
         console.error('[Group] failed to load member habits', selectedMemberId, err);
@@ -362,8 +362,8 @@ const GroupDetail: React.FC<{
     // memberHabitsMap cache または allUserProfiles fallback
     let memberHabits = memberHabitsMap[memberId];
     if (!memberHabits) {
-      const mp = allUserProfiles.get(memberId) as any;
-      memberHabits = (mp && mp.habits) ? mp.habits as Habit[] : [];
+      const mp = allUserProfiles.get(memberId);
+      memberHabits = (mp && 'habits' in mp && Array.isArray((mp as any).habits)) ? (mp as any).habits : [];
     }
     if (!memberHabits || memberHabits.length === 0) return null;
     const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
@@ -491,7 +491,7 @@ const GroupDetail: React.FC<{
                 <div className="space-y-4">
                   {grouped.items.map(message => {
                     const isAuthor = message.authorId === profile.id;
-                    const authorImageUrl = (message as any).authorImageUrl || null;
+                    const authorImageUrl = message.authorImageUrl || null;
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                         {!isAuthor && (

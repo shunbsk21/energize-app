@@ -13,12 +13,12 @@ export const SharedHabitsModal: React.FC<{
 }> = ({ group, profile, myHabits, initialSharedIds, onClose, onSave }) => {
   const [selected, setSelected] = useState<Set<string>>(() => {
     if (initialSharedIds && initialSharedIds.length > 0) return new Set(initialSharedIds);
-    return new Set(myHabits.map(h => h.id));
+    return new Set(myHabits.map(h => h.id).filter((id): id is string => !!id));
   });
 
   useEffect(() => {
     if ((!initialSharedIds || initialSharedIds.length === 0) && myHabits && myHabits.length > 0) {
-      setSelected(new Set(myHabits.map(h => h.id)));
+      setSelected(new Set(myHabits.map(h => h.id).filter((id): id is string => !!id)));
     }
     if (initialSharedIds && initialSharedIds.length > 0) {
       setSelected(new Set(initialSharedIds));
@@ -33,7 +33,7 @@ export const SharedHabitsModal: React.FC<{
       return s;
     });
   };
-  const selectAll = () => setSelected(new Set(myHabits.map(h => h.id)));
+  const selectAll = () => setSelected(new Set(myHabits.map(h => h.id).filter((id): id is string => !!id)));
   const clearAll = () => setSelected(new Set());
 
   const weekdayNames = ['日','月','火','水','木','金','土'];
@@ -54,8 +54,7 @@ export const SharedHabitsModal: React.FC<{
     return '';
   };
   const getTitle = (habit: Habit) => {
-    const h: any = habit;
-    return h.title || h.name || h.label || '無題の習慣';
+    return habit.name || (habit as any).title || (habit as any).label || '無題の習慣';
   };
 
   return (

@@ -16,14 +16,14 @@ export const MemberHabitsModal: React.FC<{
   onEditMySharedHabits?: () => void;
   isLoading: boolean;
 }> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
-  const habits: Habit[] = memberHabits || (memberProfile && (memberProfile as any).habits) || [];
+  const habits: Habit[] = memberHabits || (memberProfile && 'habits' in memberProfile && Array.isArray((memberProfile as any).habits) ? (memberProfile as any).habits : []);
   const todayStr = new Date().toLocaleDateString('sv-SE');
-  const sharedHabits = habits.filter(h => groupSharedHabitIds.includes(h.id));
+  const sharedHabits = habits.filter(h => h.id && groupSharedHabitIds.includes(h.id));
   const isSelf = memberId === currentUserId;
   const weekdayNames = ['日','月','火','水','木','金','土'];
   const formatFrequency = (habit: Habit) => {
-    const type = (habit as any).frequencyType;
-    const val = (habit as any).frequencyValue;
+    const type = habit.frequencyType;
+    const val = habit.frequencyValue;
     if (type === 'daily') return '毎日';
     if (type === 'weekly') {
       if (Array.isArray(val) && val.length > 0) return '毎週 ' + val.map((d: number) => weekdayNames[d]).join('・');
@@ -38,8 +38,7 @@ export const MemberHabitsModal: React.FC<{
     return '';
   };
   const getTitle = (habit: Habit) => {
-    const h: any = habit;
-    return h.title || h.name || h.label || '無題の習慣';
+    return habit.name || (habit as any).title || (habit as any).label || '無題の習慣';
   };
 
   const completionPercent = useMemo(() => calculateCompletionPercentForDate(new Date(), sharedHabits), [sharedHabits]);

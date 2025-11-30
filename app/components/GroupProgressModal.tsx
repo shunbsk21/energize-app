@@ -18,12 +18,12 @@ export const GroupProgressModal: React.FC<{
     if (memberId === profile.id) {
       return calculateCompletionPercentForDate(today, habits);
     }
-    const sharedForMember: string[] = (group as any).sharedByMember?.[memberId] || (group as any).sharedHabitIds || [];
+    const sharedForMember: string[] = (group.sharedByMember?.[memberId]) || group.sharedHabitIds || [];
     if (!sharedForMember || sharedForMember.length === 0) return null;
-    const memberProfile = allUserProfiles.get(memberId) as any;
-    const memberHabits: Habit[] = (memberProfile && memberProfile.habits) || [];
+    const memberProfile = allUserProfiles.get(memberId);
+    const memberHabits: Habit[] = (memberProfile && 'habits' in memberProfile && Array.isArray((memberProfile as any).habits)) ? (memberProfile as any).habits : [];
     if (!memberHabits || memberHabits.length === 0) return null;
-    const sharedHabits = memberHabits.filter(h => sharedForMember.includes(h.id));
+    const sharedHabits = memberHabits.filter(h => h.id && sharedForMember.includes(h.id));
     if (sharedHabits.length === 0) return 0;
     return calculateCompletionPercentForDate(today, sharedHabits);
   };
