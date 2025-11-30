@@ -110,23 +110,9 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [fabOpen, setFabOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement | null>(null);
 
-  // personality 診断の頻度 / 完了日を localStorage から読み込む（Energy と同様の UX を出す）
-  const [localPersonalityFrequency, setLocalPersonalityFrequency] = useState<DiagnosisFrequency>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('personalityDiagnosisFrequency') : null;
-      return raw ? JSON.parse(raw) : { frequencyType: 'daily', frequencyValue: [] };
-    } catch {
-      return { frequencyType: 'daily', frequencyValue: [] };
-    }
-  });
-  const [personalityCompletedDates, setPersonalityCompletedDates] = useState<string[]>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('personalityDiagnosisCompletedDates') : null;
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  // personality 診断の頻度 / 完了日を読み込むための state
+  const [localPersonalityFrequency, setLocalPersonalityFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
+  const [personalityCompletedDates, setPersonalityCompletedDates] = useState<string[]>([]);
 
   // --- purelife の完了日をローカルで保持し、グローバルイベントで即時更新する ---
   const [localPurelifeCompletedDatesState, setLocalPurelifeCompletedDatesState] = useState<string[]>(localPurelifeCompletedDates ?? []);
@@ -181,33 +167,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     return () => { mounted = false; };
   }, [selectedDateISO, hasPurelifeConfig, isPurelifeDay]);
   
-  useEffect(() => {
-    // listen storage events (other tabs) to keep in sync
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'personalityDiagnosisFrequency') {
-        try { setLocalPersonalityFrequency(JSON.parse(e.newValue || '{}')); } catch {}
-      }
-      if (e.key === 'personalityDiagnosisCompletedDates') {
-        try { setPersonalityCompletedDates(JSON.parse(e.newValue || '[]')); } catch {}
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    // listen custom event dispatched when personality is saved
-    const handler = (ev: Event) => {
-      try {
-        const ce = ev as CustomEvent;
-        const date = ce?.detail?.date;
-        if (!date) return;
-        setPersonalityCompletedDates(prev => prev.includes(date) ? prev : [date, ...prev]);
-      } catch {}
-    };
-    window.addEventListener('personality-diagnosis-saved', handler as EventListener);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('personality-diagnosis-saved', handler as EventListener);
-    };
-  }, []);
-
   // add-modal 開閉時に自動リサイズ実行
   useEffect(() => {
     if (newHabitDetailsRef.current) {

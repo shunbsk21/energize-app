@@ -18,6 +18,20 @@ const getCurrentUid = () => {
 const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateNote }) => {
   // Firestore-driven: start empty and rely on snapshot listener (if uid present)
   const [notes, setNotes] = useState<NoteItem[]>(initialNotes && initialNotes.length ? initialNotes : []);
+  const [search, setSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [viewArchived, setViewArchived] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [activeNote, setActiveNote] = useState<NoteItem | null>(null);
+
+  // UI states
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  // actionMenuNote: when set, show centered action modal with Edit / Archive / Delete
+  const [actionMenuNote, setActionMenuNote] = useState<NoteItem | null>(null);
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [editingIsNew, setEditingIsNew] = useState(false);
+  const [isFullscreenEditOpen, setIsFullscreenEditOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'archive'|'delete', note: NoteItem } | null>(null);
 
   // Subscribe to Firestore notes; require authenticated uid
   useEffect(() => {
@@ -69,22 +83,6 @@ const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateN
     return () => window.removeEventListener('open-note-creator', openHandler as EventListener);
   }, []);
 
-  const [search, setSearch] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [viewArchived, setViewArchived] = useState(false);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [activeNote, setActiveNote] = useState<NoteItem | null>(null);
-
-  // UI states
-  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-  // actionMenuNote: when set, show centered action modal with Edit / Archive / Delete
-  const [actionMenuNote, setActionMenuNote] = useState<NoteItem | null>(null);
-  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
-  const [editingIsNew, setEditingIsNew] = useState(false);
-  const [isFullscreenEditOpen, setIsFullscreenEditOpen] = useState(false);
-
-  const [confirmAction, setConfirmAction] = useState<{ type: 'archive'|'delete', note: NoteItem } | null>(null);
-
   // derived tag list from all non-deleted notes
   const allTags = useMemo(() => {
     const s = new Set<string>();
@@ -106,7 +104,13 @@ const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateN
         const inTag = !selectedTag || (n.tags || []).includes(selectedTag);
         return inText && inTag;
       })
-      .sort((a,b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
+      .sort((a, b) => {
+        const dateA = a.updatedAt ?? a.createdAt;
+        const dateB = b.updatedAt ?? b.createdAt;
+        const strA = typeof dateA === 'string' ? dateA : dateA.toDate().toISOString();
+        const strB = typeof dateB === 'string' ? dateB : dateB.toDate().toISOString();
+        return strB.localeCompare(strA);
+      });
   }, [notes, search, selectedTag, viewArchived]);
 
   // helpers
@@ -283,7 +287,11 @@ const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateN
                             {n.body}
                           </div>
                           <div className="mt-3 flex items-center justify-between">
-                            <div className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleString()}</div>
+                            <div className="text-xs text-gray-400">
+                              {(typeof n.createdAt === 'object' && n.createdAt && 'toDate' in n.createdAt)
+                                ? (n.createdAt as any).toDate().toLocaleString()
+                                : new Date(n.createdAt).toLocaleString()}
+                            </div>
                             <div>
                               {!isExpanded ? (
                                 <button onClick={() => setExpandedNoteId(n.id)} className="text-sm text-indigo-600">詳細を見る</button>
@@ -445,73 +453,6 @@ const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateN
         
       </div>
     </>
-  );
-};
-
-// small editor component used by create/edit modals
-const NoteEditor: React.FC<{
-  initial: { title?: string; body: string; tags?: string[] };
-  onCancel: () => void;
-  onSave: (title: string|undefined, body: string, tags: string[]) => void;
-  parseTagsInput: (s: string) => string[];
-  allTags?: string[];
-}> = ({ initial, onCancel, onSave, parseTagsInput, allTags = [] }) => {
-  const [title, setTitle] = useState(initial.title ?? '');
-  const [body, setBody] = useState(initial.body ?? '');
-  const [tags, setTags] = useState<string[]>(initial.tags ?? []);
-  const [tagsInput, setTagsInput] = useState((initial.tags || []).join(', '));
-
-  const addTag = (t: string) => {
-    const v = t.trim().toLowerCase().replace(/\s+/g,'-');
-    if (!v) return;
-    if (!tags.includes(v)) setTags(prev => [...prev, v]);
-    setTagsInput('');
-  };
-  const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
-  const toggleTag = (t: string) => tags.includes(t) ? removeTag(t) : addTag(t);
-
-  useEffect(() => {
-    setTitle(initial.title ?? '');
-    setBody(initial.body ?? '');
-    setTags((initial.tags ?? []));
-    setTagsInput((initial.tags || []).join(', '));
-  }, [initial]);
-
-  return (
-    <form onSubmit={e => { e.preventDefault(); onSave(title.trim() || undefined, body, tags); }} className="space-y-3">
-      {/* タイトル → タグ → 詳細 の順 */}
-      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" className="w-full p-2 border border-gray-200 rounded" />
-      <div>
-        <div className="mb-2">
-          <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ',' ) { e.preventDefault(); addTag(tagsInput); }
-          }} placeholder="タグを入力して Enter（または既存タグをクリック）" className="w-full p-2 border border-gray-200 rounded" />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {tags.map(t => (
-            <span key={t} className="inline-flex items-center gap-2 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs mb-1">
-              #{t}
-              <button type="button" onClick={() => removeTag(t)} className="text-indigo-600 px-1">✕</button>
-            </span>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2 mb-1">
-         {allTags.filter(t => !tags.includes(t)).map(t => (
-            <button key={t} type="button" onClick={() => toggleTag(t)} className="px-2 py-1 text-sm rounded bg-gray-100 text-gray-700">
-              #{t}
-            </button>
-          ))}
-        </div>
-      </div>
-      <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="本文" rows={10} className="w-full p-2 border border-gray-200 rounded whitespace-pre-wrap" />
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-500">タグは半角カンマで区切ってください</div>
-        <div className="flex gap-2">
-          <button type="button" onClick={onCancel} className="px-3 py-2 bg-gray-100 rounded">キャンセル</button>
-          <button type="submit" className="px-3 py-2 bg-indigo-600 text-white rounded">保存</button>
-        </div>
-      </div>
-    </form>
   );
 };
 
