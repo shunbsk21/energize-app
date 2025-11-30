@@ -1,14 +1,10 @@
 // ...existing code...
 import React, { useState } from 'react';
-import { Profile } from '../types';
+import { Profile, LoginProps } from '../types';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../../lib/firebase';
 import { GoogleIcon } from '../components/Icons';
 // ...existing code...
-
-interface LoginProps {
-  onLoginSuccess: (profile: Profile) => void;
-}
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);

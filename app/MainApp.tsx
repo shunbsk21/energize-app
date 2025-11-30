@@ -32,7 +32,7 @@ import HabitTracker from './views/HabitTracker';
 import Analytics from './views/Analytics';
 import Group from './views/Group';
 import Records from './views/Records';
-import ProfileModal from './components/Profile';
+import ProfileModal from './components/ProfileModal';
 import Tasks from './views/Tasks';
 import Notes from './views/Notes';
 import Learnings from './views/Learnings';

@@ -4,20 +4,8 @@ import Image from 'next/image';
 import React, { useState, useRef, useMemo } from 'react';
 // ★ ユーザーの指示通り ../types に修正
 import AddFriendModal from './AddFriendModal';
-import { Profile, Friend } from '../types';
+import { Profile, Friend, ProfileModalProps } from '../types';
 import { CameraIcon, CopyIcon, LogoutIcon } from './Icons';
-
-// ★★★ Propsの定義を変更 ★★★
-interface ProfileModalProps {
-  profile: Profile;
-  following: Friend[]; // ★ friends -> following
-  followers: Friend[]; // ★ 追加
-  onFollowUser: (friendId: string) => void; // ★ onAddFriend -> onFollowUser
-  onClose: () => void;
-  onLogout: () => void;
-  onSave: (newDisplayName: string, newImageUrl: string | null) => void;
-}
-
 
 // ★★★ ProfileModal の Props を修正 ★★★
 const ProfileModal: React.FC<ProfileModalProps> = ({ 

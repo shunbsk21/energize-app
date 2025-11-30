@@ -306,3 +306,38 @@ export interface TaskDetailProps {
   toggleTask: (id: string, done: boolean) => Promise<void> | void;
   removeTask: (id: string) => Promise<void> | void;
 }
+
+export interface AnalyticsProps {
+  energyHistory: EnergyRecord[];
+  habits: Habit[];
+  setIsHelpOpen: (isOpen: boolean) => void;
+  checkins?: Checkin[];
+  checkouts?: Checkout[];
+}
+
+export interface LearningsProps {
+  learnings: LearningItem[];
+  onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
+  profile: Profile | null;
+}
+
+export interface NotesProps {
+  notes?: NoteItem[];
+  onAddNote?: (n: Omit<NoteItem, 'id'|'createdAt'|'updatedAt'>) => void;
+  onUpdateNote?: (n: NoteItem) => void;
+}
+
+export interface LoginProps {
+  onLoginSuccess: (profile: Profile) => void;
+}
+
+export interface ProfileModalProps {
+  profile: Profile;
+  following: Friend[];
+  followers: Friend[];
+  onFollowUser: (friendId: string) => void;
+  onClose: () => void;
+  onLogout: () => void;
+  onSave: (newDisplayName: string, newImageUrl: string | null) => void;
+}
+}

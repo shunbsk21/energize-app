@@ -36,19 +36,6 @@ const getTypeKey = (scores: EnergyScores) => {
   return `P_${p}_M_${m}_E_${e}_I_${i}`;
 };
 
-// ★★★ Propsの定義を変更 ★★★
-interface EnergyDiagnosisProps {
-  history: EnergyRecord[];
-  onComplete: (scores: EnergyScores) => void;
-  setIsHelpOpen: (isOpen: boolean) => void;
-  diagnosisFrequency: DiagnosisFrequency;
-  // React.Dispatch<React.SetStateAction<DiagnosisFrequency>> だったものを、
-  // MainApp.tsx が渡す関数の型 (Firestore保存関数) に合わせる
-  setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
-  habits: Habit[];
-  handleAddHabit?: (newHabitData: any) => Promise<void> | void;
-}
-
 type QuizStep = EnergyCategory | 'start' | 'results';
 const categoryOrder: EnergyCategory[] = ['physical', 'mental', 'emotional', 'intellectual'];
 

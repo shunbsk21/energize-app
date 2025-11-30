@@ -3,26 +3,11 @@ import React, {
   useEffect,
   useRef
 } from 'react';
-import { Profile } from '../types';
-
-interface LearningItem {
-  id?: string;
-  title: string;
-  url?: string;
-  notes?: string; // HTML
-  tags?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-  createdBy?: string;
-}
+import { Profile, LearningItem, LearningsProps } from '../types';
 
 import { ADMIN_ID } from '../config';
 
-const Learnings: React.FC<{
-  learnings: LearningItem[];
-  onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
-  profile: Profile | null;
-}> = ({ learnings = [], onAddLearning, profile }) => {
+const Learnings: React.FC<LearningsProps> = ({ learnings = [], onAddLearning, profile }) => {
   const isAdmin = (profile as any)?.id === ADMIN_ID;
   const [selected, setSelected] = useState<LearningItem | null>(null); // 詳細表示用
   const [isEditorOpen, setIsEditorOpen] = useState(false);

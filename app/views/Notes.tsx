@@ -2,17 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase'; // <- adjust path if necessary
-
-interface NoteItem {
-  id: string;
-  title?: string;
-  body: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt?: string;
-  archived?: boolean;
-  deleted?: boolean; // logical delete
-}
+import { NoteItem, NotesProps } from '../types';
 
 const defaultNow = () => new Date().toISOString();
 
@@ -25,11 +15,7 @@ const getCurrentUid = () => {
   }
 };
 
-const Notes: React.FC<{
-  notes?: NoteItem[]; // optional initial
-  onAddNote?: (n: Omit<NoteItem, 'id'|'createdAt'|'updatedAt'>) => void;
-  onUpdateNote?: (n: NoteItem) => void;
-}> = ({ notes: initialNotes, onAddNote, onUpdateNote }) => {
+const Notes: React.FC<NotesProps> = ({ notes: initialNotes, onAddNote, onUpdateNote }) => {
   // Firestore-driven: start empty and rely on snapshot listener (if uid present)
   const [notes, setNotes] = useState<NoteItem[]>(initialNotes && initialNotes.length ? initialNotes : []);
 

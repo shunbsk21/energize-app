@@ -1,18 +1,8 @@
 "use client"; // Next.js 13+ App Router では "use client" が必要かもしれません
 
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { EnergyRecord, Habit, EnergyCategory, Checkin, Checkout } from '../types';
+import { EnergyRecord, Habit, EnergyCategory, Checkin, Checkout, AnalyticsProps } from '../types';
 import { ENERGY_CATEGORIES } from '../constants';
-
-interface AnalyticsProps {
-  energyHistory: EnergyRecord[];
-  habits: Habit[];
-  setIsHelpOpen: (isOpen: boolean) => void;
-  // 追加: checkins を受け取ってチャート表示
-  checkins?: Checkin[];
-  // 追加: チェックアウトの推移（オプション） -> rating を利用
-  checkouts?: Checkout[];
-}
 
 type Period = 7 | 30 | 'all';
 type TooltipData = { x: number; y: number; content: React.ReactNode; };
