@@ -673,7 +673,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = collection(db, 'users', profile.id, 'checkins');
       const payload: Omit<Checkin, 'id'> = {
-        date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
+        date: dateStr ?? new Date().formatDateKey(),
         value,
         note: note || '',
         createdAt: new Date().toISOString()
@@ -690,7 +690,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     try {
       const ref = collection(db, 'users', profile.id, 'checkouts');
       const payload: Omit<Checkout, 'id'> = {
-        date: dateStr ?? new Date().toLocaleDateString('sv-SE'),
+        date: dateStr ?? new Date().formatDateKey(),
         gratitude: gratitude || '',
         note: note || '',
         rating: rating ?? null,

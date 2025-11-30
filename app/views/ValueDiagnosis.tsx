@@ -403,7 +403,7 @@ export default function ValueDiagnosis({ handleAddHabit, setIsHelpOpen }: ValueD
         initialDate={new Date()}
         highlightedDates={recordDates}
         onDateSelect={(date) => {
-          const dStr = date.toLocaleDateString('sv-SE');
+          const dStr = date.formatDateKey();
           const rec = history.find(h => String(h.date) === dStr) ?? null;
           setSelectedRecord(rec);
           setStep(rec ? 'results' : 'idle');

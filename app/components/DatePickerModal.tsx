@@ -51,8 +51,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateStr = date.toLocaleDateString('sv-SE');
-      const isSelected = initialDate.toLocaleDateString('sv-SE') === dateStr;
+      const dateStr = date.formatDateKey();
+      const isSelected = initialDate.formatDateKey() === dateStr;
       const completionStatus = habits ? calculateCompletionStatus(date, habits) : 'none';
       const hasRecord = highlightedDates?.has(dateStr);
 

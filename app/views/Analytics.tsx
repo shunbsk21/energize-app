@@ -71,7 +71,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       if (d instanceof Date) {
         const dt = new Date(d);
         dt.setHours(0, 0, 0, 0);
-        return dt.toLocaleDateString('sv-SE');
+        return dt.formatDateKey();
       }
       const s = String(d);
       const ymd = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -79,12 +79,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ energyHistory, habits, setIsHelpO
       if (m) {
         const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
         dt.setHours(0, 0, 0, 0);
-        return dt.toLocaleDateString('sv-SE');
+        return dt.formatDateKey();
       }
       const dt2 = new Date(s);
       if (!Number.isNaN(dt2.getTime())) {
         dt2.setHours(0, 0, 0, 0);
-        return dt2.toLocaleDateString('sv-SE');
+        return dt2.formatDateKey();
       }
       return s;
     };

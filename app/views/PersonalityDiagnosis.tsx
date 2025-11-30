@@ -177,7 +177,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   // 履歴が更新されたら、まず「今日」の結果があれば表示する（なければ no-result のまま）
   useEffect(() => {
     if (history && history.length > 0) {
-      const today = new Date().toLocaleDateString('sv-SE');
+      const today = new Date().formatDateKey();
       const todayRec = history.find(h => String(h.date) === today);
       if (todayRec) {
         setSubmittedResult(todayRec);
@@ -247,7 +247,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
       const uid = getCurrentUid();
       if (db && uid) {
         try {
-          const today = new Date().toLocaleDateString('sv-SE');
+          const today = new Date().formatDateKey();
           const payload = {
             date: today,
             type: res.type,
@@ -279,11 +279,11 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
       } else {
         // fallback: add to local history if not authenticated
         const date = new Date();
-        const rec = { id: date.toISOString(), date: date.toLocaleDateString('sv-SE'), type: res.type, percents: res.percents, strength: res.strength };
+        const rec = { id: date.toISOString(), date: date.formatDateKey(), type: res.type, percents: res.percents, strength: res.strength };
         setHistory(prev => [rec, ...prev].slice(0, 20));
         // also persist completion locally + notify
         try {
-          const today = date.toLocaleDateString('sv-SE');
+          const today = date.formatDateKey();
           const key = 'personalityDiagnosisCompletedDates';
           const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
           const arr: string[] = raw ? JSON.parse(raw) : [];
@@ -540,7 +540,7 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
           initialDate={new Date()}
           highlightedDates={recordDates}
           onDateSelect={(date) => {
-            const dStr = date.toLocaleDateString('sv-SE');
+            const dStr = date.formatDateKey();
             const rec = history.find(h => String(h.date) === dStr) ?? null;
             setSubmittedResult(rec);
             setStep('results');

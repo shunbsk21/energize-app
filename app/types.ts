@@ -39,7 +39,7 @@ export interface Habit {
   startDate?: string;
   frequencyType: FrequencyType;
   frequencyValue: number[] | string;
-  type?: 'amount' | 'boolean';
+  type?: 'amount' | 'binary';
   targetAmount?: number;
   target?: number;
   completedDates?: string[];

@@ -113,7 +113,7 @@ const Records: React.FC<RecordsProps> = ({ checkouts = [], checkins = [] }) => {
 
     // 日付フィルタ
     if (selectedDate) {
-      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      const dateStr = selectedDate.formatDateKey();
       return sorted.filter(r => (r.date ?? r.createdAt ?? '').startsWith(dateStr));
     }
 

@@ -131,7 +131,7 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
   const recordDates = useMemo(() => new Set(history.map(r => r.date)), [history]);
 
   const displayedRecord = useMemo(() => {
-    const dateString = selectedDate.toLocaleDateString('sv-SE');
+    const dateString = selectedDate.formatDateKey();
     return history.find(r => r.date === dateString) || null;
   }, [history, selectedDate]);
 

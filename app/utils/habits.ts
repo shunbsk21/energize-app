@@ -5,7 +5,7 @@ export const normalizeKey = (d: string | Date): string => {
     const dt = new Date(d);
     if (Number.isNaN(dt.getTime())) return String(d);
     dt.setHours(0, 0, 0, 0);
-    return dt.toLocaleDateString('sv-SE');
+    return dt.formatDateKey();
   } catch {
     return String(d);
   }

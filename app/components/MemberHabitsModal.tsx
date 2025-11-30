@@ -17,7 +17,7 @@ export const MemberHabitsModal: React.FC<{
   isLoading: boolean;
 }> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
   const habits: Habit[] = memberHabits || memberProfile?.habits || [];
-  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const todayStr = new Date().formatDateKey();
   const sharedHabits = habits.filter(h => h.id && groupSharedHabitIds.includes(h.id));
   const isSelf = memberId === currentUserId;
   const weekdayNames = ['日','月','火','水','木','金','土'];

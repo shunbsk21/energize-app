@@ -152,7 +152,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   isAdmin = false
 }) => {
   const [newHabitName, setNewHabitName] = useState('');
-  const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().toLocaleDateString('sv-SE'));
+  const [newHabitStartDate, setNewHabitStartDate] = useState(new Date().formatDateKey());
   const [newHabitFrequency, setNewHabitFrequency] = useState<{type: FrequencyType, value: number[]}>({type: 'daily', value: []});
   const [newHabitType, setNewHabitType] = useState<'binary' | 'amount'>('binary');
   const [newHabitTarget, setNewHabitTarget] = useState<number | undefined>(undefined);
@@ -491,11 +491,11 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // --- checkin/checkout lookup helpers (date format: sv-SE) ---
   const getCheckinForDate = (date: Date) => {
-    const d = date.toLocaleDateString('sv-SE');
+    const d = date.formatDateKey();
     return (propsOrEmpty(checkins) || []).find((c:Checkin) => c.date === d) || null;
   };
   const getCheckoutForDate = (date: Date) => {
-    const d = date.toLocaleDateString('sv-SE');
+    const d = date.formatDateKey();
     return (propsOrEmpty(checkouts) || []).find((c:Checkout) => c.date === d) || null;
   };
 
@@ -626,7 +626,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
 
 
     // ...existing code...
-    const selectedDateString = selectedDate.toLocaleDateString('sv-SE');
+    const selectedDateString = selectedDate.formatDateKey();
 
     // --- optimistic updates: ユーザー操作で即時UI反映するためのマップ ---
     const [optimistic, setOptimistic] = useState<Record<string, Habit>>({});
@@ -665,7 +665,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       try {
         const dt = new Date(d);
         if (Number.isNaN(dt.getTime())) return String(d);
-        return dt.toLocaleDateString('sv-SE');
+        return dt.formatDateKey();
       } catch {
         return String(d);
       }
@@ -781,7 +781,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       name: newHabitName.trim(),
       details: newHabitDetails.trim() || undefined,
       type: newHabitType,
-      startDate: newHabitStartDate ?? new Date().toLocaleDateString('sv-SE'),
+      startDate: newHabitStartDate ?? new Date().formatDateKey(),
       frequencyType: newHabitFrequency?.type ?? 'daily',
       frequencyValue: Array.isArray(newHabitFrequency?.value) ? newHabitFrequency.value : (newHabitFrequency?.value ? [newHabitFrequency.value] : []),
       skippedDates: [],
@@ -812,7 +812,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
       // 成功時はフォームをクリアしてモーダルを閉じる（ローディング状態を触らない）
       setNewHabitName('');
       setNewHabitDetails('');
-      setNewHabitStartDate(new Date().toLocaleDateString('sv-SE'));
+      setNewHabitStartDate(new Date().formatDateKey());
       setNewHabitFrequency({ type: 'daily', value: [] });
       setNewHabitType('binary');
       setNewHabitTarget(undefined);
@@ -917,7 +917,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (rec && onUpdateCheckin) {
       onUpdateCheckin(rec.id, value, note);
     } else if (!rec && onAddCheckin) {
-      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      const dateStr = selectedDate.formatDateKey();
       onAddCheckin(value, note, dateStr);
     }
     setCheckedInToday(true);
@@ -928,14 +928,14 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (rec && onUpdateCheckout) {
       onUpdateCheckout(rec.id, gratitude, note, rating);
     } else if (!rec && onAddCheckout) {
-      const dateStr = selectedDate.toLocaleDateString('sv-SE');
+      const dateStr = selectedDate.formatDateKey();
       onAddCheckout(gratitude, note, rating, dateStr);
     }
     setCheckedOutToday(true);
   };
 
   const recordOrToggleForNonScheduled = async (habit: Habit) => {
-    const dkey = selectedDate.toLocaleDateString('sv-SE');
+    const dkey = selectedDate.formatDateKey();
     if (habit.type === 'amount') {
       // amount はモーダルで入力
       const current = (habit.completedAmounts || {})[dkey];
@@ -957,7 +957,7 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   const toggleSkipForDate = (habit: Habit) => {
-    const dkey = selectedDate.toLocaleDateString('sv-SE');
+    const dkey = selectedDate.formatDateKey();
     const skips = habit.skippedDates ?? [];
     const exists = skips.includes(dkey);
     const newSkips = exists ? skips.filter(s => s !== dkey) : [...skips, dkey];
