@@ -311,9 +311,10 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                     {WEEK_DAYS.map((day, index) => (
                       <button type="button" key={index}
                         onClick={() => {
-                          const newValue = formData.frequencyValue.includes(index)
-                            ? formData.frequencyValue.filter(d => d !== index)
-                            : [...formData.frequencyValue, index];
+                          const currentFrequencyValue = formData.frequencyValue as number[];
+                          const newValue = currentFrequencyValue.includes(index)
+                            ? currentFrequencyValue.filter(d => d !== index)
+                            : [...currentFrequencyValue, index];
                           setFormData(f => ({...f, frequencyValue: newValue.sort()}));
                         }}
                         className={`w-10 h-10 rounded-full font-semibold transition-colors ${formData.frequencyValue.includes(index) ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
