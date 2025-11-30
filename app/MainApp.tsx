@@ -271,8 +271,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         // checkins / checkouts を state に入れる
         const loadedCheckins = checkinsSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Checkin, 'id'>) }));
         const loadedCheckouts = checkoutsSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as Omit<Checkout, 'id'>) }));
-        setCheckins(loadedCheckins.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
-        setCheckouts(loadedCheckouts.sort((a,b) => (a.createdAt || a.date) < (b.createdAt || b.date) ? 1 : -1));
+        const getDateMs = (record: Checkin | Checkout): number => {
+          const dateValue = record.createdAt ?? record.date;
+          if (!dateValue) return 0;
+          if (typeof dateValue === 'string') return new Date(dateValue).getTime();
+          // Assuming it's a Firestore Timestamp
+          if (typeof dateValue.toDate === 'function') return dateValue.toDate().getTime();
+          return 0;
+        };
+
+        setCheckins(loadedCheckins.sort((a, b) => getDateMs(b) - getDateMs(a)));
+        setCheckouts(loadedCheckouts.sort((a, b) => getDateMs(b) - getDateMs(a)));
         
         const loadedFollowing = followingSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         const loadedFollowers = followersSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
@@ -440,21 +449,6 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       setTimeout(markRead, 150);
     }
   }, [view, notifications, profile.id]);
-
-  // --- helper: VAPID 公開鍵を env か runtime で渡す ---
-  // 環境に応じて置き換えてください（例: NEXT_PUBLIC_VAPID_KEYを設定）
-  const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '<PUT_PUBLIC_KEY_HERE>';
-
-  function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
 
   // --- inside MainApp component (ユーザー profile が利用できる箇所に追加) ---
   useEffect(() => {
