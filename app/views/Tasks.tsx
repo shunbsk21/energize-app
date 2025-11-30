@@ -13,6 +13,7 @@ import {
   deleteDoc,
   serverTimestamp,
   deleteField,
+  Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import TaskDetail from './TaskDetail';
@@ -24,9 +25,9 @@ interface TaskItem {
   dueDate?: string; // ISO YYYY-MM-DD
   priority?: 'low' | 'medium' | 'high';
   done?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  completedAt?: string;
+  createdAt?: string | Timestamp;
+  updatedAt?: string | Timestamp;
+  completedAt?: string | Timestamp | null;
 }
 
 const defaultPriority: TaskItem['priority'] = 'medium';
@@ -60,8 +61,6 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => void }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const [openUpwards, setOpenUpwards] = useState(false);
-  // value (YYYY-MM-DD) をローカル日付として扱う（new Date('YYYY-MM-DD') の UTC問題を回避）
-  const [viewDate, setViewDate] = useState(() => (value ? new Date(`${value}T00:00:00`) : new Date()));
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -71,6 +70,10 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // value prop から直接 viewDate を導出する
+  const [internalViewDate, setInternalViewDate] = useState(() => (value ? new Date(`${value}T00:00:00`) : new Date()));
+  const viewDate = value ? new Date(`${value}T00:00:00`) : internalViewDate;
 
   // open 状態になったら表示位置を計算（下にスペースが足りなければ上に表示）
   useEffect(() => {
@@ -111,8 +114,8 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
         <Portal>
           <div
             className={`absolute left-0 w-64 bg-white rounded shadow-lg p-3 z-50 ${openUpwards ? 'bottom-full mb-2' : 'mt-2'}`}
-            onMouseDown={e => e.stopPropagation()}
             style={{ maxHeight: 320, overflowY: 'auto' }}
+            onMouseDown={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
               <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{'<'}</button>
