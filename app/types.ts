@@ -118,6 +118,7 @@ export interface Checkin {
   date: string;
   value: number;
   note?: string;
+  text?: string; // for legacy data
   createdAt?: string;
 }
 

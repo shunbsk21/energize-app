@@ -211,16 +211,6 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
       setSelectedRecord(newRec);
       setStep('results');
 
-      // append completion date into users/{uid}/settings/main.purelifeCompletedDates (setDoc merge で堅牢化)
-      try {
-        const settingsRef = doc(db, 'users', uid, 'settings', 'main');
-        // setDoc with merge:true + arrayUnion is safe even if doc missing
-        // use local ISO (YYYY-MM-DD) to match HabitTracker / selectedDateISO
-        await setDoc(settingsRef, { purelifeCompletedDates: arrayUnion(todayIso) }, { merge: true });
-      } catch (e) {
-        console.warn("[Purelife] failed to append completion date to settings:", e);
-      }
-
       // dispatch global event so other components (MainApp/HabitTracker) update immediately
       try {
         // dispatch same local-ISO date so HabitTracker/MainApp event handler と一致する

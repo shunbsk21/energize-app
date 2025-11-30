@@ -131,11 +131,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // --- purelife の完了日をローカルで保持し、グローバルイベントで即時更新する ---
   const [localPurelifeCompletedDatesState, setLocalPurelifeCompletedDatesState] = useState<string[]>(localPurelifeCompletedDates ?? []);
 
-  // prop が更新されたら同期する（親から渡された値で上書き）
-  useEffect(() => {
-    setLocalPurelifeCompletedDatesState(localPurelifeCompletedDates ?? []);
-  }, [localPurelifeCompletedDates]);
-
   // グローバルイベントで完了が伝播されたら即時に追加
   useEffect(() => {
     const handler = (ev: Event) => {
@@ -672,8 +667,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   }, [selectedDateISO, hasPurelifeConfig, isPurelifeDay]);
 
   const isPurelifeCompleted = useMemo(() => {
-    return (localPurelifeCompletedDatesState || []).includes(selectedDateISO);
-  }, [localPurelifeCompletedDatesState, selectedDateISO]);
+    return (localPurelifeCompletedDates || []).includes(selectedDateISO);
+  }, [localPurelifeCompletedDates, selectedDateISO]);
 
 
   // (↓ addHabit, deleteHabit, updateHabit, toggleHabit は変更なし)
