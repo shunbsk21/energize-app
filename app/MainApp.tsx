@@ -1,5 +1,6 @@
 "use client";
 
+import * as firestoreService from './services/firestoreService';
 import Image from 'next/image';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ADMIN_ID } from './config';
@@ -52,7 +53,7 @@ import {
   NoteIcon,
   ScholarIcon,
   BellIcon
-} from './components/Icons';
+} from './components/Icons'; 
 
 // Type
 import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem, MainAppProps } from './types'; 
@@ -487,27 +488,20 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // (2) 習慣(Habit) (変更なし)
   const handleAddHabit = useCallback(async (newHabitData: Omit<Habit, 'id'>) => {
     if (!profile.id) return;
     try {
-      const habitsRef = collection(db, 'users', profile.id, 'habits');
-      // sanitize: remove undefined fields because Firestore rejects undefined
-      const toSave = Object.fromEntries(Object.entries(newHabitData).filter(([, v]) => v !== undefined));
-      const docRef = await addDoc(habitsRef, toSave);
-      const createdHabit: Habit = { ...(toSave as Omit<Habit, 'id'>), id: docRef.id };
+      const createdHabit = await firestoreService.addHabit(profile.id, newHabitData);
       setHabits(prevHabits => [...prevHabits, createdHabit]);
     } catch (error) {
       console.error("習慣の追加に失敗しました:", error);
     }
-  }, [profile.id]);
+  }, [profile.id, setHabits]);
   
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     if (!profile.id || !updatedHabit.id) return;
     try {
-      const habitRef = doc(db, 'users', profile.id, 'habits', updatedHabit.id);
-      const { id, ...dataToSave } = updatedHabit;
-      await setDoc(habitRef, dataToSave); 
+      await firestoreService.updateHabit(profile.id, updatedHabit);
       setHabits(prevHabits => 
         prevHabits.map(h => h.id === updatedHabit.id ? updatedHabit : h)
       );
@@ -515,18 +509,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       console.error("習慣の更新に失敗しました:", error);
     }
   };
+
   const handleDeleteHabit = async (habitId: string) => {
     if (!profile.id) return;
     try {
-      const habitRef = doc(db, 'users', profile.id, 'habits', habitId);
-      await deleteDoc(habitRef);
+      await firestoreService.deleteHabit(profile.id, habitId);
       setHabits(prevHabits => prevHabits.filter(h => h.id !== habitId));
     } catch (error) {
       console.error("習慣の削除に失敗しました:", error);
     }
   };
 
-  // 追加: グローバル habit-created イベントを拾って handleAddHabit を呼ぶ
   useEffect(() => {
     const handler = async (ev: Event) => {
       try {
@@ -542,38 +535,20 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     return () => window.removeEventListener('habit-created', handler as EventListener);
   }, [handleAddHabit]);
   
-  // (3) グループ・友達関連 (★ handleAddComment を修正 ★)
-  
   const handleFollowUser = async (friendId: string) => {
     if (!profile.id || friendId === profile.id || following.some(f => f.id === friendId)) {
         console.warn("すでにフォロー済みか、自分自身です:", friendId);
         return;
     }
     try {
-      let friendData: Omit<Friend, 'id'>;
       const friendProfile = (await fetchUserProfiles([friendId])).get(friendId);
-      if(friendProfile) {
-        friendData = {
-          displayName: friendProfile.displayName,
-          imageUrl: friendProfile.imageUrl
-        };
-      } else {
-         friendData = {
-            displayName: `ユーザー ${friendId.substring(0, 4)}`,
-            imageUrl: null
-         };
-      }
-      const followingRef = doc(db, 'users', profile.id, 'following', friendId);
-      await setDoc(followingRef, friendData);
-      const newFriend: Friend = { ...friendData, id: friendId };
+      if (!friendProfile) throw new Error("Friend profile not found");
+
+      await firestoreService.followUser(profile.id, profile, friendId, friendProfile);
+
+      const newFriend: Friend = { ...friendProfile, id: friendId };
       setFollowing(prevFollowing => [...prevFollowing, newFriend]);
       setAllUserProfiles(prevMap => new Map(prevMap).set(newFriend.id, newFriend));
-      const myProfileDataForFollower: Omit<Friend, 'id'> = {
-          displayName: profile.displayName,
-          imageUrl: profile.imageUrl
-      };
-      const myRefOnFollowerList = doc(db, 'users', friendId, 'followers', profile.id);
-      await setDoc(myRefOnFollowerList, myProfileDataForFollower);
     } catch (error) {
       console.error("フォローに失敗しました:", error);
     }
@@ -582,24 +557,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleCreateGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
     if (!profile.id) return;
     try {
-      const newGroupRef = doc(collection(db, 'users', profile.id, 'groups'));
-      const newGroupId = newGroupRef.id;
-      const groupDocWithId: GroupType = { 
-          ...newGroupData,
-          id: newGroupId,
-          ownerId: profile.id // ★ オーナーIDを追加
-      };
-      const { id, ...dataToSave } = groupDocWithId; 
-
-      for (const memberId of newGroupData.members) {
-        if (memberId === profile.id) {
-          const groupRefForMe = doc(db, 'users', profile.id, 'groups', newGroupId);
-          await setDoc(groupRefForMe, dataToSave);
-        } else {
-          const inviteRef = doc(db, 'users', memberId, 'group_invites', newGroupId);
-          await setDoc(inviteRef, dataToSave);
-        }
-      }
+      const groupDocWithId = await firestoreService.createGroup(profile.id, newGroupData);
       setGroups(prevGroups => [...prevGroups, groupDocWithId]);
       const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
       if (newMemberIds.length > 0) {
@@ -613,19 +571,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   
   const handleInviteToGroup = async (group: GroupType, memberIdsToInvite: string[]) => {
     if (!profile.id || !group.id || memberIdsToInvite.length === 0) return;
-    const updatedMembers = [...new Set([...group.members, ...memberIdsToInvite])];
-    const updatedGroupData: GroupType = { ...group, members: updatedMembers };
-    const { id, ...dataToSave } = updatedGroupData;
     try {
-      for (const newMemberId of memberIdsToInvite) {
-        if (newMemberId === profile.id || group.members.includes(newMemberId)) continue;
-        const inviteRef = doc(db, 'users', newMemberId, 'group_invites', group.id);
-        await setDoc(inviteRef, dataToSave);
-      }
-      for (const existingMemberId of group.members) {
-        const groupRef = doc(db, 'users', existingMemberId, 'groups', group.id);
-        await setDoc(groupRef, dataToSave);
-      }
+      await firestoreService.inviteToGroup(group, memberIdsToInvite);
+      const updatedMembers = [...new Set([...group.members, ...memberIdsToInvite])];
+      const updatedGroupData: GroupType = { ...group, members: updatedMembers };
       setGroups(prevGroups => prevGroups.map(g => g.id === group.id ? updatedGroupData : g));
       const newMemberIdsToFetch = memberIdsToInvite.filter(id => !allUserProfiles.has(id));
       if (newMemberIdsToFetch.length > 0) {
@@ -653,15 +602,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           return;
       }
       try {
-          const updatedMembers = groupToUpdate.members.filter(id => id !== memberIdToRemove);
-          const updatedGroupData: GroupType = { ...groupToUpdate, members: updatedMembers };
-          const { id, ...dataToSave } = updatedGroupData;
-          const memberGroupRef = doc(db, 'users', memberIdToRemove, 'groups', groupId);
-          await deleteDoc(memberGroupRef);
-          for (const memberId of updatedMembers) {
-              const groupRef = doc(db, 'users', memberId, 'groups', groupId);
-              await setDoc(groupRef, dataToSave);
-          }
+          await firestoreService.removeMemberFromGroup(groupToUpdate, memberIdToRemove);
+          const updatedGroupData: GroupType = { ...groupToUpdate, members: groupToUpdate.members.filter(id => id !== memberIdToRemove) };
           setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? updatedGroupData : g));
       } catch (error) {
           console.error("メンバーの削除に失敗しました:", error);
@@ -671,11 +613,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleAcceptGroupInvite = async (invite: GroupType) => {
     if (!profile.id || !invite.id) return;
     try {
-      const groupRef = doc(db, 'users', profile.id, 'groups', invite.id);
-      const { id, ...dataToSave } = invite;
-      await setDoc(groupRef, dataToSave);
-      const inviteRef = doc(db, 'users', profile.id, 'group_invites', invite.id);
-      await deleteDoc(inviteRef);
+      await firestoreService.acceptGroupInvite(profile.id, invite);
       setGroups(prev => [...prev, invite]);
       setGroupInvites(prev => prev.filter(g => g.id !== invite.id));
     } catch (error) {
@@ -686,8 +624,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleDeclineGroupInvite = async (inviteId: string) => {
     if (!profile.id) return;
     try {
-      const inviteRef = doc(db, 'users', profile.id, 'group_invites', inviteId);
-      await deleteDoc(inviteRef);
+      await firestoreService.declineGroupInvite(profile.id, inviteId);
       setGroupInvites(prev => prev.filter(g => g.id !== inviteId));
     } catch (error) {
       console.error("グループ招待の拒否に失敗しました:", error);
@@ -698,21 +635,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleAddComment = async (newCommentData: Omit<Comment, 'id'>) => {
     if (!profile.id) return;
     try {
-      // 1. ★ 保存先を `group_chats/{groupId}/messages` に変更
-      const commentsRef = collection(db, 'group_chats', newCommentData.groupId, 'messages');
-      
-      // 2. ★ 保存するデータに、送信者の最新プロフィール情報を追加
       const dataToSave = {
           ...newCommentData,
           authorId: profile.id,
           authorName: profile.displayName ?? '名無しさん',
           authorImageUrl: profile.imageUrl || null
       };
-      
-      // 3. ★ 共有チャットルームに書き込む
-      await addDoc(commentsRef, dataToSave);
-      
-      // 4. ローカルの setComments() は削除 (Group.tsx がリアルタイムで受信)
+      await firestoreService.addCommentToGroup(dataToSave);
     } catch (error) {
       console.error("コメントの追加に失敗しました:", error);
     }
@@ -723,8 +652,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id) return;
     setDiagnosisFrequency(newFrequency);
     try {
-      const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
-      await setDoc(settingsRef, { diagnosisFrequency: newFrequency }, { merge: true });
+      await firestoreService.saveDiagnosisFrequency(profile.id, newFrequency);
     } catch (error) {
       console.error("設定の保存に失敗しました:", error);
     }
@@ -741,44 +669,19 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     setProfile(updatedProfile); // page.tsx の state を更新
     setAllUserProfiles(prevMap => new Map(prevMap).set(profile.id, updatedProfile)); // ★ 自分の情報もMAPで更新
     try {
-      const settingsRef = doc(db, 'users', profile.id, 'settings', 'main');
-      await setDoc(settingsRef, { 
-        profile: {
-          displayName: newDisplayName,
-          imageUrl: newImageUrl
-        }
-      }, { merge: true });
+      await firestoreService.saveProfile(profile.id, newDisplayName, newImageUrl);
     } catch (error) {
       console.error("プロフィール情報の保存に失敗しました:", error);
     }
   };
 
-  // 共有習慣の更新（自分のユーザー配下の group ドキュメントだけを更新し、local state を更新）
   const handleUpdateGroupSharedHabits = async (groupId: string, memberId: string, sharedIds: string[]) => {
     if (!profile.id || !groupId || !memberId) return;
     try {
-      const groupRef = doc(db, 'users', profile.id, 'groups', groupId);
-      // フィールドパスを使って自分のドキュメント内に保存
-      await updateDoc(groupRef, { [`sharedByMember.${memberId}`]: sharedIds });
-      // local state を更新（UI に即時反映）
-      setGroups(prev => prev.map(g => g.id === groupId ? { 
-        ...g, 
-        sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } 
-      } : g));
-      console.log('shared habits updated (local user copy)');
-    } catch (err) {
-      // updateDoc が失敗する（ドキュメントが存在しない等）場合は setDoc(merge) にフォールバック
-      try {
-        const fallbackRef = doc(db, 'users', profile.id, 'groups', groupId);
-        await setDoc(fallbackRef, { sharedByMember: { [memberId]: sharedIds } }, { merge: true });
-        setGroups(prev => prev.map(g => g.id === groupId ? { 
-          ...g, 
-          sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } 
-        } : g));
-        console.log('shared habits saved via setDoc merge fallback');
-      } catch (err2) {
-        console.error('failed to update shared habits', err, err2);
-      }
+      await firestoreService.updateGroupSharedHabits(profile.id, groupId, memberId, sharedIds);
+      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } } : g));
+    } catch (error) {
+      console.error('failed to update shared habits', error);
     }
   };
 
@@ -840,27 +743,20 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // タスク追加ハンドラ（HabitTracker から呼ばれる）
   const handleAddTask = async (payload: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => {
     if (!profile.id) return;
     try {
-      const ref = collection(db, 'users', profile.id, 'tasks');
-      const docRef = await addDoc(ref, { ...payload, done: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      setTasks(prev => [{ id: docRef.id, ...payload, done: false }, ...prev]);
+      const newTask = await firestoreService.addTask(profile.id, payload);
+      setTasks(prev => [newTask, ...prev]);
     } catch (err) {
       console.error('handleAddTask error', err);
     }
   };
 
-  // タスクの完了状態を切り替えるハンドラ（HabitTracker から呼ばれる）
   const handleToggleTask = async (taskId: string, done: boolean) => {
     if (!profile.id || !taskId) return;
     try {
-      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      const updatePayload: Partial<Task> = { done, updatedAt: new Date().toISOString() };
-      if (done) updatePayload.completedAt = new Date().toISOString();
-      else updatePayload.completedAt = null;
-      await updateDoc(taskRef, updatePayload);
+      const updatePayload = await firestoreService.toggleTask(profile.id, taskId, done);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, done, updatedAt: updatePayload.updatedAt, completedAt: updatePayload.completedAt } : t));
     } catch (err) {
       console.error('handleToggleTask error', err);
@@ -868,17 +764,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // タスク更新ハンドラ（タイトル/詳細/期日/優先度/完了の更新）
   const handleUpdateTask = async (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => {
     if (!profile.id || !taskId) return;
     try {
-      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      // サーバに送る前に undefined フィールドを除去する
-      const base: Partial<Task> = { ...payload, updatedAt: new Date().toISOString() };
-      if (payload.done === true) base.completedAt = new Date().toISOString();
-      if (payload.done === false) base.completedAt = null;
-      const updatePayload = Object.fromEntries(Object.entries(base).filter(([_, v]) => v !== undefined));
-      await updateDoc(taskRef, updatePayload);
+      await firestoreService.updateTask(profile.id, taskId, payload);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updatePayload } as Task : t));
     } catch (err) {
       console.error('handleUpdateTask error', err);
@@ -886,12 +775,10 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  // タスク削除ハンドラ
   const handleDeleteTask = async (taskId: string) => {
     if (!profile.id || !taskId) return;
     try {
-      const taskRef = doc(db, 'users', profile.id, 'tasks', taskId);
-      await deleteDoc(taskRef);
+      await firestoreService.deleteTask(profile.id, taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
     } catch (err) {
       console.error('handleDeleteTask error', err);

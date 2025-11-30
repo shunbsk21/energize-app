@@ -45,6 +45,7 @@ export interface Habit {
   completedDates?: string[];
   completedAmounts?: Record<string, number>;
   skippedDates?: string[];
+  unit?: string;
 }
 
 export interface EnergyScores {
