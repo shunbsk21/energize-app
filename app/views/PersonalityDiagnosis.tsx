@@ -5,7 +5,8 @@ import Image from "next/image";
 import {
   View,
   DiagnosisFrequency,
-  FrequencyType, 
+  FrequencyType,
+  PersonalityProps,
   PersonalityDimension,
   PersonalityAnswerValue,
   PersonalityQuestion,
