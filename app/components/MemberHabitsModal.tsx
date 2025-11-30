@@ -2,34 +2,25 @@
 
 import React, { useMemo } from 'react';
 import { Profile, Friend, Habit } from '../types';
-import { isHabitScheduledForDate, calculateCompletionPercentForDate } from '../utils/habits';
+import { isHabitScheduledForDate, calculateCompletionPercentForDate, formatFrequency } from '../utils/habits';
 import { formatDateKey } from '../utils/dates';
 
 export const MemberHabitsModal: React.FC<{
   memberId: string;
-// ...
+  memberProfile: Profile | Friend | null;
+  memberHabits?: Habit[];
+  groupSharedHabitIds: string[];
+  currentUserId: string;
+  isFollowing: boolean;
+  onClose: () => void;
+  onFollowUser: (friendId: string) => void;
+  onEditMySharedHabits?: () => void;
+  isLoading: boolean;
 }> = ({ memberId, memberProfile, memberHabits, groupSharedHabitIds, currentUserId, isFollowing, onClose, onFollowUser, onEditMySharedHabits, isLoading }) => {
   const habits: Habit[] = memberHabits || memberProfile?.habits || [];
   const todayStr = formatDateKey(new Date());
   const sharedHabits = habits.filter(h => h.id && groupSharedHabitIds.includes(h.id));
   const isSelf = memberId === currentUserId;
-  const weekdayNames = ['日','月','火','水','木','金','土'];
-  const formatFrequency = (habit: Habit) => {
-    const type = habit.frequencyType;
-    const val = habit.frequencyValue;
-    if (type === 'daily') return '毎日';
-    if (type === 'weekly') {
-      if (Array.isArray(val) && val.length > 0) return '毎週 ' + val.map((d: number) => weekdayNames[d]).join('・');
-      return '毎週';
-    }
-    if (type === 'monthly') {
-      if (Array.isArray(val) && val.length > 0) return '毎月 ' + val.map((d: number) => `${d}日`).join('、');
-      return '毎月';
-    }
-    if (typeof val === 'string' && val) return String(val);
-    if (Array.isArray(val) && val.length) return String(val);
-    return '';
-  };
   const getTitle = (habit: Habit) => {
     return habit.name || habit.title || habit.label || '無題の習慣';
   };

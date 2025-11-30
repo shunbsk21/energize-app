@@ -1,6 +1,8 @@
 import { Habit } from '../types';
 import { formatDateKey } from '../utils/dates';
 
+const weekdayNames = ['日','月','火','水','木','金','土'];
+
 export const normalizeKey = (d: string | Date): string => {
   try {
     const dt = new Date(d);
@@ -200,3 +202,20 @@ export const calculateLongestStreak = (habit: Habit): number => {
   longest = Math.max(longest, currentStreak);
   return longest;
 };
+
+export const formatFrequency = (habit: Habit) => {
+    const type = habit.frequencyType;
+    const val = habit.frequencyValue;
+    if (type === 'daily') return '毎日';
+    if (type === 'weekly') {
+      if (Array.isArray(val) && val.length > 0) return '毎週 ' + val.map((d: number) => weekdayNames[d]).join('・');
+      return '毎週';
+    }
+    if (type === 'monthly') {
+      if (Array.isArray(val) && val.length > 0) return '毎月 ' + val.map((d: number) => `${d}日`).join('、');
+      return '毎月';
+    }
+    if (typeof val === 'string' && val) return String(val);
+    if (Array.isArray(val) && val.length) return String(val);
+    return '';
+  };
