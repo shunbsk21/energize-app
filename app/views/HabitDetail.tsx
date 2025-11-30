@@ -326,21 +326,22 @@ const HabitDetail: React.FC<HabitDetailProps> = ({ habit, onClose, onDelete, onU
                 })()}
 
                 {formData.frequencyType === 'monthly' && (() => {
-                  const currentFrequencyValueString = formData.frequencyValue as string;
+                  const monthlyFrequencyValueNumber = formData.frequencyValue as number[];
                   return (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">日付を選択 (カンマ区切り)</label>
                       <input
                         type="text" placeholder="例: 1, 15"
-                      defaultValue={currentFrequencyValueString.join(', ')}
-                      onChange={e => {
-                        const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
-                        setFormData(f => ({...f, frequencyValue: value.sort((a,b)=>a-b)}));
-                      }}
-                      className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    />
-                  </div>
-                )})()}
+                        defaultValue={monthlyFrequencyValueNumber.join(', ')}
+                        onChange={e => {
+                          const value = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 31);
+                          setFormData(f => ({...f, frequencyValue: value.sort((a,b)=>a-b)}));
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      />
+                    </div>
+                  );
+                })()}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
