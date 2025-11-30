@@ -119,6 +119,8 @@ export interface Checkin {
   value: number;
   note?: string;
   text?: string; // for legacy data
+  data?: any; // for legacy data
+  payload?: any; // for legacy data
   createdAt?: string;
 }
 
@@ -128,6 +130,7 @@ export interface Checkout {
   gratitude?: string;
   note?: string;
   rating?: number | null;
+  data?: any; // for legacy data
   createdAt?: string;
 }
 
