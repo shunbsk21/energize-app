@@ -25,8 +25,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
   const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const closeProgress = () => setIsProgressOpen(false);
-  const groupSharedIds: string[] = group.sharedHabitIds || [];
-  const groupSharedByMember = group.sharedByMember || {};
+  const groupSharedIds: string[] = group.sharedHabitIds ?? [];
+  const groupSharedByMember = group.sharedByMember ?? {};
   const [memberSharedMap, setMemberSharedMap] = useState<Record<string, string[]>>({});
   const [memberHabitsMap, setMemberHabitsMap] = useState<Record<string, Habit[]>>({});
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -56,8 +56,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         try {
           const [habitsSnap, sharedSnap] = await Promise.all([habitPromise, sharedSettingPromise]);
 
-          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Habit[] : memberHabitsMap[memberId] || [];
-          const sharedIds = sharedSnap?.exists() ? (sharedSnap.data()?.sharedByMember?.[memberId] as string[] | undefined) || [] : memberSharedMap[memberId] || [];
+          const habits = habitsSnap ? habitsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Habit[] : memberHabitsMap[memberId] ?? [];
+          const sharedIds = sharedSnap?.exists() ? (sharedSnap.data()?.sharedByMember?.[memberId] as string[] | undefined) ?? [] : memberSharedMap[memberId] ?? [];
 
           return { memberId, habits, sharedIds };
         } catch (err) {
@@ -101,8 +101,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
               authorId: data.authorId,
               authorName: data.authorName,
               text: data.text,
-              timestamp: data.timestamp,
-              authorImageUrl: data.authorImageUrl || null
+              timestamp: data.timestamp, 
+              authorImageUrl: data.authorImageUrl ?? null
             };
             return obj;
           })
@@ -129,7 +129,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                   authorName: data.authorName,
                   text: data.text,
                   timestamp: data.timestamp,
-                  authorImageUrl: data.authorImageUrl || null
+                  authorImageUrl: data.authorImageUrl ?? null
                 };
                 const newMsg = obj as Comment;
                 setMessages(prev => {
@@ -138,8 +138,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                   return [...prev, newMsg];
                 });
                 // toast for others' messages (preserve original behavior)
-                if (!initialLoadRef.current && newMsg.authorId !== profile.id) {
-                  toast(`${newMsg.authorName || '名無し'}: ${String(newMsg.text)}`, { duration: 4000 });
+                if (!initialLoadRef.current && newMsg.authorId !== profile.id) { 
+                  toast(`${newMsg.authorName ?? '名無し'}: ${String(newMsg.text)}`, { duration: 4000 });
                 }
               }
             });
@@ -159,7 +159,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                   authorName: data.authorName,
                   text: data.text,
                   timestamp: data.timestamp,
-                  authorImageUrl: data.authorImageUrl || null
+                  authorImageUrl: data.authorImageUrl ?? null
                 };
                 const newMsg = obj as Comment;
                 setMessages(prev => {
@@ -208,7 +208,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           authorName: data.authorName,
           text: data.text,
           timestamp: data.timestamp,
-          authorImageUrl: data.authorImageUrl || null
+          authorImageUrl: data.authorImageUrl ?? null
         };
         return obj;
       }).reverse();
@@ -290,7 +290,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         const snap = await getDoc(memberGroupDocRef);
         if (cancelled) return;
         if (snap.exists()) {
-          const data = snap.data();
+          const data = snap.data(); 
           const sharedForGroup = (data?.sharedByMember?.[selectedMemberId]) || data?.sharedHabitIds || [];
           setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
           return;
@@ -299,7 +299,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           const globalGroupRef = firestoreDoc(db, 'groups', group.id);
           const gSnap = await getDoc(globalGroupRef);
           if (!cancelled && gSnap.exists()) { 
-            const gdata = gSnap.data();
+            const gdata = gSnap.data(); 
             const sharedForGroup = (gdata?.sharedByMember && gdata.sharedByMember[selectedMemberId]) || gdata?.sharedHabitIds || [];
             setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
             return;
@@ -336,7 +336,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
   }, [selectedMemberId, memberHabitsMap]);
 
   const getMemberProfile = (memberId: string) => {
-    return allUserProfiles.get(memberId) || { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
+    return allUserProfiles.get(memberId) ?? { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
   };
 
   const getMemberProgress = (memberId: string): number | null => {
@@ -345,13 +345,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
       // 自分の習慣リスト（props habits）
       return calculateCompletionPercentForDate(today, habits);
     }
-    const sharedForMember: string[] = groupSharedByMember[memberId] || memberSharedMap[memberId] || [];
+    const sharedForMember: string[] = groupSharedByMember[memberId] ?? memberSharedMap[memberId] ?? [];
     if (!sharedForMember || sharedForMember.length === 0) return null;
 
     // memberHabitsMap cache または allUserProfiles fallback
     let memberHabits = memberHabitsMap[memberId];
     if (!memberHabits) {
-      const memberProfile = allUserProfiles.get(memberId);
+      const memberProfile = allUserProfiles.get(memberId); 
       memberHabits = memberProfile?.habits || [];
     }
     if (!memberHabits || memberHabits.length === 0) return null;
@@ -413,7 +413,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
     const commentData: Omit<Comment, 'id'> = {
       groupId: group.id,
       authorId: profile.id,
-      authorName: profile.displayName,
+      authorName: profile.displayName ?? '名無しさん',
       text: newComment.trim(),
       timestamp: new Date().toISOString()
     };
@@ -486,7 +486,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                 <div className="space-y-4">
                   {grouped.items.map(message => {
                     const isAuthor = message.authorId === profile.id;
-                    const authorImageUrl = message.authorImageUrl;
+                    const authorImageUrl = message.authorImageUrl; 
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                         {!isAuthor && allUserProfiles.has(message.authorId) && (
@@ -499,8 +499,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                                 onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
                             />
                         )}
-                        <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}>
-                          {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName || '名無しのさん'}</p>}
+                        <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}> 
+                          {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName ?? '名無しのさん'}</p>}
                           <p className="text-sm">{message.text}</p>
                           <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>
                             {new Date(message.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
@@ -523,7 +523,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
               <MemberHabitsModal
                 memberId={selectedMemberId}
                 memberProfile={(allUserProfiles.get(selectedMemberId) as Profile | Friend) || null}
-                memberHabits={memberHabitsMap[selectedMemberId]}
+                memberHabits={memberHabitsMap[selectedMemberId]} 
                 groupSharedHabitIds={memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []}
                 currentUserId={profile.id}
                 isFollowing={followingIds.has(selectedMemberId)}
@@ -541,7 +541,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
             group={group}
             profile={profile}
             myHabits={habits}
-            initialSharedIds={groupSharedByMember[profile.id] || []}
+            initialSharedIds={groupSharedByMember[profile.id] ?? []}
             onClose={() => setIsSharedHabitsOpen(false)}
             onSave={(ids) => {
               onUpdateGroupSharedHabits(group.id, profile.id, ids);

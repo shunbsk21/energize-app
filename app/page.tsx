@@ -26,8 +26,8 @@ const App: React.FC = () => {
         // types.tsx の Profile の定義に合わせ、id, displayName, imageUrl のみ設定します。
         const userProfile: Profile = {
           id: user.uid,
-          displayName: user.displayName || 'EnerGize User',
-          imageUrl: user.photoURL || null, // types.tsx に合わせ、空文字ではなく null を設定
+          displayName: user.displayName ?? 'EnerGize User',
+          imageUrl: user.photoURL ?? null, // types.tsx に合わせ、空文字ではなく null を設定
         };
         
         setProfile(userProfile);

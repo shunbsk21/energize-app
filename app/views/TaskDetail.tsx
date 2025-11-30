@@ -22,16 +22,16 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 export default function TaskDetail({ task, onClose, updateTask, toggleTask, removeTask }: TaskDetailProps) {
-  const [title, setTitle] = useState(task.title || '');
-  const [details, setDetails] = useState(task.details || '');
-  const [dueDate, setDueDate] = useState<string | undefined>(task.dueDate || undefined);
-  const [priority, setPriority] = useState<Task['priority']>(task.priority || 'medium');
+  const [title, setTitle] = useState(task.title ?? '');
+  const [details, setDetails] = useState(task.details ?? '');
+  const [dueDate, setDueDate] = useState<string | undefined>(task.dueDate ?? undefined);
+  const [priority, setPriority] = useState<Task['priority']>(task.priority ?? 'medium');
   const [done, setDone] = useState(!!task.done);
   useEffect(() => {
-    setTitle(task.title || '');
-    setDetails(task.details || '');
-    setDueDate(task.dueDate || undefined);
-    setPriority(task.priority || 'medium');
+    setTitle(task.title ?? '');
+    setDetails(task.details ?? '');
+    setDueDate(task.dueDate ?? undefined);
+    setPriority(task.priority ?? 'medium');
     setDone(!!task.done);
   }, [task]);
 
@@ -40,9 +40,9 @@ export default function TaskDetail({ task, onClose, updateTask, toggleTask, remo
     try {
       const updatedTask: Task = {
         ...task,
-        title: title.trim(),
-        details: details || undefined,
-        dueDate: dueDate || undefined,
+        title: title.trim(), 
+        details: details || undefined, 
+        dueDate: dueDate || undefined, 
         priority,
         done,
       };

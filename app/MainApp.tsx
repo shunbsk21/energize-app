@@ -705,7 +705,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       const dataToSave = {
           ...newCommentData,
           authorId: profile.id,
-          authorName: profile.displayName,
+          authorName: profile.displayName ?? '名無しさん',
           authorImageUrl: profile.imageUrl || null
       };
       

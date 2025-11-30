@@ -18,8 +18,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const user = result.user;
       const profile: Profile = {
         id: user.uid,
-        displayName: user.displayName ?? user.email ?? 'User',
-        imageUrl: user.photoURL ?? `https://i.pravatar.cc/150?u=${user.uid}`
+        displayName: user.displayName ?? user.email ?? 'User', 
+        imageUrl: user.photoURL ?? `https://i.pravatar.cc/150?u=${user.uid}` 
       };
       onLoginSuccess(profile);
     } catch (err) {
