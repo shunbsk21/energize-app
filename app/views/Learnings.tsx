@@ -132,7 +132,12 @@ const Learnings: React.FC<LearningsProps> = ({ learnings = [], onAddLearning, pr
             <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
               {/* 最終更新日のみ左下に小さく表示 */}
               <div className="text-xs text-gray-500">
-                {l.updatedAt ? `更新: ${new Date(l.updatedAt).toLocaleString()}` : ''}
+                {l.updatedAt ? `更新: ${
+                  // Timestampオブジェクトか文字列かを判別して正しくDateに変換
+                  (typeof l.updatedAt === 'object' && l.updatedAt && 'toDate' in l.updatedAt)
+                    ? (l.updatedAt as any).toDate().toLocaleString()
+                    : new Date(l.updatedAt).toLocaleString()
+                }` : ''}
               </div>
               {/* 右側に外部URL（必要なら） */}
               <div>
@@ -217,7 +222,11 @@ const Learnings: React.FC<LearningsProps> = ({ learnings = [], onAddLearning, pr
           <div className="p-6 overflow-auto flex-1">
             <div className="mb-4 text-xs text-gray-500">
               {selected.createdAt && <span>作成: {new Date(selected.createdAt).toLocaleString()}</span>}
-              {selected.updatedAt && <span className="ml-3">更新: {new Date(selected.updatedAt).toLocaleString()}</span>}
+              {selected.updatedAt && <span className="ml-3">更新: {
+                (typeof selected.updatedAt === 'object' && selected.updatedAt && 'toDate' in selected.updatedAt)
+                  ? (selected.updatedAt as any).toDate().toLocaleString()
+                  : new Date(selected.updatedAt).toLocaleString()
+              }</span>}
             </div>
             {selected.tags && selected.tags.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
