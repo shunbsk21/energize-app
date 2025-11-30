@@ -5,7 +5,7 @@ import Image from "next/image";
 import {
   View,
   DiagnosisFrequency,
-  FrequencyType,
+  FrequencyType, 
   PersonalityDimension,
   PersonalityAnswerValue,
   PersonalityQuestion,
@@ -29,6 +29,8 @@ import { HelpIcon, CalendarIcon } from "../components/Icons";
 // Firestore
 import { collection, query, orderBy, onSnapshot, setDoc, doc, serverTimestamp, QueryDocumentSnapshot, FirestoreError } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+
+type Dimension = PersonalityDimension;
 
 const fallbackPreference: Record<Dimension, "left" | "right"> = {
   EI: "right",

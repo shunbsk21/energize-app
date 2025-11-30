@@ -1,3 +1,5 @@
+import { PersonalityDimension as Dimension } from '../types';
+
 export function RadarChart({ values }: { values: Record<Dimension, number> }) {
   const size = 180;
   const cx = size / 2;
