@@ -561,8 +561,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         )}
         {memberToRemove && (
           <ConfirmRemoveModal 
-            member={memberToRemove}
-            groupName={group.name}
+            open={!!memberToRemove}
+            title="メンバーの削除"
+            message={`${memberToRemove.displayName ?? 'メンバー'}さんをグループ「${group.name}」から削除します。よろしいですか？`}
             onClose={() => setMemberToRemove(null)}
             onConfirm={confirmRemoveMember}
           />
