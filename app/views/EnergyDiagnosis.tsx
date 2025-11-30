@@ -346,12 +346,10 @@ const EnergyDiagnosis: React.FC<EnergyDiagnosisProps> = ({
                                 <div className="mt-4">
                                   <div className="text-sm font-medium text-gray-700 mb-3">おすすめの習慣</div>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* try to get structured habits from mapping by key; fallback to simple list */}
                                     {(() => {
-                                      if (!personalityResult) {
-                                        return <div className="text-sm text-gray-500 col-span-full">診断結果がありません。</div>;
-                                      }
                                       const key = personalityResult.key;
-                                      const recs = (key && ENERGY_PERSONALITY_HABITS[key as keyof typeof ENERGY_PERSONALITY_HABITS]) ?? (personalityResult.data.advice.habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })));
+                                      const recs = (key && ENERGY_PERSONALITY_HABITS[key as keyof typeof ENERGY_PERSONALITY_HABITS]) || (personalityResult.data.advice.habits.map((t: string) => ({ energy: 'mental', title: t, detail: '' })));
                                       return recs.map((h: any, idx: number) => {
                                         // h.energy は外部データなので安全に EnergyCategory にキャストして参照する
                                         const energyKey = (h.energy ?? 'mental') as EnergyCategory;
