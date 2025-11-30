@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ADMIN_ID } from './config';
 
@@ -1156,7 +1157,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   <div className="flex items-center">
                     <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
                       {profile.imageUrl ? (
-                          <img src={profile.imageUrl ?? ''} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                          <Image 
+                            src={profile.imageUrl} 
+                            alt={profile.displayName || ''} 
+                            width={40}
+                            height={40}
+                            className="w-full h-full object-cover" />
                       ) : (
                           <UserIcon className="w-6 h-6"/>
                       )}
@@ -1235,7 +1241,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex items-center gap-3 px-2 py-3 bg-white rounded-lg shadow-sm mb-4">
               <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
                 {profile.imageUrl ? (
-                  <img src={profile.imageUrl ?? ''} alt={profile.displayName || ''} className="w-full h-full object-cover" />
+                  <Image 
+                    src={profile.imageUrl} 
+                    alt={profile.displayName || ''} 
+                    width={48}
+                    height={48}
+                    className="w-full h-full object-cover" 
+                  />
                 ) : (
                   <UserIcon className="w-6 h-6 text-gray-500" />
                 )}
@@ -1295,7 +1307,14 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               </div>
               <div className="flex items-center gap-3 px-2 py-2 bg-gray-50 rounded mb-3">
                 <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-                  {profile.imageUrl ? <img src={profile.imageUrl ?? ''} className="w-full h-full object-cover" alt="" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
+                  {profile.imageUrl ? 
+                    <Image 
+                      src={profile.imageUrl} 
+                      className="w-full h-full object-cover" 
+                      alt="" 
+                      width={40}
+                      height={40}
+                    /> : <UserIcon className="w-5 h-5 text-gray-500" />}
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-800">{profile.displayName || 'あなた'}</div>

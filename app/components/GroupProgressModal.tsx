@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import React from 'react';
 import { Profile, Friend, Group as GroupType, Habit } from '../types';
 import { calculateCompletionPercentForDate } from '../utils/habits';
@@ -43,7 +44,13 @@ export const GroupProgressModal: React.FC<{
             return (
               <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <img src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={member.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                  <Image 
+                    src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} 
+                    alt={member.displayName ?? ''} 
+                    width={40}
+                    height={40}
+                    className="w-10 h-10 rounded-full object-cover bg-gray-200" 
+                  />
                   <div>
                     <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
                   </div>

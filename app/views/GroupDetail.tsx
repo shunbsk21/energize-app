@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, getDocs, where, limit, startAfter } from 'firebase/firestore';
@@ -495,9 +496,11 @@ const GroupDetail: React.FC<{
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                         {!isAuthor && (
-                          <img
+                          <Image
                             src={authorImageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
                             alt={message.authorName}
+                            width={32}
+                            height={32}
                             className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
                             onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
                           />

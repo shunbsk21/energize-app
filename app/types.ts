@@ -149,8 +149,10 @@ export interface Question {
 export type EnergyQuestionnaire = {
   [key in EnergyCategory]: Question[];
 };
-
 export type ValueAnswersMap = Record<string, number>;
+export type PersonalityDimension = "EI" | "SN" | "TF" | "JP";
+export type PersonalityAnswerValue = 1 | 2 | 3 | 4 | 5;
+export type PurelifeAnswersMap = Record<string, number>;
 
 export interface ValueResultRecord {
   id: string;
@@ -162,10 +164,6 @@ export interface ValueResultRecord {
   answers?: ValueAnswersMap;
   createdAt: any;
 }
-
-export type PersonalityDimension = "EI" | "SN" | "TF" | "JP";
-
-export type PersonalityAnswerValue = 1 | 2 | 3 | 4 | 5;
 
 export interface PersonalityQuestion {
   id: number;
@@ -189,8 +187,6 @@ export interface RecommendedHabit {
   title: string;
   detail: string;
 }
-
-export type PurelifeAnswersMap = Record<string, number>;
 
 export interface PurelifeResultRecord {
   id: string;

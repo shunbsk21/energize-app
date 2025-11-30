@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import React, { useState, useMemo } from 'react';
 import { Group as GroupType, Profile, Friend } from '../types';
 
@@ -39,8 +40,14 @@ export const InviteMemberModal: React.FC<{
             {availableFriends.length > 0 ? availableFriends.map(friend => (
               <div key={friend.id} onClick={() => toggleFriend(friend.id)} className={`flex items-center p-2 rounded-lg cursor-pointer ${selectedFriends.has(friend.id) ? 'bg-indigo-100' : 'bg-gray-50'}`}>
                 <input type="checkbox" checked={selectedFriends.has(friend.id)} readOnly className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                <img src={friend.imageUrl ?? 'data:image/svgxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} alt={friend.displayName ?? ''} className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" />
-                <span className="ml-2 text-gray-800">{friend.displayName}</span>
+                <Image 
+                  src={friend.imageUrl ?? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJoLTYgdy02IiBmaWxsPSJub25lIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTUuMTIxIDE3LjgwNEExMy45MzcgMTMuOTM3IDAgMDExMiAxNmMzLjUgMCA2Ljg0Ny42NTUgNi44NzkgMS44MDRNMTUgMTBhMyAzIDAgMTEtNiAwIDMgMyAwIDAxNiAweiIgLz48L3N2Zz4='} 
+                  alt={friend.displayName ?? ''} 
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 rounded-full object-cover bg-gray-200 ml-3" 
+                />
+                <span className="ml-2 text-gray-800">{friend.displayName ?? ''}</span>
               </div>
             )) : (
               <p className="text-gray-500 text-center py-4">招待できるフォロー中の友達がいません。</p>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
 import { Profile, Friend, Group as GroupType, Comment, Habit } from '../types';
 import GroupDetail from '../views/GroupDetail';
@@ -127,13 +128,19 @@ const Group: React.FC<GroupProps> = ({
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold">フォロー中の友達 ({following.length})</h3>
                     </div>
-                    <div className="space-y-2">
+                <div className="space-y-2 max-h-96 overflow-y-auto">
                         {following.length === 0 ? (
                             <div className="text-sm text-gray-500">フォロー中の友達がいません。</div>
                         ) : (
                             following.map(f => (
                                 <div key={f.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
-                                    <img src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={f.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                <Image 
+                                  src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} 
+                                  alt={f.displayName ?? ''} 
+                                  width={40}
+                                  height={40}
+                                  className="w-10 h-10 rounded-full object-cover bg-gray-200" 
+                                />
                                     <div className="flex-1">
                                         <div className="font-medium text-gray-800">{f.displayName}</div>
                                         {/* ID は個人情報のため表示しない */}
@@ -159,7 +166,13 @@ const Group: React.FC<GroupProps> = ({
                                 ) : (
                                     candidates.map(c => (
                                         <div key={c.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-50">
-                                            <img src={c.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} alt={c.displayName ?? ''} className="w-10 h-10 rounded-full object-cover bg-gray-200" />
+                                            <Image 
+                                              src={c.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} 
+                                              alt={c.displayName ?? ''} 
+                                              width={40}
+                                              height={40}
+                                              className="w-10 h-10 rounded-full object-cover bg-gray-200" 
+                                            />
                                             <div className="flex-1">
                                                 <div className="font-medium text-gray-800">{c.displayName}</div>
                                                 <div className="text-xs text-gray-500">{c.id}</div>
@@ -187,7 +200,14 @@ const Group: React.FC<GroupProps> = ({
                 <div className="flex items-center gap-3">
                     <div className="flex -space-x-2">
                         {following.slice(0, 8).map(f => (
-                            <img key={f.id} src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} alt={f.displayName ?? ''} className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
+                            <Image 
+                              key={f.id} 
+                              src={f.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} 
+                              alt={f.displayName ?? ''} 
+                              width={32}
+                              height={32}
+                              className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" 
+                            />
                         ))}
                         {following.length > 8 && (
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-600 ring-2 ring-white">+{following.length - 8}</div>
@@ -256,16 +276,28 @@ const Group: React.FC<GroupProps> = ({
                                   {group.members.slice(0,5).map(memberId => {
                                       const member = allUserProfiles.get(memberId);
                                       return (
-                                        <img key={memberId} src={member?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} alt={member?.displayName ?? 'member'} className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
+                                        <Image 
+                                          key={memberId} 
+                                          src={member?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'} 
+                                          alt={member?.displayName ?? 'member'} 
+                                          width={32}
+                                          height={32}
+                                          className="w-8 h-8 rounded-full ring-2 ring-white object-cover bg-gray-200" />
                                       );
                                   })}
                               </div>
-                              <span className="ml-3 text-sm text-gray-500">{group.members.length}人のメンバー</span>
+                              <span className="ml-3 text-sm text-gray-500">{group.members.length}人</span>
                               <div className="flex-1" />
                           </div>
                       </div>
                   ))}
-                  {isProgressOpen && progressGroup && <GroupProgressModal group={progressGroup} onClose={closeProgress} />}
+                  {isProgressOpen && progressGroup && <GroupProgressModal 
+                    group={progressGroup}
+                    profile={profile}
+                    habits={habits}
+                    allUserProfiles={allUserProfiles}
+                    onClose={closeProgress} 
+                  />}
                 </div>
 
                 {groups.length === 0 && (
