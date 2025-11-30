@@ -12,7 +12,8 @@ import {
   PersonalityAnswerValue,
   PersonalityQuestion,
   PersonalityHistoryRecord,
-  RecommendedHabit
+  RecommendedHabit,
+  EnergyCategory
 } from "../types";
 import {
   PERSONALITY_QUESTIONS,
@@ -119,24 +120,15 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
   const [submittedResult, setSubmittedResult] = useState<PersonalityHistoryRecord | null>(null);
   const [history, setHistory] = useState<PersonalityHistoryRecord[]>([]);
 
-  // 頻度設定用モーダル制御（EnergyDiagnosis と同様の見た目に合わせる）
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
-  
-  // local frequency state persisted to localStorage under key "personalityDiagnosisFrequency"
-  const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>(() => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("personalityDiagnosisFrequency") : null;
-      return raw ? JSON.parse(raw) : { frequencyType: "daily", frequencyValue: [] };
-    } catch {
-      return { frequencyType: "daily", frequencyValue: [] };
-    }
-  });
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   // Habit create modal state
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
   const [habitDraft, setHabitDraft] = useState<{ title: string; detail: string; energy?: string } | null>(null);
+
+  const [localFrequency, setLocalFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
 
   // submittedResult が変わったら表示用の画像パスを決定
   const resultImageSrc = useMemo(() => {
@@ -182,32 +174,45 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
     if (history && history.length > 0) {
       const today = formatDateKey(new Date());
       const todayRec = history.find(h => String(h.date) === today);
-      if (todayRec) {
+      // 今日の記録があり、かつ現在の表示がまだ今日の結果でない場合にのみ更新する
+      if (todayRec && (submittedResult?.id !== todayRec.id || step !== 'results')) {
         setSubmittedResult(todayRec);
         setStep('results');
-        return;
       }
     }
     // 既に submittedResult が設定されている場合は触らない（ユーザーが手動で選んでいる可能性）
-  }, [history]);
+  }, [history, submittedResult, step]);
 
+  // Firestoreから頻度設定を読み込む
   useEffect(() => {
-    // keep localFrequency in sync with stored value if it exists (safe on client)
+    const uid = getCurrentUid();
+    if (!db || !uid) return;
     try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("personalityDiagnosisFrequency") : null;
-      if (raw) setLocalFrequency(JSON.parse(raw));
-    } catch (e) { /* ignore */ }
+      const settingsRef = doc(db, "users", uid, "settings", "main");
+      getDoc(settingsRef).then(settingsSnap => {
+        if (settingsSnap.exists() && settingsSnap.data().personalityDiagnosisFrequency) {
+          setLocalFrequency(settingsSnap.data().personalityDiagnosisFrequency);
+        }
+      });
+    } catch (e) { console.warn("[PersonalityDiagnosis] failed to load frequency", e); }
   }, []);
 
-  const handleSaveFrequency = () => {
-    try {
-      localStorage.setItem("personalityDiagnosisFrequency", JSON.stringify(localFrequency));
-    } catch (err) {
-      console.warn("Failed to save personalityDiagnosisFrequency", err);
+  const handleSaveFrequency = async () => {
+    const uid = getCurrentUid();
+    if (!db || !uid) {
+      setIsFrequencyModalOpen(false);
+      return;
     }
-    setShowSaveSuccess(true);
-    setTimeout(() => setShowSaveSuccess(false), 2000);
-    setIsFrequencyModalOpen(false);
+    const docRef = doc(db, "users", uid, "settings", "main");
+    try {
+      await setDoc(docRef, { personalityDiagnosisFrequency: localFrequency }, { merge: true });
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+    } catch (e) {
+      console.error("save frequency error", e);
+    } finally {
+      setIsFrequencyModalOpen(false);
+    }
   };
 
   const openRecordDetail = (rec: PersonalityHistoryRecord) => {
@@ -267,17 +272,6 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
           };
           const ref = doc(db, 'users', uid, 'personalityHistory', today);
           await setDoc(ref, payload);
-          // local history will update via snapshot listener
-          // mark as completed for other local UIs (HabitTracker) and notify via event
-          try {
-            const key = 'personalityDiagnosisCompletedDates';
-            const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-            const arr: string[] = raw ? JSON.parse(raw) : [];
-            if (!arr.includes(today)) {
-              arr.unshift(today);
-              localStorage.setItem(key, JSON.stringify(arr));
-            }
-          } catch (e) { /* noop */ }
           try {
             window.dispatchEvent(new CustomEvent('personality-diagnosis-saved', { detail: { date: today } }));
           } catch (e) { /* noop */ }
@@ -288,19 +282,6 @@ const PersonalityDiagnosis: React.FC<PersonalityProps> = ({
         // fallback: add to local history if not authenticated
         const date = new Date();
         const rec = { id: date.toISOString(), date: formatDateKey(date), type: res.type, percents: res.percents, strength: res.strength };
-        setHistory(prev => [rec, ...prev].slice(0, 20));
-        // also persist completion locally + notify
-        try {
-          const today = formatDateKey(date);
-          const key = 'personalityDiagnosisCompletedDates';
-          const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-          const arr: string[] = raw ? JSON.parse(raw) : [];
-          if (!arr.includes(today)) {
-            arr.unshift(today);
-            localStorage.setItem(key, JSON.stringify(arr));
-          }
-          window.dispatchEvent(new CustomEvent('personality-diagnosis-saved', { detail: { date: today } }));
-        } catch (e) { /* noop */ }
       }
 
       onComplete?.(res);

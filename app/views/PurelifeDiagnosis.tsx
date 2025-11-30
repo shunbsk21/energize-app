@@ -22,6 +22,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { arrayUnion } from "firebase/firestore";
+import { HelpIcon } from "../components/Icons";
 
 /* DatePickerModal and RecordsPickerModal unchanged from previous version */
 const RecordsPickerModal: React.FC<{ open: boolean; onClose: () => void; onSelect: (rec: PurelifeResultRecord | null) => void; history: PurelifeResultRecord[] }> = ({ open, onClose, onSelect, history }) => {
@@ -251,11 +252,6 @@ const PurelifeDiagnosis: React.FC<PurelifeProps> = ({
     } finally {
       setIsFrequencyModalOpen(false);
     }
-  };
-
-  const lowCategories = (record: PurelifeResultRecord | null) => {
-    if (!record) return [];
-    return Object.entries(record.categories).filter(([k,v]) => v <= 30).map(([k]) => k);
   };
 
   const viewDetail = (rec: PurelifeResultRecord) => {
