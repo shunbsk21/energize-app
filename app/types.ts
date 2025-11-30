@@ -247,6 +247,8 @@ export interface HabitTrackerProps {
   purelifeFrequency?: DiagnosisFrequency;
   localPurelifeCompletedDates?: string[];
   onOpenPurelife?: () => void;
+  personalityDiagnosisFrequency?: DiagnosisFrequency;
+  personalityDiagnosisCompletedDates?: string[];
   valueDiagnosisFrequency?: DiagnosisFrequency;
   valueDiagnosisCompletedDates?: string[];
   onOpenValueDiagnosis?: () => void;

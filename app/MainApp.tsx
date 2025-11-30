@@ -88,6 +88,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const [localPurelifeCompletedDates, setLocalPurelifeCompletedDates] = useState<string[]>(purelifeCompletedDates ?? []);
   const [valueDiagnosisFrequency, setValueDiagnosisFrequency] = useState<DiagnosisFrequency | null>(null);
   const [valueDiagnosisCompletedDates, setValueDiagnosisCompletedDates] = useState<string[]>([]);
+  const [personalityDiagnosisFrequency, setPersonalityDiagnosisFrequency] = useState<DiagnosisFrequency | null>(null);
+  const [personalityDiagnosisCompletedDates, setPersonalityDiagnosisCompletedDates] = useState<string[]>([]);
 
   // sync incoming prop -> local state
   useEffect(() => {
@@ -318,11 +320,21 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
           if (settingsData.valueDiagnosisFrequency) {
             setValueDiagnosisFrequency(settingsData.valueDiagnosisFrequency);
           }
+          // ★ Personality Diagnosis の頻度設定を読み込む
+          if (settingsData.personalityDiagnosisFrequency) {
+            setPersonalityDiagnosisFrequency(settingsData.personalityDiagnosisFrequency);
+          }
         }
         // ★ Value Diagnosis の完了履歴を読み込む
         const valueHistorySnap = await getDocs(collection(baseRef, 'valueHistory'));
         if (!valueHistorySnap.empty) {
           setValueDiagnosisCompletedDates(valueHistorySnap.docs.map((d: QueryDocumentSnapshot) => d.data().date as string));
+        }
+
+        // ★ Personality Diagnosis の完了履歴を読み込む
+        const personalityHistorySnap = await getDocs(collection(baseRef, 'personalityHistory'));
+        if (!personalityHistorySnap.empty) {
+          setPersonalityDiagnosisCompletedDates(personalityHistorySnap.docs.map((d: QueryDocumentSnapshot) => d.data().date as string));
         }
 
         // --- 4. 全員のプロフィール情報を取得 ---
@@ -872,6 +884,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                   purelifeFrequency={purelifeFrequency ?? undefined}
                   localPurelifeCompletedDates={localPurelifeCompletedDates}
                   // ★ Value Diagnosis の設定と完了履歴を渡す
+                  personalityDiagnosisFrequency={personalityDiagnosisFrequency ?? undefined}
+                  personalityDiagnosisCompletedDates={personalityDiagnosisCompletedDates}
                   valueDiagnosisFrequency={valueDiagnosisFrequency ?? undefined}
                   valueDiagnosisCompletedDates={valueDiagnosisCompletedDates}
                   onOpenValueDiagnosis={() => setView('value')}

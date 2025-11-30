@@ -67,6 +67,8 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   onDeleteTask,
   onAddLearning,
   purelifeFrequency,
+  personalityDiagnosisFrequency,
+  personalityDiagnosisCompletedDates,
   localPurelifeCompletedDates,
   onOpenPurelife,
   valueDiagnosisFrequency,
@@ -109,10 +111,6 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   // --- Floating multi-button 展開 state ---
   const [fabOpen, setFabOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement | null>(null);
-
-  // personality 診断の頻度 / 完了日を読み込むための state
-  const [localPersonalityFrequency, setLocalPersonalityFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'daily', frequencyValue: [] });
-  const [personalityCompletedDates, setPersonalityCompletedDates] = useState<string[]>([]);
 
   // --- purelife の完了日をローカルで保持し、グローバルイベントで即時更新する ---
   const [localPurelifeCompletedDatesState, setLocalPurelifeCompletedDatesState] = useState<string[]>(localPurelifeCompletedDates ?? []);
@@ -592,12 +590,12 @@ const HabitTracker: React.FC<HabitTrackerProps> = ({
   }, [energyHistory, selectedDateString]);
 
   const isPersonalityDiagnosisDay = useMemo(() => {
-    return isDiagnosisScheduledForDate(localPersonalityFrequency, selectedDate);
-  }, [localPersonalityFrequency, selectedDate]);
+    return isDiagnosisScheduledForDate(personalityDiagnosisFrequency, selectedDate);
+  }, [personalityDiagnosisFrequency, selectedDate]);
 
   const isPersonalityCompleted = useMemo(() => {
-    return personalityCompletedDates.includes(selectedDateISO);
-  }, [personalityCompletedDates, selectedDateISO]);
+    return personalityDiagnosisCompletedDates?.includes(selectedDateISO);
+  }, [personalityDiagnosisCompletedDates, selectedDateISO]);
 
   // Firestore に保存された purelifeHistory を参照して selectedDate が実施済みか確認する
   useEffect(() => {
