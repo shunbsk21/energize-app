@@ -118,9 +118,9 @@ const CalendarPicker: React.FC<{ value?: string; onChange: (iso?: string) => voi
             onMouseDown={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
-              <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{'<'}</button>
+              <button className="px-2 py-1 text-sm" onClick={() => setInternalViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{'<'}</button>
               <div className="text-sm font-medium">{viewDate.toLocaleString(undefined, { month: 'long' })} {viewDate.getFullYear()}</div>
-              <button className="px-2 py-1 text-sm" onClick={() => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>{'>'}</button>
+              <button className="px-2 py-1 text-sm" onClick={() => setInternalViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>{'>'}</button>
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-xs text-center mb-2">
