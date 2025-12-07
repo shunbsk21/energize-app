@@ -7,13 +7,14 @@ import { collection, query, onSnapshot, orderBy, doc as firestoreDoc, getDoc, ge
 import { db } from '@/lib/firebase';
 import { Profile, Friend, Group as GroupType, Comment, Habit, GroupDetailProps } from '../types';
 import { calculateCompletionPercentForDate } from '../utils/habits';
-import { ChevronLeftIcon, SendIcon, } from '../components/Icons';
+import { ChevronLeftIcon, SendIcon, CogIcon } from '../components/Icons';
 import { ConfirmRemoveModal } from '../components/ConfirmRemoveModal';
 import { MemberHabitsModal } from '../components/MemberHabitsModal';
 import { SharedHabitsModal } from '../components/SharedHabitsModal';
 import { InviteMemberModal } from '../components/InviteMemberModal';
+import { GroupSettingsModal } from '../components/GroupSettingsModal';
 
-const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, onFollowUser, onAddComment, habits, onBack, onInviteMembers, onRemoveMember, allUserProfiles, onUpdateGroupSharedHabits }) => {
+const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, onFollowUser, onAddComment, habits, onBack, onInviteMembers, onRemoveMember, allUserProfiles, onUpdateGroupSharedHabits, onDeleteGroup }) => {
 
   const [newComment, setNewComment] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -23,6 +24,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isSharedHabitsOpen, setIsSharedHabitsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const closeProgress = () => setIsProgressOpen(false);
   const groupSharedIds: string[] = group.sharedHabitIds ?? [];
@@ -101,7 +103,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
               authorId: data.authorId,
               authorName: data.authorName,
               text: data.text,
-              timestamp: data.timestamp, 
+              timestamp: data.timestamp,
               authorImageUrl: data.authorImageUrl ?? null
             };
             return obj;
@@ -120,7 +122,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           unsubNew = onSnapshot(qNew, (snapNew) => {
             snapNew.docChanges().forEach(change => {
               if (change.type === 'added') {
-                const d = change.doc; 
+                const d = change.doc;
                 const data = d.data();
                 const obj = {
                   id: d.id,
@@ -138,7 +140,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                   return [...prev, newMsg];
                 });
                 // toast for others' messages (preserve original behavior)
-                if (!initialLoadRef.current && newMsg.authorId !== profile.id) { 
+                if (!initialLoadRef.current && newMsg.authorId !== profile.id) {
                   toast(`${newMsg.authorName ?? '名無し'}: ${String(newMsg.text)}`, { duration: 4000 });
                 }
               }
@@ -150,7 +152,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           unsubNew = onSnapshot(qOne, (snapNew) => {
             snapNew.docChanges().forEach(change => {
               if (change.type === 'added') {
-                const d = change.doc; 
+                const d = change.doc;
                 const data = d.data();
                 const obj = {
                   id: d.id,
@@ -290,7 +292,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         const snap = await getDoc(memberGroupDocRef);
         if (cancelled) return;
         if (snap.exists()) {
-          const data = snap.data(); 
+          const data = snap.data();
           const sharedForGroup = (data?.sharedByMember?.[selectedMemberId]) || data?.sharedHabitIds || [];
           setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
           return;
@@ -298,8 +300,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         try {
           const globalGroupRef = firestoreDoc(db, 'groups', group.id);
           const gSnap = await getDoc(globalGroupRef);
-          if (!cancelled && gSnap.exists()) { 
-            const gdata = gSnap.data(); 
+          if (!cancelled && gSnap.exists()) {
+            const gdata = gSnap.data();
             const sharedForGroup = (gdata?.sharedByMember && gdata.sharedByMember[selectedMemberId]) || gdata?.sharedHabitIds || [];
             setMemberSharedMap(prev => ({ ...prev, [selectedMemberId]: Array.isArray(sharedForGroup) ? sharedForGroup : [] }));
             return;
@@ -336,7 +338,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
   }, [selectedMemberId, memberHabitsMap]);
 
   const getMemberProfile = (memberId: string) => {
-    return allUserProfiles.get(memberId) ?? { id: memberId, displayName: `ユーザー ${memberId.substring(0,4)}`, imageUrl: null };
+    return allUserProfiles.get(memberId) ?? { id: memberId, displayName: `ユーザー ${memberId.substring(0, 4)}`, imageUrl: null };
   };
 
   const getMemberProgress = (memberId: string): number | null => {
@@ -351,7 +353,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
     // memberHabitsMap cache または allUserProfiles fallback
     let memberHabits = memberHabitsMap[memberId];
     if (!memberHabits) {
-      const memberProfile = allUserProfiles.get(memberId); 
+      const memberProfile = allUserProfiles.get(memberId);
       memberHabits = memberProfile?.habits || [];
     }
     if (!memberHabits || memberHabits.length === 0) return null;
@@ -384,12 +386,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                 return (
                   <div key={memberId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <Image 
-                        src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'} 
-                        alt={member.displayName ?? ''} 
+                      <Image
+                        src={member.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"></svg>'}
+                        alt={member.displayName ?? ''}
                         width={40}
                         height={40}
-                        className="w-10 h-10 rounded-full object-cover bg-gray-200" 
+                        className="w-10 h-10 rounded-full object-cover bg-gray-200"
                       />
                       <div>
                         <div className="font-semibold text-gray-800">{member.displayName}{isSelf ? ' (自分)' : ''}</div>
@@ -409,7 +411,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
   };
 
   const handlePostComment = () => {
-    if(!newComment.trim()) return;
+    if (!newComment.trim()) return;
     const commentData: Omit<Comment, 'id'> = {
       groupId: group.id,
       authorId: profile.id,
@@ -454,18 +456,21 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
         {/* ヘッダー */}
         <div className="fixed left-4 right-4 z-40 flex items-center gap-2 py-2 px-4 bg-white/90 border border-gray-200/30 rounded-xl shadow">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100">
-            <ChevronLeftIcon className="w-6 h-6 text-gray-600"/>
+            <ChevronLeftIcon className="w-6 h-6 text-gray-600" />
           </button>
           <h2 className="text-2xl font-bold text-gray-800">{group.name}</h2>
           <div className="flex-1" />
           <button onClick={(e) => { e.stopPropagation(); openProgress(); }} className="ml-3 px-3 py-1 bg-white border border-gray-200 rounded-md text-sm text-indigo-600 hover:bg-indigo-50">
             進捗
           </button>
-          {group.members.includes(profile.id) && (
-            <button onClick={() => setIsSharedHabitsOpen(true)} className="ml-3 px-3 py-1 rounded-lg bg-indigo-100 text-indigo-700 text-sm">
-              自分の共有設定
-            </button>
-          )}
+
+          {/* Settings Icon */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(true); }}
+            className="ml-2 p-2 rounded-full hover:bg-gray-100 text-gray-600"
+          >
+            <CogIcon className="w-6 h-6" />
+          </button>
         </div>
 
         {/* messages area: flexible scroll region */}
@@ -486,20 +491,20 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
                 <div className="space-y-4">
                   {grouped.items.map(message => {
                     const isAuthor = message.authorId === profile.id;
-                    const authorImageUrl = message.authorImageUrl; 
+                    const authorImageUrl = message.authorImageUrl;
                     return (
                       <div key={message.id} className={`flex gap-2 ${isAuthor ? 'justify-end' : 'justify-start'}`}>
                         {!isAuthor && allUserProfiles.has(message.authorId) && (
-                            <Image
-                                src={allUserProfiles.get(message.authorId)?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
-                                alt={message.authorName}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
-                                onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
-                            />
+                          <Image
+                            src={allUserProfiles.get(message.authorId)?.imageUrl ?? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>'}
+                            alt={message.authorName}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full object-cover bg-gray-200 mt-1 cursor-pointer hover:scale-110 transition-transform"
+                            onClick={() => { setSelectedMemberId(message.authorId); setIsMemberModalOpen(true); }}
+                          />
                         )}
-                        <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}> 
+                        <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${isAuthor ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800'} shadow-sm`}>
                           {!isAuthor && <p className="text-xs font-bold text-indigo-600 mb-1">{allUserProfiles.get(message.authorId)?.displayName ?? '名無しのさん'}</p>}
                           <p className="text-sm">{message.text}</p>
                           <p className={`text-xs mt-1 ${isAuthor ? 'text-indigo-200' : 'text-gray-400'} text-right`}>
@@ -523,7 +528,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
               <MemberHabitsModal
                 memberId={selectedMemberId}
                 memberProfile={(allUserProfiles.get(selectedMemberId) as Profile | Friend) || null}
-                memberHabits={memberHabitsMap[selectedMemberId]} 
+                memberHabits={memberHabitsMap[selectedMemberId]}
                 groupSharedHabitIds={memberSharedMap[selectedMemberId] || groupSharedByMember[selectedMemberId] || groupSharedIds || []}
                 currentUserId={profile.id}
                 isFollowing={followingIds.has(selectedMemberId)}
@@ -560,7 +565,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           />
         )}
         {memberToRemove && (
-          <ConfirmRemoveModal 
+          <ConfirmRemoveModal
             open={!!memberToRemove}
             title="メンバーの削除"
             message={`${memberToRemove.displayName ?? 'メンバー'}さんをグループ「${group.name}」から削除します。よろしいですか？`}
@@ -569,6 +574,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
           />
         )}
         {isProgressOpen && <GroupProgressModalInline onClose={closeProgress} />}
+
+        <GroupSettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          isOwner={isOwner}
+          groupName={group.name}
+          onOpenSharedSettings={() => setIsSharedHabitsOpen(true)}
+          onDeleteGroup={() => {
+            onDeleteGroup(group.id);
+            onBack();
+          }}
+        />
       </div>
       {/* input fixed to bottom of component */}
       <div className="fixed bottom-18 w-full bg-white p-3 left-0 right-0">
@@ -582,7 +599,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, profile, following, on
             className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"
           />
           <button onClick={handlePostComment} className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition">
-            <SendIcon className="w-5 h-5"/>
+            <SendIcon className="w-5 h-5" />
           </button>
         </div>
       </div>

@@ -55,10 +55,10 @@ import {
   NoteIcon,
   ScholarIcon,
   BellIcon
-} from './components/Icons'; 
+} from './components/Icons';
 
 // Type
-import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem, MainAppProps } from './types'; 
+import { EnergyRecord, Habit, View, EnergyScores, Profile, DiagnosisFrequency, Friend, Group as GroupType, Comment, Notification, Task, Checkin, Checkout, LearningItem, MainAppProps } from './types';
 
 
 const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
@@ -67,7 +67,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationIdsRef = useRef(new Set<string>());
-  
+
   const { habits, setHabits, groups, setGroups, profile: contextProfile, setProfile: setContextProfile } = useAppContext();
   const { data: energyHistory, loading: energyHistoryLoading } = useFirestoreCollection<EnergyRecord>(`users/${profile.id}/energyHistory`);
   const [diagnosisFrequency, setDiagnosisFrequency] = useState<DiagnosisFrequency>({ frequencyType: 'weekly', frequencyValue: [1] });
@@ -95,7 +95,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   useEffect(() => {
     setLocalPurelifeCompletedDates(purelifeCompletedDates ?? []);
   }, [purelifeCompletedDates]);
- 
+
   // listen for purelife completion events dispatched by PurelifeDiagnosis and update local list
   useEffect(() => {
     const handler = (ev: Event) => {
@@ -104,7 +104,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const date: string | undefined = ce?.detail?.date;
         if (!date) return;
         setLocalPurelifeCompletedDates(prev => prev.includes(date) ? prev : [date, ...prev]);
-      } catch {}
+      } catch { }
     };
     window.addEventListener('purelife-diagnosis-saved', handler as EventListener);
     return () => window.removeEventListener('purelife-diagnosis-saved', handler as EventListener);
@@ -124,6 +124,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   useEffect(() => {
     setGroups(firestoreGroups);
   }, [firestoreGroups, setGroups]);
+
+  // ★ Group Invites (Real-time)
+  const { data: firestoreGroupInvites, loading: groupInvitesLoading } = useFirestoreCollection<GroupType>(`users/${profile.id}/group_invites`);
+
+  useEffect(() => {
+    setGroupInvites(firestoreGroupInvites);
+  }, [firestoreGroupInvites]);
+
+
   // Admin判定
   const isAdmin = Boolean(profile && profile.id === ADMIN_ID);
 
@@ -210,39 +219,52 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // ★ ユーザーのプロフィール情報を取得するヘルパー関数
   const fetchUserProfiles = useCallback(async (userIds: string[]): Promise<Map<string, Profile | Friend>> => {
-      const userMap = new Map<string, Profile | Friend>();
-      userMap.set(profile.id, profile);
+    const userMap = new Map<string, Profile | Friend>();
+    userMap.set(profile.id, profile);
 
-      const uniqueIdsToFetch = new Set(userIds.filter(id => id !== profile.id));
+    const uniqueIdsToFetch = new Set(userIds.filter(id => id !== profile.id));
 
-      for (const id of uniqueIdsToFetch) {
-          try {
-              const settingsRef = doc(db, 'users', id, 'settings', 'main');
-              const docSnap = await getDoc(settingsRef);
-              if (docSnap.exists() && docSnap.data().profile) {
-                  const userProfile = docSnap.data().profile;
-                  userMap.set(id, {
-                      id: id,
-                      displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`,
-                      imageUrl: userProfile.imageUrl || null
-                  });
-              } else {
-                  userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-              }
-          } catch (error) {
-              console.error(`ユーザー(id: ${id}) のプロフィール取得に失敗:`, error);
-              userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
-          }
+    for (const id of uniqueIdsToFetch) {
+      try {
+        const settingsRef = doc(db, 'users', id, 'settings', 'main');
+        const docSnap = await getDoc(settingsRef);
+        if (docSnap.exists() && docSnap.data().profile) {
+          const userProfile = docSnap.data().profile;
+          userMap.set(id, {
+            id: id,
+            displayName: userProfile.displayName ?? `ユーザー ${id.substring(0, 4)}`,
+            imageUrl: userProfile.imageUrl || null
+          });
+        } else {
+          userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
+        }
+      } catch (error) {
+        console.error(`ユーザー(id: ${id}) のプロフィール取得に失敗:`, error);
+        userMap.set(id, { id: id, displayName: `ユーザー ${id.substring(0, 4)}`, imageUrl: null });
       }
-      return userMap;
+    }
+    return userMap;
   }, [profile]); // ★ profile が更新されたら、この関数も更新される
+
+  // Fetch profiles for new invites (Moved here to be after fetchUserProfiles definition)
+  useEffect(() => {
+    const memberIds = groupInvites.flatMap(g => g.members);
+    const uniqueIds = Array.from(new Set(memberIds));
+    const missingIds = uniqueIds.filter(id => !allUserProfiles.has(id));
+
+    if (missingIds.length > 0) {
+      fetchUserProfiles(missingIds).then(newProfiles => {
+        setAllUserProfiles(prev => new Map([...prev, ...newProfiles]));
+      });
+    }
+  }, [groupInvites, allUserProfiles, fetchUserProfiles]);
 
   // ★★★ データの「読み込み」処理 (Firestore) (★コメント読み込みを削除★) ★★★
   useEffect(() => {
     if (!profile.id) {
       return;
     }
-    
+
     const loadData = async () => {
       try {
         const baseRef = doc(db, 'users', profile.id);
@@ -250,22 +272,20 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const checkinsRef = collection(baseRef, 'checkins');
         const checkoutsRef = collection(baseRef, 'checkouts');
         const settingsRef = doc(baseRef, 'settings', 'main');
-        
+
         const followingRef = collection(baseRef, 'following');
         const followersRef = collection(baseRef, 'followers');
-        const groupInvitesRef = collection(baseRef, 'group_invites');
 
         const [
-            settingsSnap,
-            followingSnap, followersSnap, groupInvitesSnap,
-            checkinsSnap, checkoutsSnap
+          settingsSnap,
+          followingSnap, followersSnap,
+          checkinsSnap, checkoutsSnap
         ] = await Promise.all([
-            getDoc(settingsRef),
-            getDocs(followingRef),
-            getDocs(followersRef),
-            getDocs(groupInvitesRef),
-            getDocs(checkinsRef),
-            getDocs(checkoutsRef)
+          getDoc(settingsRef),
+          getDocs(followingRef),
+          getDocs(followersRef),
+          getDocs(checkinsRef),
+          getDocs(checkoutsRef)
         ]);
 
         // --- 読み込んだデータを state にセット ---
@@ -284,11 +304,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
         setCheckins(loadedCheckins.sort((a, b) => getDateMs(b) - getDateMs(a)));
         setCheckouts(loadedCheckouts.sort((a, b) => getDateMs(b) - getDateMs(a)));
-        
+
+
         const loadedFollowing = followingSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
         const loadedFollowers = followersSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<Friend, 'id'>, id: d.id }));
-        const loadedGroupInvites = groupInvitesSnap.docs.map((d: QueryDocumentSnapshot) => ({ ...d.data() as Omit<GroupType, 'id'>, id: d.id }));
-        setGroupInvites(loadedGroupInvites);
+        // groupInvites is now handled by useFirestoreCollection hook
+
 
         // 設定 (診断頻度 + プロフィール)
         if (settingsSnap.exists()) {
@@ -300,9 +321,9 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             const savedProfile = settingsData.profile;
             if (savedProfile.displayName !== profile.displayName || savedProfile.imageUrl !== profile.imageUrl) {
               setProfile((prevProfile: Profile | null) => ({
-                  ...prevProfile!,
-                  displayName: savedProfile.displayName || prevProfile!.displayName,
-                  imageUrl: savedProfile.imageUrl,
+                ...prevProfile!,
+                displayName: savedProfile.displayName || prevProfile!.displayName,
+                imageUrl: savedProfile.imageUrl,
               }));
             }
           }
@@ -341,21 +362,22 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         const followingIds = loadedFollowing.map(f => f.id);
         const followersIds = loadedFollowers.map(f => f.id);
         const memberIds = groups.flatMap(g => g.members);
-        const inviteMemberIds = loadedGroupInvites.flatMap(g => g.members);
-        
-        const allUserIds = Array.from(new Set([...followingIds, ...followersIds, ...memberIds, ...inviteMemberIds]));
-        
+        // inviteMemberIds removed from initial load as invites are now loaded via hook. 
+        // Profiles for invites should be fetched when invites are loaded or rendered.
+
+        const allUserIds = Array.from(new Set([...followingIds, ...followersIds, ...memberIds]));
+
         const userProfilesMap = await fetchUserProfiles(allUserIds);
         setAllUserProfiles(userProfilesMap);
 
         // 5. 読み込んだ following / followers リストを、最新のプロフィールで更新する
         const updatedFollowing = loadedFollowing.map(oldFriend => {
-            return userProfilesMap.get(oldFriend.id) || oldFriend;
+          return userProfilesMap.get(oldFriend.id) || oldFriend;
         });
         const updatedFollowers = loadedFollowers.map(oldFollower => {
-            return userProfilesMap.get(oldFollower.id) || oldFollower;
+          return userProfilesMap.get(oldFollower.id) || oldFollower;
         });
-        
+
         setFollowing(updatedFollowing);
         setFollowers(updatedFollowers);
 
@@ -375,7 +397,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     };
 
     loadData();
-    
+
   }, [profile.id, setProfile, profile, fetchUserProfiles, groups]);
 
   // ★★★ 通知リスナーの設置 ★★★
@@ -395,7 +417,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
     // 2. 各グループのチャットをリッスンして、新しいメッセージがあれば通知を作成・保存する
     const chatUnsubscribers = groups.map(group => {
-      if (!group.id) return () => {}; // group.id がなければ何もしない
+      if (!group.id) return () => { }; // group.id がなければ何もしない
       const messagesRef = collection(db, 'group_chats', group.id, 'messages');
       return onSnapshot(messagesRef, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
@@ -410,7 +432,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             // 既に同じ通知が存在しないか確認してから作成
             const notificationSnap = await getDoc(notificationRef);
             if (!notificationSnap.exists()) {
-            // sanitize: do not send undefined fields to Firestore
+              // sanitize: do not send undefined fields to Firestore
               const toSave: Partial<Notification> = {
                 groupId: group.id,
                 groupName: group.name,
@@ -485,20 +507,18 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleAddHabit = useCallback(async (newHabitData: Omit<Habit, 'id'>) => {
     if (!profile.id) return;
     try {
-      const createdHabit = await firestoreService.addHabit(profile.id, newHabitData);
-      setHabits(prevHabits => [...prevHabits, createdHabit]);
+      await firestoreService.addHabit(profile.id, newHabitData);
+      // setHabits handled by real-time listener
     } catch (error) {
       console.error("習慣の追加に失敗しました:", error);
     }
-  }, [profile.id, setHabits]);
-  
+  }, [profile.id]);
+
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     if (!profile.id || !updatedHabit.id) return;
     try {
       await firestoreService.updateHabit(profile.id, updatedHabit);
-      setHabits(prevHabits => 
-        prevHabits.map(h => h.id === updatedHabit.id ? updatedHabit : h)
-      );
+      // setHabits handled by real-time listener
     } catch (error) {
       console.error("習慣の更新に失敗しました:", error);
     }
@@ -508,7 +528,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id) return;
     try {
       await firestoreService.deleteHabit(profile.id, habitId);
-      setHabits(prevHabits => prevHabits.filter(h => h.id !== habitId));
+      // setHabits handled by real-time listener
     } catch (error) {
       console.error("習慣の削除に失敗しました:", error);
     }
@@ -528,11 +548,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     window.addEventListener('habit-created', handler as EventListener);
     return () => window.removeEventListener('habit-created', handler as EventListener);
   }, [handleAddHabit]);
-  
+
   const handleFollowUser = async (friendId: string) => {
     if (!profile.id || friendId === profile.id || following.some(f => f.id === friendId)) {
-        console.warn("すでにフォロー済みか、自分自身です:", friendId);
-        return;
+      console.warn("すでにフォロー済みか、自分自身です:", friendId);
+      return;
     }
     try {
       const friendProfile = (await fetchUserProfiles([friendId])).get(friendId);
@@ -551,29 +571,28 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   const handleCreateGroup = async (newGroupData: Omit<GroupType, 'id'>) => {
     if (!profile.id) return;
     try {
-      const groupDocWithId = await firestoreService.createGroup(profile.id, newGroupData);
-      setGroups(prevGroups => [...prevGroups, groupDocWithId]);
+      await firestoreService.createGroup(profile.id, newGroupData);
+      // setGroups handled by real-time listener
+
       const newMemberIds = newGroupData.members.filter(id => !allUserProfiles.has(id));
       if (newMemberIds.length > 0) {
-          const newProfilesMap = await fetchUserProfiles(newMemberIds);
-          setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+        const newProfilesMap = await fetchUserProfiles(newMemberIds);
+        setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
       }
     } catch (error) {
       console.error("グループの作成/招待に失敗しました:", error);
     }
   };
-  
+
   const handleInviteToGroup = async (group: GroupType, memberIdsToInvite: string[]) => {
     if (!profile.id || !group.id || memberIdsToInvite.length === 0) return;
     try {
       await firestoreService.inviteToGroup(group, memberIdsToInvite);
-      const updatedMembers = [...new Set([...group.members, ...memberIdsToInvite])];
-      const updatedGroupData: GroupType = { ...group, members: updatedMembers };
-      setGroups(prevGroups => prevGroups.map(g => g.id === group.id ? updatedGroupData : g));
+      // setGroups handled by real-time listener
       const newMemberIdsToFetch = memberIdsToInvite.filter(id => !allUserProfiles.has(id));
       if (newMemberIdsToFetch.length > 0) {
-          const newProfilesMap = await fetchUserProfiles(newMemberIdsToFetch);
-          setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
+        const newProfilesMap = await fetchUserProfiles(newMemberIdsToFetch);
+        setAllUserProfiles(prevMap => new Map([...prevMap, ...newProfilesMap]));
       }
     } catch (error) {
       console.error("グループへの招待に失敗しました:", error);
@@ -581,47 +600,61 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
   };
 
   const handleRemoveMember = async (groupId: string, memberIdToRemove: string) => {
-      if (!profile.id || !groupId || !memberIdToRemove) return;
-      const groupToUpdate = groups.find(g => g.id === groupId);
-      if (!groupToUpdate) {
-          console.error("対象のグループが見つかりません。");
-          return;
-      }
-      if (groupToUpdate.ownerId !== profile.id) {
-          console.error("オーナー以外はメンバーを削除できません。");
-          return;
-      }
-      if (groupToUpdate.ownerId === memberIdToRemove) {
-          console.error("オーナー自身を削除することはできません。");
-          return;
-      }
-      try {
-          await firestoreService.removeMemberFromGroup(groupToUpdate, memberIdToRemove);
-          const updatedGroupData: GroupType = { ...groupToUpdate, members: groupToUpdate.members.filter(id => id !== memberIdToRemove) };
-          setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? updatedGroupData : g));
-      } catch (error) {
-          console.error("メンバーの削除に失敗しました:", error);
-      }
+    if (!profile.id || !groupId || !memberIdToRemove) return;
+    const groupToUpdate = groups.find(g => g.id === groupId);
+    if (!groupToUpdate) {
+      console.error("対象のグループが見つかりません。");
+      return;
+    }
+    if (groupToUpdate.ownerId !== profile.id) {
+      console.error("オーナー以外はメンバーを削除できません。");
+      return;
+    }
+    if (groupToUpdate.ownerId === memberIdToRemove) {
+      console.error("オーナー自身を削除することはできません。");
+      return;
+    }
+    try {
+      await firestoreService.removeMemberFromGroup(groupToUpdate, memberIdToRemove);
+      // setGroups handled by real-time listener
+    } catch (error) {
+      console.error("メンバーの削除に失敗しました:", error);
+    }
   };
-  
+
   const handleAcceptGroupInvite = async (invite: GroupType) => {
     if (!profile.id || !invite.id) return;
     try {
       await firestoreService.acceptGroupInvite(profile.id, invite);
-      setGroups(prev => [...prev, invite]);
-      setGroupInvites(prev => prev.filter(g => g.id !== invite.id));
+      // handled by real-time listener
     } catch (error) {
       console.error("グループ招待の承認に失敗しました:", error);
     }
   };
-  
+
   const handleDeclineGroupInvite = async (inviteId: string) => {
     if (!profile.id) return;
     try {
       await firestoreService.declineGroupInvite(profile.id, inviteId);
-      setGroupInvites(prev => prev.filter(g => g.id !== inviteId));
+      // handled by real-time listener
     } catch (error) {
       console.error("グループ招待の拒否に失敗しました:", error);
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!profile.id || !groupId) return;
+    const groupToDelete = groups.find(g => g.id === groupId);
+    if (!groupToDelete) return;
+    if (groupToDelete.ownerId !== profile.id) {
+      console.error("オーナー以外はグループを削除できません。");
+      return;
+    }
+    try {
+      await firestoreService.deleteGroup(groupToDelete);
+      // real-time listener will handle cleanup
+    } catch (error) {
+      console.error("グループの削除に失敗しました:", error);
     }
   };
 
@@ -630,17 +663,17 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id) return;
     try {
       const dataToSave = {
-          ...newCommentData,
-          authorId: profile.id,
-          authorName: profile.displayName ?? '名無しさん',
-          authorImageUrl: profile.imageUrl || null
+        ...newCommentData,
+        authorId: profile.id,
+        authorName: profile.displayName ?? '名無しさん',
+        authorImageUrl: profile.imageUrl || null
       };
       await firestoreService.addCommentToGroup(dataToSave);
     } catch (error) {
       console.error("コメントの追加に失敗しました:", error);
     }
   };
-  
+
   // (4) 診断頻度の書き込み (変更なし)
   const handleDiagnosisFrequencyChange = async (newFrequency: DiagnosisFrequency) => {
     if (!profile.id) return;
@@ -673,7 +706,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     if (!profile.id || !groupId || !memberId) return;
     try {
       await firestoreService.updateGroupSharedHabits(profile.id, groupId, memberId, sharedIds);
-      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, sharedByMember: { ...g.sharedByMember, [memberId]: sharedIds } } : g));
+      // handled by real-time listener
     } catch (error) {
       console.error('failed to update shared habits', error);
     }
@@ -737,7 +770,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  const handleAddTask = async (payload: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => {
+  const handleAddTask = async (payload: { title: string; details?: string; dueDate?: string; priority?: 'low' | 'medium' | 'high' }) => {
     if (!profile.id) return;
     try {
       const newTask = await firestoreService.addTask(profile.id, payload);
@@ -758,7 +791,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     }
   };
 
-  const handleUpdateTask = async (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => {
+  const handleUpdateTask = async (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low' | 'medium' | 'high'; done?: boolean }) => {
     if (!profile.id || !taskId) return;
     try {
       await firestoreService.updateTask(profile.id, taskId, payload);
@@ -779,7 +812,7 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       throw err;
     }
   };
-  
+
   // --- ヘルプテキスト (変更なし) ---
   const helpText = useMemo(() => {
     // if (view === 'diagnosis') {
@@ -827,8 +860,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               <p className="text-center text-gray-500 py-12">通知はありません</p>
             ) : (
               notifications.map(n => (
-                <div 
-                  key={n.id} 
+                <div
+                  key={n.id}
                   onClick={() => {
                     setSelectedGroupId(n.groupId ?? null);
                     setView('groups');
@@ -846,18 +879,18 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         </div>
       );
     }
-  
+
     switch (view) {
       case 'diagnosis':
-        return <EnergyDiagnosis 
-                  history={energyHistory} 
-                  onComplete={handleDiagnosisComplete} 
-                  setIsHelpOpen={setIsHelpOpen} 
-                  diagnosisFrequency={diagnosisFrequency} 
-                  setDiagnosisFrequency={handleDiagnosisFrequencyChange}
-                  habits={habits}
-                  handleAddHabit={handleAddHabit}
-                />;
+        return <EnergyDiagnosis
+          history={energyHistory}
+          onComplete={handleDiagnosisComplete}
+          setIsHelpOpen={setIsHelpOpen}
+          diagnosisFrequency={diagnosisFrequency}
+          setDiagnosisFrequency={handleDiagnosisFrequencyChange}
+          habits={habits}
+          handleAddHabit={handleAddHabit}
+        />;
       case 'personality':
         return <PersonalityDiagnosis
           setIsHelpOpen={setIsHelpOpen}
@@ -871,74 +904,75 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
       case 'value':
         return <ValueDiagnosis />;
       case 'habits':
-        return <HabitTracker 
-                  habits={habits} 
-                  energyHistory={energyHistory}
-                  onAddHabit={handleAddHabit}
-                  onUpdateHabit={handleUpdateHabit}
-                  onDeleteHabit={handleDeleteHabit}
-                  setIsHelpOpen={setIsHelpOpen} 
-                  setView={setView} 
-                  diagnosisFrequency={diagnosisFrequency}
-                  // pass purelife configuration so HabitTracker can show the card on scheduled days
-                  purelifeFrequency={purelifeFrequency ?? undefined}
-                  localPurelifeCompletedDates={localPurelifeCompletedDates}
-                  // ★ Value Diagnosis の設定と完了履歴を渡す
-                  personalityDiagnosisFrequency={personalityDiagnosisFrequency ?? undefined}
-                  personalityDiagnosisCompletedDates={personalityDiagnosisCompletedDates}
-                  valueDiagnosisFrequency={valueDiagnosisFrequency ?? undefined}
-                  valueDiagnosisCompletedDates={valueDiagnosisCompletedDates}
-                  onOpenValueDiagnosis={() => setView('value')}
-                  onOpenPurelife={() => setView('purelife')}
-                  onAddCheckin={handleAddCheckin}
-                  onAddCheckout={handleAddCheckout}
-                  checkins={checkins}
-                  checkouts={checkouts}
-                  onUpdateCheckin={handleUpdateCheckin}
-                  onUpdateCheckout={handleUpdateCheckout}
-                  tasks={tasks}
-                  onAddTask={handleAddTask}
-                  onToggleTask={handleToggleTask}
-                  onUpdateTask={handleUpdateTask}
-                  onDeleteTask={handleDeleteTask}
-                  onAddLearning={handleCreateLearning}
-                  isAdmin={isAdmin}
-                />;
+        return <HabitTracker
+          habits={habits}
+          energyHistory={energyHistory}
+          onAddHabit={handleAddHabit}
+          onUpdateHabit={handleUpdateHabit}
+          onDeleteHabit={handleDeleteHabit}
+          setIsHelpOpen={setIsHelpOpen}
+          setView={setView}
+          diagnosisFrequency={diagnosisFrequency}
+          // pass purelife configuration so HabitTracker can show the card on scheduled days
+          purelifeFrequency={purelifeFrequency ?? undefined}
+          localPurelifeCompletedDates={localPurelifeCompletedDates}
+          // ★ Value Diagnosis の設定と完了履歴を渡す
+          personalityDiagnosisFrequency={personalityDiagnosisFrequency ?? undefined}
+          personalityDiagnosisCompletedDates={personalityDiagnosisCompletedDates}
+          valueDiagnosisFrequency={valueDiagnosisFrequency ?? undefined}
+          valueDiagnosisCompletedDates={valueDiagnosisCompletedDates}
+          onOpenValueDiagnosis={() => setView('value')}
+          onOpenPurelife={() => setView('purelife')}
+          onAddCheckin={handleAddCheckin}
+          onAddCheckout={handleAddCheckout}
+          checkins={checkins}
+          checkouts={checkouts}
+          onUpdateCheckin={handleUpdateCheckin}
+          onUpdateCheckout={handleUpdateCheckout}
+          tasks={tasks}
+          onAddTask={handleAddTask}
+          onToggleTask={handleToggleTask}
+          onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
+          onAddLearning={handleCreateLearning}
+          isAdmin={isAdmin}
+        />;
       case 'analytics':
-        return <Analytics 
-                  energyHistory={energyHistory} 
-                  habits={habits} 
-                  setIsHelpOpen={setIsHelpOpen}
-                  checkins={checkins}
-                  checkouts={checkouts}
-                />;
-       case 'groups':
-        return <Group 
-                  profile={profile} 
-                  following={following}
-                  followers={followers}
-                  onFollowUser={handleFollowUser}
-                  groups={groups} 
-                  groupInvites={groupInvites}
-                  onAddGroup={handleCreateGroup}
-                  onInviteToGroup={handleInviteToGroup}
-                  onAcceptGroupInvite={handleAcceptGroupInvite}
-                  onDeclineGroupInvite={handleDeclineGroupInvite}
-                  onRemoveMember={handleRemoveMember}
-                  onAddComment={handleAddComment}
-                  habits={habits} 
-                  setIsHelpOpen={setIsHelpOpen}
-                  allUserProfiles={allUserProfiles}
-                  onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
-                  selectedGroupId={selectedGroupId}
-                  onClearSelectedGroup={() => setSelectedGroupId(null)}
-                />;
+        return <Analytics
+          energyHistory={energyHistory}
+          habits={habits}
+          setIsHelpOpen={setIsHelpOpen}
+          checkins={checkins}
+          checkouts={checkouts}
+        />;
+      case 'groups':
+        return <Group
+          profile={profile}
+          following={following}
+          followers={followers}
+          onFollowUser={handleFollowUser}
+          groups={groups}
+          groupInvites={groupInvites}
+          onAddGroup={handleCreateGroup}
+          onInviteToGroup={handleInviteToGroup}
+          onAcceptGroupInvite={handleAcceptGroupInvite}
+          onDeclineGroupInvite={handleDeclineGroupInvite}
+          onRemoveMember={handleRemoveMember}
+          onAddComment={handleAddComment}
+          habits={habits}
+          setIsHelpOpen={setIsHelpOpen}
+          allUserProfiles={allUserProfiles}
+          onUpdateGroupSharedHabits={handleUpdateGroupSharedHabits}
+          selectedGroupId={selectedGroupId}
+          onClearSelectedGroup={() => setSelectedGroupId(null)}
+          onDeleteGroup={handleDeleteGroup}
+        />;
       case 'records':
         return (
           <Records
             checkins={checkins}
             checkouts={checkouts}
-            /* ...既存の props... */
+          /* ...既存の props... */
           />
         );
       case 'tasks':
@@ -947,13 +981,13 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
         return <Notes /* 必要な props を渡す（例: notes, onAddNote 等） */ />
       case 'learnings':
         return (
-          <Learnings 
+          <Learnings
             learnings={learnings}
             onAddLearning={handleCreateLearning}
             profile={profile}
           />
         );
-      
+
       default:
         return null;
     }
@@ -964,15 +998,15 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
   // 「診断, 習慣, グループ, 記録, 分析」をまとめて
   // 上部の「習慣」タブに紐付ける（どれを選んでいても習慣タブがアクティブに見える）
-  const isUnderHabits = useMemo(() => ['diagnosis','personality','purelife','value','habits','groups','records','analytics', 'notifications'].includes(view), [view]);
+  const isUnderHabits = useMemo(() => ['diagnosis', 'personality', 'purelife', 'value', 'habits', 'groups', 'records', 'analytics', 'notifications'].includes(view), [view]);
 
   // 上部固定タブ（診断ページ：エネルギー / パーソナリティ）
-  const showDiagnosisTabs = ['diagnosis','personality','purelife','value'].includes(view);
+  const showDiagnosisTabs = ['diagnosis', 'personality', 'purelife', 'value'].includes(view);
 
   const mainContainerClass = isView('notes')
     ? 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8'
     : 'max-w-4xl mx-auto p-4 sm:p-6 lg:p-8';
-  
+
   const mainDivClass = `min-h-screen bg-gray-100 font-sans text-gray-800 ${view !== 'notifications' ? (isView('tasks') ? 'pb-24' : 'pb-28') : ''}`;
 
   // --- JSX (変更なし) ---
@@ -980,74 +1014,74 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
     <div className={mainDivClass}>
       <header className={`bg-white sticky top-0 z-40 ${showDiagnosisTabs ? '' : 'shadow-sm'}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-2 h-16">
-                {/* 左: ハンバーガーメニュー + タイトル */}
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <button
-                      aria-label="メニュー"
-                      onClick={() => setIsMenuOpen(v => !v)}
-                      className="p-2 rounded-md hover:bg-gray-100"
-                    >
-                      {/* simple hamburger */}
-                      <svg className="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                      </svg>
-                    </button>
-                  </div>
+          <div className="flex justify-between items-center py-2 h-16">
+            {/* 左: ハンバーガーメニュー + タイトル */}
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button
+                  aria-label="メニュー"
+                  onClick={() => setIsMenuOpen(v => !v)}
+                  className="p-2 rounded-md hover:bg-gray-100"
+                >
+                  {/* simple hamburger */}
+                  <svg className="w-6 h-6 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
 
-                  {/* タイトル + ビュータグ */}
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
+              {/* タイトル + ビュータグ */}
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl md:text-2xl font-bold text-indigo-600">EnerGize</h1>
 
-                    <div className="flex items-center gap-2">
-                      {isUnderHabits && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">習慣</span>
-                      )}
-                      {isView('tasks') && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">タスク</span>
-                      )}
-                      {isView('notes') && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">メモ</span>
-                      )}
-                      {isView('learnings') && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">学習</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 右: 通知アイコン + プロフィール */}
                 <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <button
-                      aria-label="通知"
-                      onClick={() => setView('notifications')}
-                      className="p-2 rounded-full hover:bg-gray-100 relative"
-                    >
-                      <BellIcon className="w-6 h-6 text-gray-600" />
-                      {notifications.filter(n => !n.isRead).length > 0 && (
-                        <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white" />
-                      )}
-                    </button>
-                  </div>
-                  {/* 右: プロフィール */}
-                  <div className="flex items-center">
-                    <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
-                      {profile.imageUrl ? (
-                          <Image 
-                            src={profile.imageUrl} 
-                            alt={profile.displayName || ''} 
-                            width={40}
-                            height={40}
-                            className="w-full h-full object-cover" />
-                      ) : (
-                          <UserIcon className="w-6 h-6"/>
-                      )}
-                    </button>
-                  </div>
+                  {isUnderHabits && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">習慣</span>
+                  )}
+                  {isView('tasks') && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">タスク</span>
+                  )}
+                  {isView('notes') && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">メモ</span>
+                  )}
+                  {isView('learnings') && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 font-medium">学習</span>
+                  )}
                 </div>
+              </div>
             </div>
+
+            {/* 右: 通知アイコン + プロフィール */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  aria-label="通知"
+                  onClick={() => setView('notifications')}
+                  className="p-2 rounded-full hover:bg-gray-100 relative"
+                >
+                  <BellIcon className="w-6 h-6 text-gray-600" />
+                  {notifications.filter(n => !n.isRead).length > 0 && (
+                    <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white" />
+                  )}
+                </button>
+              </div>
+              {/* 右: プロフィール */}
+              <div className="flex items-center">
+                <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 overflow-hidden">
+                  {profile.imageUrl ? (
+                    <Image
+                      src={profile.imageUrl}
+                      alt={profile.displayName || ''}
+                      width={40}
+                      height={40}
+                      className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-6 h-6" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -1068,9 +1102,8 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
                     key={tab.key}
                     onClick={() => setView(tab.key as View)}
                     aria-pressed={active}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                      active ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${active ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                      }`}
                   >
                     <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${active ? 'bg-white/20' : 'bg-gray-100'}`}>
                       {tab.icon}
@@ -1119,12 +1152,12 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
             <div className="flex items-center gap-3 px-2 py-3 bg-white rounded-lg shadow-sm mb-4">
               <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
                 {profile.imageUrl ? (
-                  <Image 
-                    src={profile.imageUrl} 
-                    alt={profile.displayName || ''} 
+                  <Image
+                    src={profile.imageUrl}
+                    alt={profile.displayName || ''}
                     width={48}
                     height={48}
-                    className="w-full h-full object-cover" 
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <UserIcon className="w-6 h-6 text-gray-500" />
@@ -1185,11 +1218,11 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
               </div>
               <div className="flex items-center gap-3 px-2 py-2 bg-gray-50 rounded mb-3">
                 <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-                  {profile.imageUrl ? 
-                    <Image 
-                      src={profile.imageUrl} 
-                      className="w-full h-full object-cover" 
-                      alt="" 
+                  {profile.imageUrl ?
+                    <Image
+                      src={profile.imageUrl}
+                      className="w-full h-full object-cover"
+                      alt=""
                       width={40}
                       height={40}
                     /> : <UserIcon className="w-5 h-5 text-gray-500" />}
@@ -1229,30 +1262,30 @@ const MainApp: React.FC<MainAppProps> = ({ profile, setProfile }) => {
 
       {isHelpOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsHelpOpen(false)}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">ヘルプ</h3>
-                <p className="text-gray-600">{helpText}</p>
-                 <div className="text-right mt-4">
-                     <button type="button" onClick={() => setIsHelpOpen(false)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow">閉じる</button>
-                  </div>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">ヘルプ</h3>
+            <p className="text-gray-600">{helpText}</p>
+            <div className="text-right mt-4">
+              <button type="button" onClick={() => setIsHelpOpen(false)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow">閉じる</button>
             </div>
+          </div>
         </div>
       )}
 
       {isProfileOpen && (
-          <ProfileModal 
-            profile={profile}
-            onSave={handleProfileSave}
-            following={following}
-            followers={followers}
-            onFollowUser={handleFollowUser}
-            onClose={() => setIsProfileOpen(false)}
-            onLogout={handleLogout}
-          />
+        <ProfileModal
+          profile={profile}
+          onSave={handleProfileSave}
+          following={following}
+          followers={followers}
+          onFollowUser={handleFollowUser}
+          onClose={() => setIsProfileOpen(false)}
+          onLogout={handleLogout}
+        />
       )}
 
       <main className={mainContainerClass}>
-          {renderView()}
+        {renderView()}
 
         {/* helpText が空文字なら枠自体を表示しない */}
         {helpText && helpText.trim() !== '' && (

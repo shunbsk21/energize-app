@@ -118,6 +118,22 @@ export const removeMemberFromGroup = async (group: Group, memberIdToRemove: stri
 };
 
 /**
+ * グループを削除する (オーナーのみ)
+ * 全メンバーのサブコレクションからグループを削除する
+ */
+export const deleteGroup = async (group: Group): Promise<void> => {
+  // 全メンバーのサブコレクションから削除
+  for (const memberId of group.members) {
+    const groupRef = doc(db, 'users', memberId, 'groups', group.id);
+    await deleteDoc(groupRef);
+  }
+  // 招待中のメンバーからも削除 (招待中IDがわかればやるべきだが、Groupオブジェクトに招待中メンバー情報はないので、
+  // 現状は参加済みメンバーのみ対応。招待中ユーザーの招待リストに残る可能性があるが、許容範囲とするか、
+  // あるいは別途招待リストを管理する必要がある。
+  // 今回の要件では「オーナーがグループを削除」なので、参加メンバーからの削除を優先する)
+};
+
+/**
  * グループへの招待を承認する
  */
 export const acceptGroupInvite = async (userId: string, invite: Group): Promise<void> => {

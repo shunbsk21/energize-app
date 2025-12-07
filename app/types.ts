@@ -238,9 +238,9 @@ export interface HabitTrackerProps {
   onUpdateCheckin?: (id: string, value: number, note?: string) => void | Promise<void>;
   onUpdateCheckout?: (id: string, gratitude?: string, note?: string, rating?: number | null) => void | Promise<void>;
   tasks?: Task[];
-  onAddTask?: (t: { title: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high' }) => void | Promise<void>;
+  onAddTask?: (t: { title: string; details?: string; dueDate?: string; priority?: 'low' | 'medium' | 'high' }) => void | Promise<void>;
   onToggleTask?: (taskId: string, done: boolean) => Promise<void> | void;
-  onUpdateTask?: (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low'|'medium'|'high'; done?: boolean }) => Promise<void> | void;
+  onUpdateTask?: (taskId: string, payload: { title?: string; details?: string; dueDate?: string; priority?: 'low' | 'medium' | 'high'; done?: boolean }) => Promise<void> | void;
   onDeleteTask?: (taskId: string) => Promise<void> | void;
   onAddLearning?: (payload: { title: string; url?: string; notes?: string; tags?: string[] }) => void | Promise<void>;
   isAdmin?: boolean;
@@ -255,24 +255,25 @@ export interface HabitTrackerProps {
 }
 
 export interface GroupProps {
-    profile: Profile;
-    following: Friend[];
-    followers: Friend[];
-    onFollowUser: (friendId: string) => void;
-    groups: Group[];
-    groupInvites: Group[];
-    onAddGroup: (newGroupData: Omit<Group, 'id'>) => void;
-    onInviteToGroup: (group: Group, memberIdsToInvite: string[]) => void;
-    onAcceptGroupInvite: (invite: Group) => void;
-    onDeclineGroupInvite: (inviteId: string) => void;
-    onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
-    onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
-    habits: Habit[];
-    setIsHelpOpen: (isOpen: boolean) => void;
-    allUserProfiles: Map<string, Profile | Friend>;
-    onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
-    selectedGroupId: string | null;
-    onClearSelectedGroup: () => void;
+  profile: Profile;
+  following: Friend[];
+  followers: Friend[];
+  onFollowUser: (friendId: string) => void;
+  groups: Group[];
+  groupInvites: Group[];
+  onAddGroup: (newGroupData: Omit<Group, 'id'>) => void;
+  onInviteToGroup: (group: Group, memberIdsToInvite: string[]) => void;
+  onAcceptGroupInvite: (invite: Group) => void;
+  onDeclineGroupInvite: (inviteId: string) => void;
+  onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
+  onAddComment: (newCommentData: Omit<Comment, 'id'>) => void;
+  habits: Habit[];
+  setIsHelpOpen: (isOpen: boolean) => void;
+  allUserProfiles: Map<string, Profile | Friend>;
+  onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
+  selectedGroupId: string | null;
+  onClearSelectedGroup: () => void;
+  onDeleteGroup: (groupId: string) => void;
 }
 
 export interface GroupDetailProps {
@@ -287,6 +288,7 @@ export interface GroupDetailProps {
   onRemoveMember: (groupId: string, memberIdToRemove: string) => void;
   allUserProfiles: Map<string, Profile | Friend>;
   onUpdateGroupSharedHabits: (groupId: string, memberId: string, sharedHabitIds: string[]) => void;
+  onDeleteGroup: (groupId: string) => void;
 }
 
 export interface EnergyDiagnosisProps {
@@ -294,7 +296,7 @@ export interface EnergyDiagnosisProps {
   onComplete: (scores: EnergyScores) => void;
   setIsHelpOpen: (isOpen: boolean) => void;
   diagnosisFrequency: DiagnosisFrequency;
-  setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void; 
+  setDiagnosisFrequency: (newFrequency: DiagnosisFrequency) => void;
   habits: Habit[];
   handleAddHabit?: (newHabitData: Omit<Habit, 'id'>) => Promise<void> | void;
 }
@@ -344,7 +346,7 @@ export interface LearningsProps {
 
 export interface NotesProps {
   notes?: NoteItem[];
-  onAddNote?: (n: Omit<NoteItem, 'id'|'createdAt'|'updatedAt'>) => void;
+  onAddNote?: (n: Omit<NoteItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateNote?: (n: NoteItem) => void;
 }
 
